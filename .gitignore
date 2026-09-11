@@ -3,7 +3,6 @@
 # =========================
 node_modules/
 .pnpm-store/
-pnpm-lock.yaml
 
 # =========================
 # Build outputs
@@ -13,11 +12,6 @@ build/
 out/
 coverage/
 packages/engine/docs/
-*.tsbuildinfo
-
-# =========================
-# TypeScript
-# =========================
 *.tsbuildinfo
 
 # =========================
@@ -96,7 +90,6 @@ baked/
 # Monorepo (pnpm)
 # =========================
 .pnpm-debug.log*
-pnpm-lock.yaml
 
 # =========================
 # Testing
