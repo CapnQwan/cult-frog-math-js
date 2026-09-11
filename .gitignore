@@ -1,0 +1,128 @@
+# =========================
+# Dependencies
+# =========================
+node_modules/
+.pnpm-store/
+pnpm-lock.yaml
+
+# =========================
+# Build outputs
+# =========================
+dist/
+build/
+out/
+coverage/
+packages/engine/docs/
+*.tsbuildinfo
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# Logs
+# =========================
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.local
+.env.*.local
+
+# =========================
+# OS junk
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Editors / IDEs
+# =========================
+.vscode/*
+# Shared editor config is committed so everyone gets Biome as the formatter.
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# =========================
+# Vite / modern bundlers
+# =========================
+.vite/
+.cache/
+.parcel-cache/
+.turbo/
+.swc/
+
+# =========================
+# Game engine / graphics artifacts
+# =========================
+# compiled shaders
+*.spv
+*.glslang
+*.wgsl.cache
+
+# GPU / shader compilation caches
+shader-cache/
+shaders/cache/
+
+# runtime-generated assets (if you stream or bake assets)
+runtime-assets/
+generated-assets/
+baked/
+
+# =========================
+# Web assets (optional depending on workflow)
+# =========================
+# If you compile assets (textures/audio/etc)
+*.atlas
+*.basis
+*.ktx2
+
+# =========================
+# Monorepo (pnpm)
+# =========================
+.pnpm-debug.log*
+pnpm-lock.yaml
+
+# =========================
+# Testing
+# =========================
+jest-cache/
+vitest-cache/
+
+# =========================
+# Coverage
+# =========================
+coverage/
+
+# =========================
+# Misc tooling
+# =========================
+.eslintcache
+.prettiercache
+
+# =========================
+# Pre commit hooks
+# =========================
+.pre-commit-config.yaml
+.pre-commit-config.yaml
+
+# =========================
+# Optional: local tooling state
+# =========================
+.tmp/
+temp/

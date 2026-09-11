@@ -1,0 +1,82 @@
+{
+  "name": "@cult-frog/math",
+  "version": "0.0.0",
+  "description": "A TypeScript math library for game development: vectors, matrices, quaternions, and numerical utilities.",
+  "license": "MIT",
+  "author": "Quin Partridge",
+  "keywords": [
+    "math",
+    "vector",
+    "matrix",
+    "quaternion",
+    "gamedev",
+    "linear-algebra",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CapnQwan/cult-frog-math-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CapnQwan/cult-frog-math-js/issues"
+  },
+  "homepage": "https://github.com/CapnQwan/cult-frog-math-js#readme",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "src"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./vector": {
+      "types": "./dist/vector/index.d.ts",
+      "default": "./dist/vector/index.js"
+    },
+    "./matrix": {
+      "types": "./dist/matrix/index.d.ts",
+      "default": "./dist/matrix/index.js"
+    },
+    "./geometry": {
+      "types": "./dist/geometry/index.d.ts",
+      "default": "./dist/geometry/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "lint": "biome lint . --error-on-warnings",
+    "format": "biome format .",
+    "fix": "biome check . --write",
+    "prepublishOnly": "pnpm build",
+    "prepare": "husky"
+  },
+  "packageManager": "pnpm@10.33.4",
+  "lint-staged": {
+    "*.{ts,tsx,js}": [
+      "biome check --write --error-on-warnings --no-errors-on-unmatched"
+    ]
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.13",
+    "@types/node": "^22.20.2",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.5.1",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.0"
+  }
+}
