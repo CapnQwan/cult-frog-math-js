@@ -49,7 +49,7 @@
     "./package.json": "./package.json"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   },
   "publishConfig": {
     "access": "public"
@@ -59,8 +59,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest watch",
-    "lint": "biome lint . --error-on-warnings",
-    "format": "biome format .",
+    "test:coverage": "vitest run --coverage",
+    "check": "biome check . --error-on-warnings",
+    "check:ci": "biome ci . --error-on-warnings",
     "fix": "biome check . --write",
     "prepublishOnly": "pnpm build",
     "prepare": "husky"
@@ -73,6 +74,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",
+    "@cult-frog/tooling": "^0.1.1",
     "@types/node": "^22.20.2",
     "husky": "^9.1.7",
     "lint-staged": "^17.5.1",
