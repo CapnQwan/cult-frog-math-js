@@ -36,3 +36,12 @@ export function copy(out: Vec3, a: ReadonlyVec3): Vec3 {
   out[2] = z;
   return out;
 }
+
+export const ZERO = create(0, 0, 0) as ReadonlyVec3;
+export const ONE = create(1, 1, 1) as ReadonlyVec3;
+export const UP = create(0, 1, 0) as ReadonlyVec3;
+export const DOWN = create(0, -1, 0) as ReadonlyVec3;
+export const LEFT = create(-1, 0, 0) as ReadonlyVec3;
+export const RIGHT = create(1, 0, 0) as ReadonlyVec3;
+export const FORWARD = create(0, 0, 1) as ReadonlyVec3;
+export const BACK = create(0, 0, -1) as ReadonlyVec3;

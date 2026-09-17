@@ -3,21 +3,21 @@ import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
 import type { ReadonlyFixedFloat32Array } from '../../_types/readonlyFixedFloat32Array.js';
 
 /**
- * A Vector4 represented as a 4-element array
+ * A 4D vector stored as a `Float32Array` of length 4: `[x, y, z, w]`,
+ * matching GLSL/WGSL `vec4`.
  *
- * vector[0] = w
- * vector[1] = x
- * vector[2] = y
- * vector[3] = z
+ * Components are float32, so values are rounded on write
+ * (`0.1` reads back as `0.10000000149011612`).
+ *
+ * Branded: a plain `Float32Array` won't type-check. Make one with
+ * `vec4.create`, or cast when wrapping existing memory (e.g. a pooled view).
  */
 export type Vec4 = Brand<FixedFloat32Array<4>, 'Vec4'>;
 
 /**
- * A Readonly Vector4 represented as a 4-element array
+ * A `Vec4` that can't be written through, so it can't be passed as `out`.
  *
- * vector[0] = w
- * vector[1] = x
- * vector[2] = y
- * vector[3] = z
+ * This limits *your* access, not the memory: if it's a view into shared
+ * storage, the values can still change underneath you.
  */
 export type ReadonlyVec4 = Brand<ReadonlyFixedFloat32Array<4>, 'Vec4'>;

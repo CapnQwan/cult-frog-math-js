@@ -14,6 +14,19 @@
  *
  * ## Conventions
  *
+ * **Everything is a `Float32Array`.** Values can be uploaded to the GPU as-is,
+ * and can be views into larger pooled buffers (e.g. component storage) instead
+ * of individual allocations. The cost is precision: about 7 significant digits,
+ * so values are rounded on write and large world coordinates lose accuracy.
+ *
+ * **Y is up.** Direction constants such as `vec2.UP` assume a y-up coordinate
+ * system. In screen or canvas space, where y grows downward, `UP` points down
+ * the screen.
+ *
+ * **Types are branded.** A plain `Float32Array` won't type-check as a `Vec3`.
+ * Use `create` for new values, or cast when wrapping existing memory such as a
+ * pooled view.
+ *
  * **Output first.** Any function that produces a vector or matrix writes the
  * result into its first parameter, `out`, and returns `out`. This lets calls be
  * nested without allocating.

@@ -3,17 +3,20 @@ import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
 import type { ReadonlyFixedFloat32Array } from '../../_types/readonlyFixedFloat32Array.js';
 
 /**
- * A Vector2 represented as a 2-element array
+ * A 2D vector stored as a `Float32Array` of length 2: `[x, y]`.
  *
- * vector[0] = x
- * vector[1] = y
+ * Components are float32, so values are rounded on write
+ * (`0.1` reads back as `0.10000000149011612`).
+ *
+ * Branded: a plain `Float32Array` won't type-check. Make one with
+ * `vec2.create`, or cast when wrapping existing memory (e.g. a pooled view).
  */
 export type Vec2 = Brand<FixedFloat32Array<2>, 'Vec2'>;
 
 /**
- * A Readonly Vector2 represented as a 2-element array
+ * A `Vec2` that can't be written through, so it can't be passed as `out`.
  *
- * vector[0] = x
- * vector[1] = y
+ * This limits *your* access, not the memory: if it's a view into shared
+ * storage, the values can still change underneath you.
  */
 export type ReadonlyVec2 = Brand<ReadonlyFixedFloat32Array<2>, 'Vec2'>;
