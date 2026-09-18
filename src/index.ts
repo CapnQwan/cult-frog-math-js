@@ -19,6 +19,26 @@
  * of individual allocations. The cost is precision: about 7 significant digits,
  * so values are rounded on write and large world coordinates lose accuracy.
  *
+ * **Layouts match the GPU.** Every value here is laid out so it can be handed
+ * to WebGPU or WebGL verbatim: no transposing, no reordering, no per-frame
+ * conversion pass. Matrices are **column major** — a `Mat4` is 16 contiguous
+ * floats, column 0 first, which puts the translation column at indices 12, 13
+ * and 14, exactly where `mat4x4<f32>` and `uniformMatrix4fv` expect it. `Vec4`
+ * and `Quat` are **`[x, y, z, w]`**, so a quaternion is byte-identical to a
+ * `vec4<f32>`, and the two share a layout with the rest of the ecosystem
+ * (gl-matrix, three.js, glTF).
+ *
+ * The one value that isn't a straight `writeBuffer` / `bufferSubData` is
+ * `Mat3`: it's stored tightly packed as 9 floats, while WGSL's `mat3x3<f32>`
+ * and std140 pad every column out to 16 bytes. Upload a `Mat3` column by
+ * column, or promote it to a `Mat4`.
+ *
+ * **Matrices read as rows and store as columns.** `create` and `set` take
+ * their arguments in row-major order — `a01` is row 0, column 1 — so a matrix
+ * spelled out in source looks the way it does on paper, and the function
+ * transposes on the way into memory. Element subscripts are always
+ * `a<row><col>`; raw indices are always column major.
+ *
  * **Y is up.** Direction constants such as `vec2.UP` assume a y-up coordinate
  * system. In screen or canvas space, where y grows downward, `UP` points down
  * the screen.
@@ -47,4 +67,6 @@
  * @packageDocumentation
  */
 
+export * from './matrix/index.js';
+export * from './quaternion/index.js';
 export * from './vector/index.js';
