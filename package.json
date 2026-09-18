@@ -38,6 +38,10 @@
       "types": "./dist/vector/index.d.ts",
       "default": "./dist/vector/index.js"
     },
+    "./quaternion": {
+      "types": "./dist/quaternion/index.d.ts",
+      "default": "./dist/quaternion/index.js"
+    },
     "./matrix": {
       "types": "./dist/matrix/index.d.ts",
       "default": "./dist/matrix/index.js"
