@@ -67,6 +67,8 @@
  * @packageDocumentation
  */
 
+export * from './constants.js';
 export * from './matrix/index.js';
 export * from './quaternion/index.js';
+export * from './scalars.js';
 export * from './vector/index.js';
