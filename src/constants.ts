@@ -21,8 +21,12 @@
  * scale. Float32 spacing grows with magnitude: around `10,000` consecutive
  * float32 values are about `0.001` apart, a thousand times `EPSILON`, so two
  * adjacent-but-distinct world coordinates at that scale will never compare
- * equal against it. For values far from the origin, scale the tolerance to the
- * magnitude rather than reusing this one.
+ * equal against it.
+ *
+ * `equalsEpsilon` already handles that: it scales the tolerance by the larger
+ * of the two magnitudes, floored at `1`, so it behaves like an absolute `1e-6`
+ * near unit scale and widens from there. Prefer it over comparing against
+ * `EPSILON` by hand whenever the values might be large.
  */
 export const EPSILON = 1e-6;
 
