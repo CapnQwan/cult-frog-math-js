@@ -3,6 +3,8 @@ import { describe, expectTypeOf, test } from 'vitest';
 
 import * as vec2 from '../vec2.js';
 
+import type { Brand, BrandOf } from '@cult-frog/types';
+import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
 import type { ReadonlyVec2, Vec2 } from '../_types/vec2.js';
 import type { Vec3 } from '../_types/vec3.js';
 
@@ -10,6 +12,12 @@ declare const live: Vec2;
 declare const frozen: ReadonlyVec2;
 declare const other: Vec3;
 declare const raw: Float32Array<ArrayBuffer>;
+
+/** A `Vec2` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
+type SharedVec2 = Brand<FixedFloat32Array<2, SharedArrayBuffer>, BrandOf<Vec2>>;
+declare const shared: SharedVec2;
+declare const sab: SharedArrayBuffer;
+declare const rawShared: Float32Array<SharedArrayBuffer>;
 
 describe('Vec2 / ReadonlyVec2 relationship', () => {
   test('assignability is one-way', () => {
@@ -57,5 +65,23 @@ describe('vec2 signatures', () => {
     vec2.set(frozen, 0, 0);
     // @ts-expect-error wrong-dimension input
     vec2.copy(live, other);
+  });
+});
+
+describe('shared memory', () => {
+  test('a SharedArrayBuffer view casts to Vec2 with a single cast', () => {
+    expectTypeOf(new Float32Array(sab, 0, 2) as Vec2).toEqualTypeOf<Vec2>();
+  });
+
+  test('SAB-backed values are accepted as out and as readonly inputs', () => {
+    expectTypeOf<SharedVec2>().toExtend<Vec2>();
+    expectTypeOf<SharedVec2>().toExtend<ReadonlyVec2>();
+    vec2.copy(shared, frozen);
+    vec2.copy(live, shared);
+    vec2.clone(shared);
+  });
+
+  test('brand still rejects unbranded shared arrays', () => {
+    expectTypeOf<typeof rawShared>().not.toExtend<ReadonlyVec2>();
   });
 });

@@ -3,6 +3,8 @@ import { describe, expectTypeOf, test } from 'vitest';
 
 import * as quat from '../quat.js';
 
+import type { Brand, BrandOf } from '@cult-frog/types';
+import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
 import type { ReadonlyVec4, Vec4 } from '../../vector/_types/vec4.js';
 import type { Quat, ReadonlyQuat } from '../_types/quat.js';
 
@@ -10,6 +12,12 @@ declare const live: Quat;
 declare const frozen: ReadonlyQuat;
 declare const vector: Vec4;
 declare const raw: Float32Array<ArrayBuffer>;
+
+/** A `Quat` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
+type SharedQuat = Brand<FixedFloat32Array<4, SharedArrayBuffer>, BrandOf<Quat>>;
+declare const shared: SharedQuat;
+declare const sab: SharedArrayBuffer;
+declare const rawShared: Float32Array<SharedArrayBuffer>;
 
 describe('Quat / ReadonlyQuat relationship', () => {
   test('assignability is one-way', () => {
@@ -86,5 +94,23 @@ describe('quat signatures', () => {
     quat.copy(live, vector);
     // @ts-expect-error the scalar component is required
     quat.set(live, 0, 0, 0);
+  });
+});
+
+describe('shared memory', () => {
+  test('a SharedArrayBuffer view casts to Quat with a single cast', () => {
+    expectTypeOf(new Float32Array(sab, 0, 4) as Quat).toEqualTypeOf<Quat>();
+  });
+
+  test('SAB-backed values are accepted as out and as readonly inputs', () => {
+    expectTypeOf<SharedQuat>().toExtend<Quat>();
+    expectTypeOf<SharedQuat>().toExtend<ReadonlyQuat>();
+    quat.copy(shared, frozen);
+    quat.copy(live, shared);
+    quat.clone(shared);
+  });
+
+  test('brand still rejects unbranded shared arrays', () => {
+    expectTypeOf<typeof rawShared>().not.toExtend<ReadonlyQuat>();
   });
 });

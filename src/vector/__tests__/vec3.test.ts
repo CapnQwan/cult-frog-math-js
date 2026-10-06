@@ -19,13 +19,14 @@ function expectComponents(v: ReadonlyVec3, x: number, y: number, z: number): voi
  * Test-only cast site: a Vec3 view over element `index` of a shared buffer,
  * standing in for a view into pooled component storage.
  */
-function viewAt(buffer: ArrayBuffer, index: number): Vec3 {
+function viewAt(buffer: ArrayBufferLike, index: number): Vec3 {
   return new Float32Array(buffer, index * FLOAT_BYTES, 3) as Vec3;
 }
 
 /** A buffer of `count` floats initialised to 1, 2, 3, ... so every slot is distinguishable. */
-function sequentialBuffer(count: number): ArrayBuffer {
-  const buffer = new ArrayBuffer(count * FLOAT_BYTES);
+function sequentialBuffer(count: number, shared = false): ArrayBufferLike {
+  const bytes = count * FLOAT_BYTES;
+  const buffer = shared ? new SharedArrayBuffer(bytes) : new ArrayBuffer(bytes);
   const floats = new Float32Array(buffer);
   for (let i = 0; i < count; i++) floats[i] = i + 1;
   return buffer;
@@ -177,6 +178,15 @@ describe('copy', () => {
     vec3.copy(viewAt(buffer, 0), viewAt(buffer, 1));
 
     expect(Array.from(new Float32Array(buffer))).toEqual([2, 3, 4, 4]);
+  });
+
+  test('overlapping views over a SharedArrayBuffer behave the same', () => {
+    // Buffer [1, 2, 3, 4]; input covers [0..2], out covers [1..3].
+    const buffer = sequentialBuffer(4, true);
+    vec3.copy(viewAt(buffer, 1), viewAt(buffer, 0));
+
+    expect(buffer).toBeInstanceOf(SharedArrayBuffer);
+    expect(Array.from(new Float32Array(buffer))).toEqual([1, 1, 2, 3]);
   });
 
   test('writes only its own slots when out is a pooled view', () => {

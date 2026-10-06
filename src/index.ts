@@ -18,8 +18,17 @@
  *
  * **Everything is a `Float32Array`.** Values can be uploaded to the GPU as-is,
  * and can be views into larger pooled buffers (e.g. component storage) instead
- * of individual allocations. The cost is precision: about 7 significant digits,
- * so values are rounded on write and large world coordinates lose accuracy.
+ * of individual allocations. Any backing buffer works, `ArrayBuffer` or
+ * `SharedArrayBuffer`, so that storage can be shared with workers. The cost is
+ * precision: about 7 significant digits, so values are rounded on write and
+ * large world coordinates lose accuracy.
+ *
+ * **Shared memory is not synchronised.** Views over a `SharedArrayBuffer`
+ * type-check and behave like any other, but no function here is atomic: a
+ * vector being written on one thread can be read half-updated on another, and
+ * `Atomics` doesn't operate on `Float32Array`. Coordinate at a higher level,
+ * e.g. frame phases, double buffering, or a lock in an `Int32Array` alongside
+ * the data.
  *
  * **Layouts match the GPU.** Every value here is laid out so it can be handed
  * to WebGPU or WebGL verbatim: no transposing, no reordering, no per-frame

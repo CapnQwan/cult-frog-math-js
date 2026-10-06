@@ -17,6 +17,8 @@ import type { ReadonlyFixedFloat32Array } from '../../_types/readonlyFixedFloat3
  *
  * Branded: a plain `Float32Array` won't type-check. Make one with
  * `mat4.create`, or cast when wrapping existing memory (e.g. a pooled view).
+ * Any backing buffer works, including a `SharedArrayBuffer`, but nothing here
+ * is atomic: coordinate access across threads yourself.
  */
 export type Mat4 = Brand<FixedFloat32Array<16>, 'Matrix4x4'>;
 

@@ -3,6 +3,8 @@ import { describe, expectTypeOf, test } from 'vitest';
 
 import * as mat4 from '../mat4.js';
 
+import type { Brand, BrandOf } from '@cult-frog/types';
+import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
 import type { Mat3 } from '../_types/mat3.js';
 import type { Mat4, ReadonlyMat4 } from '../_types/mat4.js';
 
@@ -10,6 +12,12 @@ declare const live: Mat4;
 declare const frozen: ReadonlyMat4;
 declare const other: Mat3;
 declare const raw: Float32Array<ArrayBuffer>;
+
+/** A `Mat4` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
+type SharedMat4 = Brand<FixedFloat32Array<16, SharedArrayBuffer>, BrandOf<Mat4>>;
+declare const shared: SharedMat4;
+declare const sab: SharedArrayBuffer;
+declare const rawShared: Float32Array<SharedArrayBuffer>;
 
 describe('Mat4 / ReadonlyMat4 relationship', () => {
   test('assignability is one-way', () => {
@@ -78,5 +86,23 @@ describe('mat4 signatures', () => {
     mat4.copy(live, other);
     // @ts-expect-error too few elements
     mat4.set(live, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0);
+  });
+});
+
+describe('shared memory', () => {
+  test('a SharedArrayBuffer view casts to Mat4 with a single cast', () => {
+    expectTypeOf(new Float32Array(sab, 0, 16) as Mat4).toEqualTypeOf<Mat4>();
+  });
+
+  test('SAB-backed values are accepted as out and as readonly inputs', () => {
+    expectTypeOf<SharedMat4>().toExtend<Mat4>();
+    expectTypeOf<SharedMat4>().toExtend<ReadonlyMat4>();
+    mat4.copy(shared, frozen);
+    mat4.copy(live, shared);
+    mat4.clone(shared);
+  });
+
+  test('brand still rejects unbranded shared arrays', () => {
+    expectTypeOf<typeof rawShared>().not.toExtend<ReadonlyMat4>();
   });
 });
