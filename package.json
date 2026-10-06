@@ -34,17 +34,33 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./vector": {
-      "types": "./dist/vector/index.d.ts",
-      "default": "./dist/vector/index.js"
+    "./vec2": {
+      "types": "./dist/vec2.d.ts",
+      "default": "./dist/vec2.js"
     },
-    "./quaternion": {
-      "types": "./dist/quaternion/index.d.ts",
-      "default": "./dist/quaternion/index.js"
+    "./vec3": {
+      "types": "./dist/vec3.d.ts",
+      "default": "./dist/vec3.js"
     },
-    "./matrix": {
-      "types": "./dist/matrix/index.d.ts",
-      "default": "./dist/matrix/index.js"
+    "./vec4": {
+      "types": "./dist/vec4.d.ts",
+      "default": "./dist/vec4.js"
+    },
+    "./mat2": {
+      "types": "./dist/mat2.d.ts",
+      "default": "./dist/mat2.js"
+    },
+    "./mat3": {
+      "types": "./dist/mat3.d.ts",
+      "default": "./dist/mat3.js"
+    },
+    "./mat4": {
+      "types": "./dist/mat4.d.ts",
+      "default": "./dist/mat4.js"
+    },
+    "./quat": {
+      "types": "./dist/quat.d.ts",
+      "default": "./dist/quat.js"
     },
     "./geometry": {
       "types": "./dist/geometry/index.d.ts",

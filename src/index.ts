@@ -2,13 +2,15 @@
  * Vector and matrix math for Cult Frog Studios.
  *
  * Every type in this package is a `Float32Array` with a fixed length. Functions
- * are free functions grouped by module and are meant to be imported as a
- * namespace:
+ * are free functions grouped into one lowercase namespace per type (`vec3`,
+ * `mat4`, `quat`, ...). Each type has its own subpath exporting that namespace
+ * plus the type and its readonly variant, and the package root exports all of
+ * them under the same names:
  *
  * ```ts
- * import { vec3 } from '@cult-frog/math/vec3';
+ * import { vec3, type Vec3 } from '@cult-frog/math/vec3';
  *
- * const velocity = vec3.create(0, -9.81, 0);
+ * const velocity: Vec3 = vec3.create(0, -9.81, 0);
  * vec3.copy(scratch, transform.getPosition(e));
  * ```
  *
@@ -68,7 +70,11 @@
  */
 
 export * from './constants.js';
-export * from './matrix/index.js';
-export * from './quaternion/index.js';
+export * from './mat2.js';
+export * from './mat3.js';
+export * from './mat4.js';
+export * from './quat.js';
 export * from './scalars.js';
-export * from './vector/index.js';
+export * from './vec2.js';
+export * from './vec3.js';
+export * from './vec4.js';
