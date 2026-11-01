@@ -2,16 +2,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { EPSILON } from '../constants.js';
-import {
-  clamp,
-  equalsEpsilon,
-  lerp,
-  round,
-  saturate,
-  smoothstep,
-  snapToZero,
-  wrap,
-} from '../scalars.js';
+import { clamp, equalsEpsilon, round, saturate, snapToZero, wrap } from '../scalars.js';
 
 describe('clamp', () => {
   test('leaves a value inside the range untouched', () => {
@@ -53,83 +44,6 @@ describe('saturate', () => {
   test('bounds are inclusive', () => {
     expect(saturate(0)).toBe(0);
     expect(saturate(1)).toBe(1);
-  });
-});
-
-describe('lerp', () => {
-  test('returns a exactly at t = 0', () => {
-    expect(lerp(2, 8, 0)).toBe(2);
-    expect(lerp(1e16, 1e-16, 0)).toBe(1e16);
-  });
-
-  test('interpolates between the endpoints', () => {
-    expect(lerp(0, 10, 0.5)).toBe(5);
-    expect(lerp(0, 10, 0.25)).toBe(2.5);
-    expect(lerp(-5, 5, 0.5)).toBe(0);
-  });
-
-  test('extrapolates outside [0, 1] rather than clamping', () => {
-    expect(lerp(0, 10, 1.5)).toBe(15);
-    expect(lerp(0, 10, -0.5)).toBe(-5);
-  });
-
-  test('lands on b exactly when both endpoints are near unit scale', () => {
-    expect(lerp(0.1, 0.3, 1)).toBe(0.3);
-    expect(lerp(-5, 5, 1)).toBe(5);
-  });
-
-  test('does not land on b exactly when the magnitudes differ', () => {
-    // The documented cost of the fast `a + (b - a) * t` form: the subtraction
-    // loses precision, so t = 1 is not an exact endpoint in general. Use
-    // `(1 - t) * a + t * b` where that matters.
-    expect(lerp(100, 0.1, 1)).not.toBe(0.1);
-    expect(lerp(100, 0.1, 1)).toBeCloseTo(0.1, 10);
-    expect(lerp(1e16, 1, 1)).toBe(0);
-  });
-});
-
-describe('smoothstep', () => {
-  test('applies the Hermite S-curve, not a linear ramp', () => {
-    // A linear remap would return 0.25 here.
-    expect(smoothstep(0, 1, 0.25)).toBe(0.15625);
-    expect(smoothstep(0, 1, 0.75)).toBe(0.84375);
-  });
-
-  test('passes through the endpoints and the midpoint', () => {
-    expect(smoothstep(0, 1, 0)).toBe(0);
-    expect(smoothstep(0, 1, 0.5)).toBe(0.5);
-    expect(smoothstep(0, 1, 1)).toBe(1);
-  });
-
-  test('clamps outside the range', () => {
-    expect(smoothstep(0, 1, -5)).toBe(0);
-    expect(smoothstep(0, 1, 5)).toBe(1);
-  });
-
-  test('eases: the slope is flat at both ends', () => {
-    // This is the reason to prefer it over a linear remap. A linear ramp would
-    // have a slope of 1 everywhere; the curve's is ~0 at the edges.
-    const h = 1e-4;
-    const slopeAtStart = (smoothstep(0, 1, h) - smoothstep(0, 1, 0)) / h;
-    const slopeAtEnd = (smoothstep(0, 1, 1) - smoothstep(0, 1, 1 - h)) / h;
-
-    expect(slopeAtStart).toBeLessThan(0.01);
-    expect(slopeAtEnd).toBeLessThan(0.01);
-  });
-
-  test('is symmetric about the midpoint', () => {
-    expect(smoothstep(0, 1, 0.3) + smoothstep(0, 1, 0.7)).toBeCloseTo(1, 12);
-  });
-
-  test('remaps an arbitrary range, taking edges first and the value last', () => {
-    // Parameter order matches the GLSL intrinsic, not clamp's (value, min, max).
-    expect(smoothstep(10, 20, 15)).toBe(0.5);
-    expect(smoothstep(10, 20, 10)).toBe(0);
-    expect(smoothstep(10, 20, 20)).toBe(1);
-  });
-
-  test('returns NaN for a degenerate range', () => {
-    expect(smoothstep(5, 5, 5)).toBeNaN();
   });
 });
 

@@ -79,6 +79,7 @@
  */
 
 export * from './constants.js';
+export * from './interpolation.js';
 export * from './mat2.js';
 export * from './mat3.js';
 export * from './mat4.js';

@@ -1,5 +1,5 @@
 /**
- * Scalar helpers: clamping, interpolation, wrapping and approximate equality.
+ * Scalar helpers: clamping, rounding, wrapping and approximate equality.
  *
  * These work on plain `number`s, which are float64. The rest of the package
  * stores float32, so a result computed here is rounded when it lands in a
@@ -42,52 +42,6 @@ export function clamp(value: number, min: number, max: number): number {
  */
 export function saturate(value: number): number {
   return clamp(value, 0, 1);
-}
-
-/**
- * Linearly interpolates from `a` to `b` by `t`.
- *
- * **Unclamped**: `t` outside `[0, 1]` extrapolates rather than saturating, so
- * `lerp(0, 10, 1.5)` is `15` and `lerp(0, 10, -0.5)` is `-5`. Wrap `t` in
- * `saturate` if you need the endpoints held.
- *
- * `t = 0` returns `a` exactly. `t = 1` is *not* guaranteed to return `b`
- * exactly: this is the fast form, `a + (b - a) * t`, and the subtraction loses
- * precision when `a` and `b` differ in magnitude. It is exact when both sit
- * near unit scale, and drifts by an ulp or so otherwise. If landing precisely
- * on `b` matters — a value compared for equality, or a loop that must settle —
- * use the slower `(1 - t) * a + t * b` instead.
- *
- * @param a - The value at `t = 0`.
- * @param b - The value at `t = 1`.
- * @param t - The interpolation factor.
- * @returns The interpolated value.
- */
-export function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
-}
-
-/**
- * Maps `value` from the range `[min, max]` onto a smooth `0`-to-`1` ramp.
- *
- * The classic Hermite ease: the input is first clamped to the range, then
- * shaped by `3x² - 2x³`. The curve's slope is zero at both ends, so motion
- * driven by it starts and stops gently instead of turning a corner — that
- * easing is the whole reason to prefer it over a linear remap.
- *
- * The parameter order matches the GLSL/HLSL intrinsic — edges first, value
- * last — not the `(value, min, max)` order that `clamp` uses.
- *
- * Returns `NaN` for a degenerate range where `min === max`.
- *
- * @param min - The input value mapping to `0`.
- * @param max - The input value mapping to `1`.
- * @param value - The value to map.
- * @returns A smoothly eased value in `[0, 1]`.
- */
-export function smoothstep(min: number, max: number, value: number): number {
-  const x = clamp((value - min) / (max - min), 0, 1);
-  return x * x * (3 - 2 * x);
 }
 
 /**
