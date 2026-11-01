@@ -2,16 +2,16 @@
  * Vector and matrix math for Cult Frog Studios.
  *
  * Every type in this package is a `Float32Array` with a fixed length. Functions
- * are free functions grouped into one lowercase namespace per type (`vec3`,
- * `mat4`, `quat`, ...). Each type has its own subpath exporting that namespace
- * plus the type and its readonly variant, and the package root exports all of
- * them under the same names:
+ * are free functions grouped into one PascalCase namespace per type (`Vec3`,
+ * `Mat4`, `Quat`, ...), and each namespace shares its name with its type. Each
+ * type has its own lowercase subpath exporting that name plus the readonly
+ * variant, and the package root exports all of them under the same names:
  *
  * ```ts
- * import { vec3, type Vec3 } from '@cult-frog/math/vec3';
+ * import { Vec3 } from '@cult-frog/math/vec3';
  *
- * const velocity: Vec3 = vec3.create(0, -9.81, 0);
- * vec3.copy(scratch, transform.getPosition(e));
+ * const velocity: Vec3 = Vec3.create(0, -9.81, 0);
+ * Vec3.copy(scratch, transform.getPosition(e));
  * ```
  *
  * ## Conventions
@@ -50,7 +50,7 @@
  * transposes on the way into memory. Element subscripts are always
  * `a<row><col>`; raw indices are always column major.
  *
- * **Y is up.** Direction constants such as `vec2.UP` assume a y-up coordinate
+ * **Y is up.** Direction constants such as `Vec2.UP` assume a y-up coordinate
  * system. In screen or canvas space, where y grows downward, `UP` points down
  * the screen.
  *
@@ -68,7 +68,7 @@
  * `out`.
  *
  * **Aliasing is allowed.** `out` may be the same object as any input, or a
- * different view that overlaps the same memory. `vec3.cross(a, a, b)` is valid
+ * different view that overlaps the same memory. `Vec3.cross(a, a, b)` is valid
  * and gives the same result as writing to a separate vector. Functions read all
  * inputs into locals before writing anything, and new functions must do the same.
  *
