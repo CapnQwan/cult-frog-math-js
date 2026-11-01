@@ -1,7 +1,18 @@
 // src/__tests__/interpolation.test.ts
 import { describe, expect, test } from 'vitest';
 
-import { invLerp, lerp } from '../interpolation.js';
+import * as Smooth from '../easing/smooth.js';
+import * as root from '../index.js';
+import { invLerp, lerp, smootherstep, smoothstep } from '../interpolation.js';
+
+describe('the package root', () => {
+  test('exports every interpolation helper', () => {
+    expect(root.lerp).toBe(lerp);
+    expect(root.invLerp).toBe(invLerp);
+    expect(root.smoothstep).toBe(smoothstep);
+    expect(root.smootherstep).toBe(smootherstep);
+  });
+});
 
 describe('lerp', () => {
   test('returns a exactly at t = 0', () => {
@@ -85,5 +96,62 @@ describe('invLerp', () => {
 
   test('propagates NaN', () => {
     expect(invLerp(0, 10, Number.NaN)).toBeNaN();
+  });
+});
+
+describe.each([
+  ['smoothstep', smoothstep, Smooth.smoothstep, 0.84375],
+  ['smootherstep', smootherstep, Smooth.smootherstep, 0.896484375],
+])('%s', (_name, remap, ease, atThreeQuarters) => {
+  test('eases the position of the value in the range', () => {
+    expect(remap(10, 20, 12.5)).toBe(ease(0.25));
+    expect(remap(10, 20, 17.5)).toBe(atThreeQuarters);
+    expect(remap(0, 1, 0.75)).toBe(atThreeQuarters);
+  });
+
+  test('passes through the bounds and the midpoint', () => {
+    expect(remap(10, 20, 10)).toBe(0);
+    expect(remap(10, 20, 15)).toBe(0.5);
+    expect(remap(10, 20, 20)).toBe(1);
+  });
+
+  test('clamps outside the range, unlike the easing curve', () => {
+    expect(remap(0, 1, -5)).toBe(0);
+    expect(remap(0, 1, 5)).toBe(1);
+    expect(ease(5)).not.toBe(1);
+  });
+
+  test('eases: the slope is flat at both ends', () => {
+    const h = 1e-4;
+    expect((remap(0, 1, h) - remap(0, 1, 0)) / h).toBeLessThan(0.01);
+    expect((remap(0, 1, 1) - remap(0, 1, 1 - h)) / h).toBeLessThan(0.01);
+  });
+
+  test('is symmetric about the midpoint', () => {
+    expect(remap(0, 1, 0.3) + remap(0, 1, 0.7)).toBeCloseTo(1, 12);
+  });
+
+  test('takes the edges first and the value last', () => {
+    // Parameter order matches the GLSL smoothstep, not clamp's (value, min, max).
+    expect(remap(0, 4, 3)).toBe(atThreeQuarters);
+  });
+
+  test('gives a descending ramp when the bounds are reversed', () => {
+    expect(remap(10, 0, 2.5)).toBe(atThreeQuarters);
+    expect(remap(10, 0, 10)).toBe(0);
+    expect(remap(10, 0, 0)).toBe(1);
+    expect(remap(10, 0, 15)).toBe(0);
+    expect(remap(10, 0, -5)).toBe(1);
+  });
+
+  test('is inconsistent for a degenerate range', () => {
+    // Documented rather than guarded: 0 / 0 is NaN, and +-Infinity clamps.
+    expect(remap(5, 5, 5)).toBeNaN();
+    expect(remap(5, 5, 6)).toBe(1);
+    expect(remap(5, 5, 4)).toBe(0);
+  });
+
+  test('propagates NaN', () => {
+    expect(remap(0, 1, Number.NaN)).toBeNaN();
   });
 });

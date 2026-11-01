@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
+import * as easingEntry from '../easing/index.js';
 import * as root from '../index.js';
 import * as mat2Entry from '../mat2.js';
 import * as mat3Entry from '../mat3.js';
@@ -44,8 +45,36 @@ describe('per-type entry points', () => {
   });
 });
 
+describe('easing entry point', () => {
+  test('exports only its namespace at runtime', () => {
+    expect(Object.keys(easingEntry)).toEqual(['Easing']);
+  });
+
+  test('namespace exposes every curve family', () => {
+    const { Cubic, Quad, Quart, Quint, Smooth } = easingEntry.Easing;
+    for (const family of [Quad, Cubic, Quart, Quint]) {
+      expect(family.easeIn).toBeTypeOf('function');
+      expect(family.easeOut).toBeTypeOf('function');
+      expect(family.easeInOut).toBeTypeOf('function');
+    }
+    expect(Smooth.smoothstep).toBeTypeOf('function');
+    expect(Smooth.smootherstep).toBeTypeOf('function');
+  });
+
+  test('the root exports the same Easing namespace object', () => {
+    expect(root.Easing).toBe(easingEntry.Easing);
+  });
+});
+
 describe('package.json exports', () => {
   const exportsMap = pkg.exports as Record<string, unknown>;
+
+  test('./easing points at its entry file', () => {
+    expect(exportsMap['./easing']).toEqual({
+      types: './dist/easing/index.d.ts',
+      default: './dist/easing/index.js',
+    });
+  });
 
   test.each(entries)('./%s points at its entry file', (name) => {
     const subpath = name.toLowerCase();

@@ -1,6 +1,6 @@
 /**
- * Interpolation helpers: moving between two values, and finding where a value
- * sits between two others.
+ * Interpolation helpers: moving between two values, finding where a value sits
+ * between two others, and easing that position onto a smooth ramp.
  *
  * Like the scalar helpers these work on plain `number`s, which are float64, so
  * a result is rounded when it lands in a `Vec3` or a `Mat4`. There is no `out`
@@ -9,6 +9,7 @@
  * @module interpolation
  */
 
+import * as Smooth from './easing/smooth.js';
 import { clamp } from './scalars.js';
 
 /**
@@ -62,4 +63,65 @@ export function lerp(a: number, b: number, t: number): number {
  */
 export function invLerp(min: number, max: number, v: number): number {
   return clamp((v - min) / (max - min), 0, 1);
+}
+
+/**
+ * Maps `value` from the range `[min, max]` onto a smooth `0`-to-`1` ramp.
+ *
+ * The classic Hermite ease: the input is first clamped to the range, then
+ * shaped by `3x² - 2x³`. The curve's slope is zero at both ends, so motion
+ * driven by it starts and stops gently instead of turning a corner — that
+ * easing is the whole reason to prefer it over a linear remap.
+ *
+ * The parameter order matches the GLSL/HLSL intrinsic — edges first, value
+ * last — not the `(value, min, max)` order that `clamp` uses. To ease a value
+ * that's already `0`-to-`1`, or to pass a `(t) => number` curve around, use
+ * `Easing.Smooth.smoothstep(t)` instead.
+ *
+ * Reversed bounds are fine and give a descending ramp: `smoothstep(10, 0, 2.5)`
+ * is `0.84375`.
+ *
+ * A degenerate range where `min === max` has no meaningful answer, and doesn't
+ * give a consistent one: `NaN` when `value === min`, `1` when `value` is above it
+ * and `0` when `value` is below it. Guard against it if the bounds are computed
+ * rather than literal. `NaN` in gives `NaN` out.
+ *
+ * @param min - The input value mapping to `0`.
+ * @param max - The input value mapping to `1`.
+ * @param value - The value to map.
+ * @returns A smoothly eased value in `[0, 1]`.
+ */
+export function smoothstep(min: number, max: number, value: number): number {
+  return Smooth.smoothstep(invLerp(min, max, value));
+}
+
+/**
+ * Maps `value` from the range `[min, max]` onto an even smoother `0`-to-`1` ramp.
+ *
+ * Ken Perlin's quintic: the input is first clamped to the range, then shaped by
+ * `6x⁵ - 15x⁴ + 10x³`. Flatter at the ends than `smoothstep`: its slope *and* its
+ * curvature are zero at both ends, so there's no sudden change in acceleration
+ * where motion starts or stops.
+ *
+ * The parameter order matches `smoothstep` — edges first, value last — not the
+ * `(value, min, max)` order that `clamp` uses. Unlike `smoothstep` there's no
+ * GLSL/HLSL intrinsic of this name. To ease a value that's already `0`-to-`1`,
+ * which skips the divide and the clamp in hot loops such as noise, use
+ * `Easing.Smooth.smootherstep(t)` instead.
+ *
+ * Reversed bounds are fine and give a descending ramp:
+ * `smootherstep(10, 0, 2.5)` is `0.896484375`.
+ *
+ * A degenerate range where `min === max` has no meaningful answer, and doesn't
+ * give a consistent one: `NaN` when `value === min`, `1` when `value` is above it
+ * and `0` when `value` is below it. Guard against it if the bounds are computed
+ * rather than literal. `NaN` in gives `NaN` out.
+ *
+ * @param min - The input value mapping to `0`.
+ * @param max - The input value mapping to `1`.
+ * @param value - The value to map.
+ * @returns A smoothly eased value in `[0, 1]`.
+ */
+export function smootherstep(min: number, max: number, value: number): number {
+  return Smooth.smootherstep(invLerp(min, max, value));
 }

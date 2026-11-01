@@ -1,5 +1,6 @@
 import { describe, expectTypeOf, test } from 'vitest';
 
+import { Easing } from '../easing/index.js';
 import { Mat2 } from '../mat2.js';
 import { Mat3 } from '../mat3.js';
 import { Mat4 } from '../mat4.js';
@@ -40,6 +41,18 @@ describe('entry points export each namespace with its types', () => {
     expectTypeOf(Quat.create).returns.toEqualTypeOf<Quat>();
     expectTypeOf(Quat.clone).parameter(0).toEqualTypeOf<ReadonlyQuat>();
   });
+
+  test('every easing curve takes t and returns a number', () => {
+    type Curve = (t: number) => number;
+    expectTypeOf(Easing.Quad.easeIn).toEqualTypeOf<Curve>();
+    expectTypeOf(Easing.Quad.easeOut).toEqualTypeOf<Curve>();
+    expectTypeOf(Easing.Quad.easeInOut).toEqualTypeOf<Curve>();
+    expectTypeOf(Easing.Cubic.easeInOut).toEqualTypeOf<Curve>();
+    expectTypeOf(Easing.Quart.easeInOut).toEqualTypeOf<Curve>();
+    expectTypeOf(Easing.Quint.easeInOut).toEqualTypeOf<Curve>();
+    expectTypeOf(Easing.Smooth.smoothstep).toEqualTypeOf<Curve>();
+    expectTypeOf(Easing.Smooth.smootherstep).toEqualTypeOf<Curve>();
+  });
 });
 
 describe('the root exports the same names', () => {
@@ -68,6 +81,7 @@ describe('the root exports the same names', () => {
     expectTypeOf<typeof root.Mat3>().toEqualTypeOf<typeof Mat3>();
     expectTypeOf<typeof root.Mat4>().toEqualTypeOf<typeof Mat4>();
     expectTypeOf<typeof root.Quat>().toEqualTypeOf<typeof Quat>();
+    expectTypeOf<typeof root.Easing>().toEqualTypeOf<typeof Easing>();
   });
 
   test('the old lowercase namespaces are gone', () => {

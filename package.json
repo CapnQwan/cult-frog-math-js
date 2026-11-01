@@ -64,6 +64,10 @@
       "types": "./dist/quat.d.ts",
       "default": "./dist/quat.js"
     },
+    "./easing": {
+      "types": "./dist/easing/index.d.ts",
+      "default": "./dist/easing/index.js"
+    },
     "./geometry": {
       "types": "./dist/geometry/index.d.ts",
       "default": "./dist/geometry/index.js"
