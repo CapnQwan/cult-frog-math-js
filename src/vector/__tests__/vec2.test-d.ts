@@ -195,3 +195,38 @@ describe('dot', () => {
     vec2.dot(raw, live);
   });
 });
+
+describe('scaleAndAdd, negate and lerp', () => {
+  test('they write to a mutable out and return it', () => {
+    expectTypeOf(vec2.scaleAndAdd).parameters.toEqualTypeOf<
+      [Vec2, ReadonlyVec2, ReadonlyVec2, number]
+    >();
+    expectTypeOf(vec2.negate).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2]>();
+    expectTypeOf(vec2.lerp).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyVec2, number]>();
+    expectTypeOf(vec2.scaleAndAdd).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.negate).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.lerp).returns.toEqualTypeOf<Vec2>();
+  });
+
+  test('call sites', () => {
+    vec2.scaleAndAdd(live, live, frozen, 2);
+    vec2.negate(live, frozen);
+    vec2.lerp(shared, frozen, live, 0.5);
+    // @ts-expect-error readonly can never be an out parameter
+    vec2.scaleAndAdd(frozen, live, live, 2);
+    // @ts-expect-error readonly can never be an out parameter
+    vec2.negate(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec2.lerp(frozen, live, live, 0.5);
+    // @ts-expect-error wrong-dimension input
+    vec2.scaleAndAdd(live, other, live, 2);
+    // @ts-expect-error wrong-dimension input
+    vec2.negate(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec2.lerp(live, raw, live, 0.5);
+    // @ts-expect-error the scalar is a number, not a vector
+    vec2.scaleAndAdd(live, live, live, frozen);
+    // @ts-expect-error t is a number, not a vector
+    vec2.lerp(live, live, live, frozen);
+  });
+});

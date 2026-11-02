@@ -8,6 +8,7 @@
  */
 
 import { EPSILON } from '../constants.js';
+import { lerp as lerpScalar } from '../interpolation.js';
 import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
 
 import type { ReadonlyVec4, Vec4 } from './_types/vec4.js';
@@ -264,6 +265,61 @@ export function scale(out: Vec4, a: ReadonlyVec4, scalar: number): Vec4 {
 }
 
 /**
+ * Writes `a + b * scalar` into `out`, the step behind `position += velocity * dt`.
+ * Only `b` is scaled.
+ *
+ * Exists because the two-call version needs a scratch vector and rounds twice:
+ * {@link scale} stores `b * scalar` as float32 before {@link add} uses it. Here the
+ * whole sum is calculated in float64 and rounded once when stored, so the two forms
+ * can differ slightly, and a large `b * scalar` can't overflow on the way through.
+ *
+ * Each result is still rounded to float32, so a small step can vanish against a
+ * large value: moving a component of `16777216` by `1` leaves it unchanged. An
+ * infinite component in `b` gives `NaN` when `scalar` is `0`.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to add to.
+ * @param b - The vector to scale and add.
+ * @param scalar - The factor applied to `b`, not to `a`.
+ * @returns `out`.
+ */
+export function scaleAndAdd(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4, scalar: number): Vec4 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  out[0] = ax + bx * scalar;
+  out[1] = ay + by * scalar;
+  out[2] = az + bz * scalar;
+  out[3] = aw + bw * scalar;
+  return out;
+}
+
+/**
+ * Writes `a` with the sign of every component flipped into `out`.
+ *
+ * `w` is flipped too, so negating a homogeneous point `(x, y, z, 1)` doesn't move
+ * it: the perspective divide cancels the sign back out. To flip a position, use a
+ * `Vec3` or set `w` back afterwards.
+ *
+ * A `0` component becomes `-0`. `isEqual` and arithmetic treat the two as the same,
+ * but `Object.is` doesn't, and neither does a `toEqual` in tests.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to negate.
+ * @returns `out`.
+ */
+export function negate(out: Vec4, a: ReadonlyVec4): Vec4 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  out[0] = -ax;
+  out[1] = -ay;
+  out[2] = -az;
+  out[3] = -aw;
+  return out;
+}
+
+/**
  * Returns the squared length of `a`.
  *
  * Skips the square root, so prefer it when comparing lengths:
@@ -411,4 +467,47 @@ export function dot(a: ReadonlyVec4, b: ReadonlyVec4): number {
   // biome-ignore format: packed component reads
   const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   return ax * bx + ay * by + az * bz + aw * bw;
+}
+
+/**
+ * Writes the point `t` of the way from `a` to `b` into `out`: `0` gives `a`, `1` gives
+ * `b` and `0.5` gives the midpoint.
+ *
+ * `t` isn't clamped, so values outside `0` to `1` carry on past either end. Pass
+ * `saturate(t)` to stay between them.
+ *
+ * Watch out for a fixed `t` applied every frame, as in `lerp(pos, pos, target, 0.1)`.
+ * It depends on the frame rate: after one second it's 95.8% of the way there at 30
+ * steps and 99.8% at 60. For the same motion at any frame rate, use
+ * `1 - Math.exp(-rate * dt)` as `t`.
+ *
+ * Blending directions doesn't keep their length: halfway between `(1, 0)` and
+ * `(0, 1)` has a length of about `0.707`, and halfway between opposite directions is
+ * zero. Normalize the result if you need a direction, and check for zero first.
+ *
+ * `w` is interpolated like any other component. A `Quat` won't type-check here,
+ * because blending rotations this way doesn't keep them valid.
+ *
+ * Uses `a + (b - a) * t`, which gives exactly `a` at `t = 0`. It only misses `b` at
+ * `t = 1` when the two differ enormously in scale: going from `1e8` to `0.1` lands on
+ * `0.09999999`. An infinite component in `a` gives `NaN` from `t = 0` upwards, and one
+ * in `b` gives `NaN` at `t = 0` and `Infinity` above it.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector at `t = 0`.
+ * @param b - The vector at `t = 1`.
+ * @param t - How far to go from `a` to `b`.
+ * @returns `out`.
+ */
+export function lerp(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4, t: number): Vec4 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+
+  out[0] = lerpScalar(ax, bx, t);
+  out[1] = lerpScalar(ay, by, t);
+  out[2] = lerpScalar(az, bz, t);
+  out[3] = lerpScalar(aw, bw, t);
+  return out;
 }

@@ -5,12 +5,14 @@ import * as vec4 from '../vec4.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
+import type { Quat } from '../../quaternion/_types/quat.js';
 import type { Vec3 } from '../_types/vec3.js';
 import type { ReadonlyVec4, Vec4 } from '../_types/vec4.js';
 
 declare const live: Vec4;
 declare const frozen: ReadonlyVec4;
 declare const other: Vec3;
+declare const rotation: Quat;
 declare const raw: Float32Array<ArrayBuffer>;
 
 /** A `Vec4` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
@@ -195,5 +197,42 @@ describe('dot', () => {
     vec4.dot(live, other);
     // @ts-expect-error unbranded arrays are rejected
     vec4.dot(raw, live);
+  });
+});
+
+describe('scaleAndAdd, negate and lerp', () => {
+  test('they write to a mutable out and return it', () => {
+    expectTypeOf(vec4.scaleAndAdd).parameters.toEqualTypeOf<
+      [Vec4, ReadonlyVec4, ReadonlyVec4, number]
+    >();
+    expectTypeOf(vec4.negate).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.lerp).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4, ReadonlyVec4, number]>();
+    expectTypeOf(vec4.scaleAndAdd).returns.toEqualTypeOf<Vec4>();
+    expectTypeOf(vec4.negate).returns.toEqualTypeOf<Vec4>();
+    expectTypeOf(vec4.lerp).returns.toEqualTypeOf<Vec4>();
+  });
+
+  test('call sites', () => {
+    vec4.scaleAndAdd(live, live, frozen, 2);
+    vec4.negate(live, frozen);
+    vec4.lerp(shared, frozen, live, 0.5);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.scaleAndAdd(frozen, live, live, 2);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.negate(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.lerp(frozen, live, live, 0.5);
+    // @ts-expect-error wrong-dimension input
+    vec4.scaleAndAdd(live, other, live, 2);
+    // @ts-expect-error wrong-dimension input
+    vec4.negate(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.lerp(live, raw, live, 0.5);
+    // @ts-expect-error the scalar is a number, not a vector
+    vec4.scaleAndAdd(live, live, live, frozen);
+    // @ts-expect-error t is a number, not a vector
+    vec4.lerp(live, live, live, frozen);
+    // @ts-expect-error a Quat isn't a Vec4, so rotations can't be blended by accident
+    vec4.lerp(live, rotation, rotation, 0.5);
   });
 });

@@ -211,3 +211,38 @@ describe('dot and cross', () => {
     vec3.cross(live, live, raw);
   });
 });
+
+describe('scaleAndAdd, negate and lerp', () => {
+  test('they write to a mutable out and return it', () => {
+    expectTypeOf(vec3.scaleAndAdd).parameters.toEqualTypeOf<
+      [Vec3, ReadonlyVec3, ReadonlyVec3, number]
+    >();
+    expectTypeOf(vec3.negate).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.lerp).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3, ReadonlyVec3, number]>();
+    expectTypeOf(vec3.scaleAndAdd).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.negate).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.lerp).returns.toEqualTypeOf<Vec3>();
+  });
+
+  test('call sites', () => {
+    vec3.scaleAndAdd(live, live, frozen, 2);
+    vec3.negate(live, frozen);
+    vec3.lerp(shared, frozen, live, 0.5);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.scaleAndAdd(frozen, live, live, 2);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.negate(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.lerp(frozen, live, live, 0.5);
+    // @ts-expect-error wrong-dimension input
+    vec3.scaleAndAdd(live, other, live, 2);
+    // @ts-expect-error wrong-dimension input
+    vec3.negate(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec3.lerp(live, raw, live, 0.5);
+    // @ts-expect-error the scalar is a number, not a vector
+    vec3.scaleAndAdd(live, live, live, frozen);
+    // @ts-expect-error t is a number, not a vector
+    vec3.lerp(live, live, live, frozen);
+  });
+});

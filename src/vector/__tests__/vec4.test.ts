@@ -1261,3 +1261,408 @@ describe('dot', () => {
     expect(vec4.dot(a, b)).toBe(70);
   });
 });
+
+describe('scaleAndAdd', () => {
+  test('adds b times the scalar to a, and returns out', () => {
+    const out = vec4.create();
+    const result = vec4.scaleAndAdd(out, vec4.create(1, 2, 3, 4), vec4.create(10, 20, 30, 40), 0.5);
+
+    expect(result).toBe(out);
+    expectComponents(out, 6, 12, 18, 24);
+  });
+
+  test('a scalar of 0 gives a, and a scalar of 1 gives a + b', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const b = vec4.create(10, 20, 30, 40);
+
+    expectComponents(vec4.scaleAndAdd(vec4.create(), a, b, 0), 1, 2, 3, 4);
+    expectComponents(vec4.scaleAndAdd(vec4.create(), a, b, 1), 11, 22, 33, 44);
+  });
+
+  test('a negative scalar steps backwards', () => {
+    const out = vec4.scaleAndAdd(
+      vec4.create(),
+      vec4.create(1, 2, 3, 4),
+      vec4.create(10, 20, 30, 40),
+      -1
+    );
+
+    expectComponents(out, -9, -18, -27, -36);
+  });
+
+  test('rounds once, so it can differ from scale followed by add', () => {
+    const a = vec4.create(1);
+    const b = vec4.create(9.81);
+    const dt = 1 / 60;
+    const once = vec4.scaleAndAdd(vec4.create(), a, b, dt);
+    const twice = vec4.add(vec4.create(), a, vec4.scale(vec4.create(), b, dt));
+
+    expect(once[0]).toBe(Math.fround(1 + Math.fround(9.81) * dt));
+    expect(once[0]).not.toBe(twice[0]);
+  });
+
+  test('b times the scalar does not overflow before the sum', () => {
+    const out = vec4.scaleAndAdd(vec4.create(), vec4.create(-3e38), vec4.create(3e38), 2);
+
+    expect(out[0]).toBe(Math.fround(3e38));
+  });
+
+  test('a result too large for float32 becomes Infinity', () => {
+    const out = vec4.scaleAndAdd(vec4.create(), vec4.create(3e38), vec4.create(3e38), 1);
+
+    expect(out[0]).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('a small step can vanish against a large value', () => {
+    const out = vec4.scaleAndAdd(vec4.create(), vec4.create(16777216), vec4.create(1), 1);
+
+    expect(out[0]).toBe(16777216);
+  });
+
+  test('a NaN scalar makes the whole result NaN', () => {
+    const out = vec4.scaleAndAdd(
+      vec4.create(),
+      vec4.create(1, 2, 3, 4),
+      vec4.create(10, 20, 30, 40),
+      Number.NaN
+    );
+
+    expectComponents(out, Number.NaN, Number.NaN, Number.NaN, Number.NaN);
+  });
+
+  test('an infinite component in b gives NaN when the scalar is 0', () => {
+    const out = vec4.scaleAndAdd(
+      vec4.create(),
+      vec4.create(1, 2, 3, 4),
+      vec4.create(Number.POSITIVE_INFINITY),
+      0
+    );
+
+    expect(out[0]).toBeNaN();
+    expect(out[1]).toBe(2);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const b = vec4.create(10, 20, 30, 40);
+    vec4.scaleAndAdd(vec4.create(), a, b, 2);
+
+    expectComponents(a, 1, 2, 3, 4);
+    expectComponents(b, 10, 20, 30, 40);
+  });
+
+  test('out may be the first input', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    vec4.scaleAndAdd(a, a, vec4.create(10, 20, 30, 40), 2);
+
+    expectComponents(a, 21, 42, 63, 84);
+  });
+
+  test('out may be the second input', () => {
+    const b = vec4.create(10, 20, 30, 40);
+    vec4.scaleAndAdd(b, vec4.create(1, 2, 3, 4), b, 2);
+
+    expectComponents(b, 21, 42, 63, 84);
+  });
+
+  test('out may be both inputs', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    vec4.scaleAndAdd(a, a, a, 2);
+
+    expectComponents(a, 3, 6, 9, 12);
+  });
+
+  test('overlapping views: out one element ahead of the first input', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 1);
+    vec4.scaleAndAdd(out, viewAt(buffer, 0), viewAt(buffer, 4), 2);
+
+    expectComponents(out, 11, 14, 17, 20);
+  });
+
+  test('overlapping views: out one element behind the first input', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 0);
+    vec4.scaleAndAdd(out, viewAt(buffer, 1), viewAt(buffer, 5), 2);
+
+    expectComponents(out, 14, 17, 20, 23);
+  });
+
+  test('overlapping views: out one element ahead of the second input', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 5);
+    vec4.scaleAndAdd(out, viewAt(buffer, 0), viewAt(buffer, 4), 2);
+
+    expectComponents(out, 11, 14, 17, 20);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(12);
+    vec4.scaleAndAdd(viewAt(pool, 4), vec4.create(0, 0, 0, 0), vec4.create(1, 1, 1, 1), 1);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 4, 1, 1, 1, 1, 9, 10, 11, 12]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec4 = vec4.create(1, 2, 3, 4);
+    const b: ReadonlyVec4 = vec4.create(10, 20, 30, 40);
+
+    expectComponents(vec4.scaleAndAdd(vec4.create(), a, b, 2), 21, 42, 63, 84);
+  });
+});
+
+describe('negate', () => {
+  test('flips the sign of every component and returns out', () => {
+    const out = vec4.create();
+    const result = vec4.negate(out, vec4.create(1, -2, 3, -4));
+
+    expect(result).toBe(out);
+    expectComponents(out, -1, 2, -3, 4);
+  });
+
+  test('negating twice gives the original back', () => {
+    const a = vec4.create(1, 2, 3, 4);
+
+    expectComponents(vec4.negate(a, vec4.negate(a, a)), 1, 2, 3, 4);
+  });
+
+  test('a zero component becomes -0, which isEqual still treats as zero', () => {
+    const zero = vec4.create();
+    const out = vec4.negate(vec4.create(), zero);
+
+    expect(out[0]).toBe(-0);
+    expect(vec4.isEqual(out, zero)).toBe(true);
+  });
+
+  test('-0 becomes 0', () => {
+    const out = vec4.negate(vec4.create(), vec4.create(-0));
+
+    expect(out[0]).toBe(0);
+  });
+
+  test('NaN stays NaN and Infinity flips', () => {
+    const out = vec4.negate(vec4.create(), vec4.create(Number.NaN, Number.POSITIVE_INFINITY));
+
+    expect(out[0]).toBeNaN();
+    expect(out[1]).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  test('flipping w too means a homogeneous point stays in the same place', () => {
+    const point = vec4.create(2, 4, 6, 2);
+    const out = vec4.negate(vec4.create(), point);
+
+    expectComponents(out, -2, -4, -6, -2);
+    expect(out[0] / out[3]).toBe(point[0] / point[3]);
+    expect(out[1] / out[3]).toBe(point[1] / point[3]);
+    expect(out[2] / out[3]).toBe(point[2] / point[3]);
+  });
+
+  test('never writes to the input', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    vec4.negate(vec4.create(), a);
+
+    expectComponents(a, 1, 2, 3, 4);
+  });
+
+  test('out may be the input', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    vec4.negate(a, a);
+
+    expectComponents(a, -1, -2, -3, -4);
+  });
+
+  test('overlapping views: out one element ahead of the input', () => {
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 1);
+    vec4.negate(out, viewAt(buffer, 0));
+
+    expectComponents(out, -1, -2, -3, -4);
+  });
+
+  test('overlapping views: out one element behind the input', () => {
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 0);
+    vec4.negate(out, viewAt(buffer, 1));
+
+    expectComponents(out, -2, -3, -4, -5);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(12);
+    vec4.negate(viewAt(pool, 4), vec4.create(1, 1, 1, 1));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 4, -1, -1, -1, -1, 9, 10, 11, 12]);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec4 = vec4.create(1, 2, 3, 4);
+
+    expectComponents(vec4.negate(vec4.create(), a), -1, -2, -3, -4);
+  });
+});
+
+describe('lerp', () => {
+  test('moves every component from a towards b, and returns out', () => {
+    const out = vec4.create();
+    const result = vec4.lerp(out, vec4.create(1, 2, 3, 4), vec4.create(10, 20, 30, 40), 0.25);
+
+    expect(result).toBe(out);
+    expectComponents(out, 3.25, 6.5, 9.75, 13);
+  });
+
+  test('t of 0 gives a and t of 1 gives b, exactly', () => {
+    const a = vec4.create(0.1);
+    const b = vec4.create(0.7);
+
+    expect(vec4.isEqual(vec4.lerp(vec4.create(), a, b, 0), a)).toBe(true);
+    expect(vec4.isEqual(vec4.lerp(vec4.create(), a, b, 1), b)).toBe(true);
+  });
+
+  test('does not clamp t, so it carries on past either end', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const b = vec4.create(10, 20, 30, 40);
+
+    expectComponents(vec4.lerp(vec4.create(), a, b, 2), 19, 38, 57, 76);
+    expectComponents(vec4.lerp(vec4.create(), a, b, -1), -8, -16, -24, -32);
+  });
+
+  test('stays on a when a and b are equal', () => {
+    const a = vec4.create(0.1);
+
+    expect(vec4.isEqual(vec4.lerp(vec4.create(), a, a, 0.3), a)).toBe(true);
+  });
+
+  test('handles the extremes of float32 without overflowing', () => {
+    const out = vec4.lerp(vec4.create(), vec4.create(3e38), vec4.create(-3e38), 0.5);
+
+    expect(out[0]).toBe(0);
+  });
+
+  test('only misses b at t of 1 when the two differ enormously in scale', () => {
+    const close = vec4.lerp(vec4.create(), vec4.create(1e6), vec4.create(0.1), 1);
+    const far = vec4.lerp(vec4.create(), vec4.create(1e8), vec4.create(0.1), 1);
+
+    expect(close[0]).toBe(Math.fround(0.1));
+    expect(far[0]).not.toBe(Math.fround(0.1));
+    expect(far[0]).toBeCloseTo(0.1, 6);
+  });
+
+  test('blending directions does not keep their length', () => {
+    const halfway = vec4.lerp(vec4.create(), vec4.create(1, 0, 0, 0), vec4.create(0, 1, 0, 0), 0.5);
+
+    expect(vec4.magnitude(halfway)).toBeCloseTo(Math.SQRT1_2, 6);
+    expect(
+      vec4.magnitude(
+        vec4.lerp(vec4.create(), vec4.create(1, 0, 0, 0), vec4.create(-1, 0, 0, 0), 0.5)
+      )
+    ).toBe(0);
+  });
+
+  test('a fixed t depends on the step count, and an exponential t does not', () => {
+    const reachedAfter = (steps: number, t: number): number => {
+      const current = vec4.create();
+      const target = vec4.create(1);
+      for (let i = 0; i < steps; i++) vec4.lerp(current, current, target, t);
+      return current[0];
+    };
+    const rate = 6;
+
+    expect(reachedAfter(30, 0.1)).toBeCloseTo(0.958, 3);
+    expect(reachedAfter(60, 0.1)).toBeCloseTo(0.998, 3);
+    expect(reachedAfter(30, 1 - Math.exp(-rate / 30))).toBeCloseTo(
+      reachedAfter(60, 1 - Math.exp(-rate / 60)),
+      5
+    );
+  });
+
+  test('a NaN t makes the whole result NaN', () => {
+    const out = vec4.lerp(
+      vec4.create(),
+      vec4.create(1, 2, 3, 4),
+      vec4.create(10, 20, 30, 40),
+      Number.NaN
+    );
+
+    expectComponents(out, Number.NaN, Number.NaN, Number.NaN, Number.NaN);
+  });
+
+  test('an infinite component in a gives NaN from t of 0 upwards', () => {
+    const a = vec4.create(Number.POSITIVE_INFINITY);
+    const b = vec4.create(1, 1, 1, 1);
+
+    expect(vec4.lerp(vec4.create(), a, b, 0)[0]).toBeNaN();
+    expect(vec4.lerp(vec4.create(), a, b, 0.5)[0]).toBeNaN();
+    expect(vec4.lerp(vec4.create(), a, b, 1)[0]).toBeNaN();
+  });
+
+  test('an infinite component in b gives NaN at t of 0 and Infinity above it', () => {
+    const a = vec4.create(1, 1, 1, 1);
+    const b = vec4.create(Number.POSITIVE_INFINITY);
+
+    expect(vec4.lerp(vec4.create(), a, b, 0)[0]).toBeNaN();
+    expect(vec4.lerp(vec4.create(), a, b, 0.5)[0]).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const b = vec4.create(10, 20, 30, 40);
+    vec4.lerp(vec4.create(), a, b, 0.5);
+
+    expectComponents(a, 1, 2, 3, 4);
+    expectComponents(b, 10, 20, 30, 40);
+  });
+
+  test('out may be the first input', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    vec4.lerp(a, a, vec4.create(10, 20, 30, 40), 0.5);
+
+    expectComponents(a, 5.5, 11, 16.5, 22);
+  });
+
+  test('out may be the second input', () => {
+    const b = vec4.create(10, 20, 30, 40);
+    vec4.lerp(b, vec4.create(1, 2, 3, 4), b, 0.5);
+
+    expectComponents(b, 5.5, 11, 16.5, 22);
+  });
+
+  test('overlapping views: out one element ahead of the first input', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 1);
+    vec4.lerp(out, viewAt(buffer, 0), viewAt(buffer, 4), 0.75);
+
+    expectComponents(out, 4, 5, 6, 7);
+  });
+
+  test('overlapping views: out one element behind the first input', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 0);
+    vec4.lerp(out, viewAt(buffer, 1), viewAt(buffer, 5), 0.75);
+
+    expectComponents(out, 5, 6, 7, 8);
+  });
+
+  test('overlapping views: out one element ahead of the second input', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 5);
+    vec4.lerp(out, viewAt(buffer, 0), viewAt(buffer, 4), 0.75);
+
+    expectComponents(out, 4, 5, 6, 7);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(12);
+    vec4.lerp(viewAt(pool, 4), vec4.create(0, 0, 0, 0), vec4.create(1, 1, 1, 1), 0.5);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([
+      1, 2, 3, 4, 0.5, 0.5, 0.5, 0.5, 9, 10, 11, 12,
+    ]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec4 = vec4.create(1, 2, 3, 4);
+    const b: ReadonlyVec4 = vec4.create(10, 20, 30, 40);
+
+    expectComponents(vec4.lerp(vec4.create(), a, b, 0.5), 5.5, 11, 16.5, 22);
+  });
+});
