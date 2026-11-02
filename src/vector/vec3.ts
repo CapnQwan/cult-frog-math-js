@@ -294,6 +294,131 @@ export function negate(out: Vec3, a: ReadonlyVec3): Vec3 {
 }
 
 /**
+ * Writes the absolute value of every component of `a` into `out`.
+ *
+ * `-0` becomes `0`, and `NaN` stays `NaN`.
+ *
+ * @param out - The vector to write to.
+ * @param a - The input vector.
+ * @returns `out`.
+ */
+export function abs(out: Vec3, a: ReadonlyVec3): Vec3 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2];
+  out[0] = Math.abs(ax);
+  out[1] = Math.abs(ay);
+  out[2] = Math.abs(az);
+  return out;
+}
+
+/**
+ * Writes the smaller of `a` and `b` into `out`, compared component by component,
+ * so the result can mix components from both. Useful for growing bounding boxes.
+ *
+ * A `NaN` in either input gives `NaN` in that component only, and `-0` counts as
+ * smaller than `0`.
+ *
+ * @param out - The vector to write to.
+ * @param a - The first vector.
+ * @param b - The second vector.
+ * @returns `out`.
+ */
+export function min(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2];
+  out[0] = Math.min(ax, bx);
+  out[1] = Math.min(ay, by);
+  out[2] = Math.min(az, bz);
+  return out;
+}
+
+/**
+ * Writes the larger of `a` and `b` into `out`, compared component by component,
+ * so the result can mix components from both. Useful for growing bounding boxes.
+ *
+ * A `NaN` in either input gives `NaN` in that component only, and `0` counts as
+ * larger than `-0`.
+ *
+ * @param out - The vector to write to.
+ * @param a - The first vector.
+ * @param b - The second vector.
+ * @returns `out`.
+ */
+export function max(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2];
+  out[0] = Math.max(ax, bx);
+  out[1] = Math.max(ay, by);
+  out[2] = Math.max(az, bz);
+  return out;
+}
+
+/**
+ * Writes every component of `a` rounded down into `out`.
+ *
+ * Rounds toward negative infinity, not toward zero, so `-1.5` becomes `-2`. That
+ * makes it the right choice for turning positions into grid or tile coordinates.
+ *
+ * @param out - The vector to write to.
+ * @param a - The input vector.
+ * @returns `out`.
+ */
+export function floor(out: Vec3, a: ReadonlyVec3): Vec3 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2];
+  out[0] = Math.floor(ax);
+  out[1] = Math.floor(ay);
+  out[2] = Math.floor(az);
+  return out;
+}
+
+/**
+ * Writes every component of `a` rounded up into `out`.
+ *
+ * Rounds toward positive infinity, so `-1.5` becomes `-1`. A component between
+ * `-1` and `0` becomes `-0`. `isEqual` and arithmetic treat that as `0`, but
+ * `Object.is` doesn't, and neither does a `toEqual` in tests.
+ *
+ * @param out - The vector to write to.
+ * @param a - The input vector.
+ * @returns `out`.
+ */
+export function ceil(out: Vec3, a: ReadonlyVec3): Vec3 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2];
+  out[0] = Math.ceil(ax);
+  out[1] = Math.ceil(ay);
+  out[2] = Math.ceil(az);
+  return out;
+}
+
+/**
+ * Writes every component of `a` rounded to the nearest whole number into `out`.
+ *
+ * Halves round toward positive infinity, not away from zero, so `-1.5` becomes
+ * `-1`, as with the scalar `round`. Unlike the scalar, this has no `decimals`
+ * parameter. A component from `-0.5` up to `0` becomes `-0`. `isEqual` and
+ * arithmetic treat that as `0`, but `Object.is` doesn't, and neither does a
+ * `toEqual` in tests.
+ *
+ * @param out - The vector to write to.
+ * @param a - The input vector.
+ * @returns `out`.
+ */
+export function round(out: Vec3, a: ReadonlyVec3): Vec3 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2];
+  out[0] = Math.round(ax);
+  out[1] = Math.round(ay);
+  out[2] = Math.round(az);
+  return out;
+}
+
+/**
  * Returns the squared length of `a`.
  *
  * Skips the square root, so prefer it when comparing lengths:

@@ -276,6 +276,56 @@ describe('reflect and angle', () => {
   });
 });
 
+describe('abs, min, max, floor, ceil and round', () => {
+  test('they write to a mutable out and return it', () => {
+    expectTypeOf(vec3.abs).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.min).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.max).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.floor).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.ceil).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.round).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.abs).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.min).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.max).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.floor).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.ceil).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.round).returns.toEqualTypeOf<Vec3>();
+  });
+
+  test('call sites', () => {
+    vec3.abs(live, frozen);
+    vec3.min(shared, frozen, live);
+    vec3.max(live, shared, frozen);
+    vec3.floor(live, live);
+    vec3.ceil(shared, frozen);
+    vec3.round(live, shared);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.abs(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.min(frozen, live, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.max(frozen, live, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.floor(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.ceil(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.round(frozen, live);
+    // @ts-expect-error wrong-dimension input
+    vec3.abs(live, other);
+    // @ts-expect-error wrong-dimension input
+    vec3.min(live, other, live);
+    // @ts-expect-error unbranded arrays are rejected
+    vec3.max(live, live, raw);
+    // @ts-expect-error unbranded arrays are rejected
+    vec3.floor(live, raw);
+    // @ts-expect-error wrong-dimension input
+    vec3.ceil(live, other);
+    // @ts-expect-error unlike the scalar round, there is no decimals parameter
+    vec3.round(live, frozen, 2);
+  });
+});
+
 describe('fromPacked', () => {
   test('it writes to a mutable out and returns it', () => {
     expectTypeOf(vec3.fromPacked).parameters.toEqualTypeOf<[Vec3, ArrayLike<number>, number]>();

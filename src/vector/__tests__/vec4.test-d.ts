@@ -266,6 +266,56 @@ describe('reflect and angle', () => {
   });
 });
 
+describe('abs, min, max, floor, ceil and round', () => {
+  test('they write to a mutable out and return it', () => {
+    expectTypeOf(vec4.abs).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.min).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.max).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.floor).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.ceil).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.round).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.abs).returns.toEqualTypeOf<Vec4>();
+    expectTypeOf(vec4.min).returns.toEqualTypeOf<Vec4>();
+    expectTypeOf(vec4.max).returns.toEqualTypeOf<Vec4>();
+    expectTypeOf(vec4.floor).returns.toEqualTypeOf<Vec4>();
+    expectTypeOf(vec4.ceil).returns.toEqualTypeOf<Vec4>();
+    expectTypeOf(vec4.round).returns.toEqualTypeOf<Vec4>();
+  });
+
+  test('call sites', () => {
+    vec4.abs(live, frozen);
+    vec4.min(shared, frozen, live);
+    vec4.max(live, shared, frozen);
+    vec4.floor(live, live);
+    vec4.ceil(shared, frozen);
+    vec4.round(live, shared);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.abs(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.min(frozen, live, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.max(frozen, live, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.floor(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.ceil(frozen, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.round(frozen, live);
+    // @ts-expect-error wrong-dimension input
+    vec4.abs(live, other);
+    // @ts-expect-error wrong-dimension input
+    vec4.min(live, other, live);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.max(live, live, raw);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.floor(live, raw);
+    // @ts-expect-error a quaternion is not a Vec4, despite the same layout
+    vec4.ceil(live, rotation);
+    // @ts-expect-error unlike the scalar round, there is no decimals parameter
+    vec4.round(live, frozen, 2);
+  });
+});
+
 describe('fromPacked', () => {
   test('it writes to a mutable out and returns it', () => {
     expectTypeOf(vec4.fromPacked).parameters.toEqualTypeOf<[Vec4, ArrayLike<number>, number]>();

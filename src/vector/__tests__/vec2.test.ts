@@ -1390,6 +1390,470 @@ describe('negate', () => {
   });
 });
 
+describe('abs', () => {
+  test('makes every component positive and returns out', () => {
+    const out = vec2.create();
+    const result = vec2.abs(out, vec2.create(-1, -2));
+
+    expect(result).toBe(out);
+    expectComponents(out, 1, 2);
+  });
+
+  test('leaves positive components alone', () => {
+    expectComponents(vec2.abs(vec2.create(), vec2.create(1.5, -2.5)), 1.5, 2.5);
+  });
+
+  test('-0 becomes 0', () => {
+    const out = vec2.abs(vec2.create(), vec2.create(-0, 0));
+
+    expect(out[0]).toBe(0);
+    expect(out[1]).toBe(0);
+  });
+
+  test('NaN stays NaN and -Infinity becomes Infinity', () => {
+    const out = vec2.abs(vec2.create(), vec2.create(Number.NaN, Number.NEGATIVE_INFINITY));
+
+    expect(out[0]).toBeNaN();
+    expect(out[1]).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('never writes to the input', () => {
+    const a = vec2.create(-1, -2);
+    vec2.abs(vec2.create(), a);
+
+    expectComponents(a, -1, -2);
+  });
+
+  test('out may be the input', () => {
+    const a = vec2.create(-1, -2);
+    vec2.abs(a, a);
+
+    expectComponents(a, 1, 2);
+  });
+
+  test('overlapping views: out one element ahead of the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 1);
+    vec2.abs(out, viewAt(buffer, 0));
+
+    expectComponents(out, 1, 2);
+  });
+
+  test('overlapping views: out one element behind the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 0);
+    vec2.abs(out, viewAt(buffer, 1));
+
+    expectComponents(out, 2, 3);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    vec2.abs(viewAt(pool, 2), vec2.create(-9, -9));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 9, 9, 5, 6]);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec2 = vec2.create(-1, -2);
+
+    expectComponents(vec2.abs(vec2.create(), a), 1, 2);
+  });
+});
+
+describe('min', () => {
+  test('takes the smaller value per component and returns out', () => {
+    const out = vec2.create();
+    const result = vec2.min(out, vec2.create(1, 5), vec2.create(4, 2));
+
+    expect(result).toBe(out);
+    expectComponents(out, 1, 2);
+  });
+
+  test('gives the same result with the inputs swapped', () => {
+    expectComponents(vec2.min(vec2.create(), vec2.create(4, 2), vec2.create(1, 5)), 1, 2);
+  });
+
+  test('handles negative values', () => {
+    expectComponents(vec2.min(vec2.create(), vec2.create(-1, -5), vec2.create(-4, 2)), -4, -5);
+  });
+
+  test('a NaN in either input gives NaN in that component only', () => {
+    const fromA = vec2.min(vec2.create(), vec2.create(Number.NaN, 1), vec2.create(1, 2));
+    const fromB = vec2.min(vec2.create(), vec2.create(1, 2), vec2.create(Number.NaN, 1));
+
+    expect(fromA[0]).toBeNaN();
+    expect(fromA[1]).toBe(1);
+    expect(fromB[0]).toBeNaN();
+    expect(fromB[1]).toBe(1);
+  });
+
+  test('-0 counts as smaller than 0, whichever input it is in', () => {
+    const out = vec2.min(vec2.create(), vec2.create(0, -0), vec2.create(-0, 0));
+
+    expect(out[0]).toBe(-0);
+    expect(out[1]).toBe(-0);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec2.create(1, 5);
+    const b = vec2.create(4, 2);
+    vec2.min(vec2.create(), a, b);
+
+    expectComponents(a, 1, 5);
+    expectComponents(b, 4, 2);
+  });
+
+  test('out may be either input', () => {
+    const a = vec2.create(1, 5);
+    const b = vec2.create(4, 2);
+    vec2.min(a, a, b);
+    expectComponents(a, 1, 2);
+
+    const c = vec2.create(1, 5);
+    const d = vec2.create(4, 2);
+    vec2.min(d, c, d);
+    expectComponents(d, 1, 2);
+  });
+
+  test('overlapping views: out one element ahead of an input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 1);
+    vec2.min(out, viewAt(buffer, 0), vec2.create(9, 9));
+
+    expectComponents(out, 1, 2);
+  });
+
+  test('overlapping views: out one element behind an input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 0);
+    vec2.min(out, vec2.create(9, 9), viewAt(buffer, 1));
+
+    expectComponents(out, 2, 3);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    vec2.min(viewAt(pool, 2), vec2.create(-9, -9), vec2.create(0, 0));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, -9, -9, 5, 6]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec2 = vec2.create(1, 5);
+    const b: ReadonlyVec2 = vec2.create(4, 2);
+
+    expectComponents(vec2.min(vec2.create(), a, b), 1, 2);
+  });
+});
+
+describe('max', () => {
+  test('takes the larger value per component and returns out', () => {
+    const out = vec2.create();
+    const result = vec2.max(out, vec2.create(1, 5), vec2.create(4, 2));
+
+    expect(result).toBe(out);
+    expectComponents(out, 4, 5);
+  });
+
+  test('gives the same result with the inputs swapped', () => {
+    expectComponents(vec2.max(vec2.create(), vec2.create(4, 2), vec2.create(1, 5)), 4, 5);
+  });
+
+  test('handles negative values', () => {
+    expectComponents(vec2.max(vec2.create(), vec2.create(-1, -5), vec2.create(-4, 2)), -1, 2);
+  });
+
+  test('a NaN in either input gives NaN in that component only', () => {
+    const fromA = vec2.max(vec2.create(), vec2.create(Number.NaN, 1), vec2.create(1, 2));
+    const fromB = vec2.max(vec2.create(), vec2.create(1, 2), vec2.create(Number.NaN, 1));
+
+    expect(fromA[0]).toBeNaN();
+    expect(fromA[1]).toBe(2);
+    expect(fromB[0]).toBeNaN();
+    expect(fromB[1]).toBe(2);
+  });
+
+  test('0 counts as larger than -0, whichever input it is in', () => {
+    const out = vec2.max(vec2.create(), vec2.create(0, -0), vec2.create(-0, 0));
+
+    expect(out[0]).toBe(0);
+    expect(out[1]).toBe(0);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec2.create(1, 5);
+    const b = vec2.create(4, 2);
+    vec2.max(vec2.create(), a, b);
+
+    expectComponents(a, 1, 5);
+    expectComponents(b, 4, 2);
+  });
+
+  test('out may be either input', () => {
+    const a = vec2.create(1, 5);
+    const b = vec2.create(4, 2);
+    vec2.max(a, a, b);
+    expectComponents(a, 4, 5);
+
+    const c = vec2.create(1, 5);
+    const d = vec2.create(4, 2);
+    vec2.max(d, c, d);
+    expectComponents(d, 4, 5);
+  });
+
+  test('overlapping views: out one element ahead of an input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 1);
+    vec2.max(out, viewAt(buffer, 0), vec2.create(-9, -9));
+
+    expectComponents(out, 1, 2);
+  });
+
+  test('overlapping views: out one element behind an input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 0);
+    vec2.max(out, vec2.create(-9, -9), viewAt(buffer, 1));
+
+    expectComponents(out, 2, 3);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    vec2.max(viewAt(pool, 2), vec2.create(9, 9), vec2.create(0, 0));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 9, 9, 5, 6]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec2 = vec2.create(1, 5);
+    const b: ReadonlyVec2 = vec2.create(4, 2);
+
+    expectComponents(vec2.max(vec2.create(), a, b), 4, 5);
+  });
+});
+
+describe('floor', () => {
+  test('rounds every component down and returns out', () => {
+    const out = vec2.create();
+    const result = vec2.floor(out, vec2.create(1.5, 2.75));
+
+    expect(result).toBe(out);
+    expectComponents(out, 1, 2);
+  });
+
+  test('rounds negative values toward negative infinity, not toward zero', () => {
+    expectComponents(vec2.floor(vec2.create(), vec2.create(-1.5, -0.25)), -2, -1);
+  });
+
+  test('leaves whole numbers alone', () => {
+    expectComponents(vec2.floor(vec2.create(), vec2.create(3, -3)), 3, -3);
+  });
+
+  test('NaN stays NaN and Infinity stays Infinity', () => {
+    const out = vec2.floor(vec2.create(), vec2.create(Number.NaN, Number.POSITIVE_INFINITY));
+
+    expect(out[0]).toBeNaN();
+    expect(out[1]).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('never writes to the input', () => {
+    const a = vec2.create(1.5, 2.5);
+    vec2.floor(vec2.create(), a);
+
+    expectComponents(a, 1.5, 2.5);
+  });
+
+  test('out may be the input', () => {
+    const a = vec2.create(1.5, 2.5);
+    vec2.floor(a, a);
+
+    expectComponents(a, 1, 2);
+  });
+
+  test('overlapping views: out one element ahead of the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 1);
+    vec2.floor(out, viewAt(buffer, 0));
+
+    expectComponents(out, 1, 2);
+  });
+
+  test('overlapping views: out one element behind the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 0);
+    vec2.floor(out, viewAt(buffer, 1));
+
+    expectComponents(out, 2, 3);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    vec2.floor(viewAt(pool, 2), vec2.create(9.5, 9.5));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 9, 9, 5, 6]);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec2 = vec2.create(1.5, 2.5);
+
+    expectComponents(vec2.floor(vec2.create(), a), 1, 2);
+  });
+});
+
+describe('ceil', () => {
+  test('rounds every component up and returns out', () => {
+    const out = vec2.create();
+    const result = vec2.ceil(out, vec2.create(1.5, 2.25));
+
+    expect(result).toBe(out);
+    expectComponents(out, 2, 3);
+  });
+
+  test('rounds negative values toward positive infinity', () => {
+    expectComponents(vec2.ceil(vec2.create(), vec2.create(-1.5, -2.75)), -1, -2);
+  });
+
+  test('leaves whole numbers alone', () => {
+    expectComponents(vec2.ceil(vec2.create(), vec2.create(3, -3)), 3, -3);
+  });
+
+  test('a value between -1 and 0 becomes -0, which isEqual still treats as zero', () => {
+    const out = vec2.ceil(vec2.create(), vec2.create(-0.5, -0.25));
+
+    expect(out[0]).toBe(-0);
+    expect(out[1]).toBe(-0);
+    expect(vec2.isEqual(out, vec2.create())).toBe(true);
+  });
+
+  test('NaN stays NaN and Infinity stays Infinity', () => {
+    const out = vec2.ceil(vec2.create(), vec2.create(Number.NaN, Number.NEGATIVE_INFINITY));
+
+    expect(out[0]).toBeNaN();
+    expect(out[1]).toBe(Number.NEGATIVE_INFINITY);
+  });
+
+  test('never writes to the input', () => {
+    const a = vec2.create(1.5, 2.5);
+    vec2.ceil(vec2.create(), a);
+
+    expectComponents(a, 1.5, 2.5);
+  });
+
+  test('out may be the input', () => {
+    const a = vec2.create(1.5, 2.5);
+    vec2.ceil(a, a);
+
+    expectComponents(a, 2, 3);
+  });
+
+  test('overlapping views: out one element ahead of the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 1);
+    vec2.ceil(out, viewAt(buffer, 0));
+
+    expectComponents(out, 1, 2);
+  });
+
+  test('overlapping views: out one element behind the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 0);
+    vec2.ceil(out, viewAt(buffer, 1));
+
+    expectComponents(out, 2, 3);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    vec2.ceil(viewAt(pool, 2), vec2.create(8.5, 8.5));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 9, 9, 5, 6]);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec2 = vec2.create(1.5, 2.5);
+
+    expectComponents(vec2.ceil(vec2.create(), a), 2, 3);
+  });
+});
+
+describe('round', () => {
+  test('rounds every component to the nearest whole number and returns out', () => {
+    const out = vec2.create();
+    const result = vec2.round(out, vec2.create(1.25, 2.75));
+
+    expect(result).toBe(out);
+    expectComponents(out, 1, 3);
+  });
+
+  test('halves round toward positive infinity, not away from zero', () => {
+    expectComponents(vec2.round(vec2.create(), vec2.create(1.5, -1.5)), 2, -1);
+    expectComponents(vec2.round(vec2.create(), vec2.create(2.5, -2.5)), 3, -2);
+  });
+
+  test('leaves whole numbers alone', () => {
+    expectComponents(vec2.round(vec2.create(), vec2.create(3, -3)), 3, -3);
+  });
+
+  test('a value from -0.5 up to 0 becomes -0, which isEqual still treats as zero', () => {
+    const out = vec2.round(vec2.create(), vec2.create(-0.5, -0.25));
+
+    expect(out[0]).toBe(-0);
+    expect(out[1]).toBe(-0);
+    expect(vec2.isEqual(out, vec2.create())).toBe(true);
+  });
+
+  test('NaN stays NaN and Infinity stays Infinity', () => {
+    const out = vec2.round(vec2.create(), vec2.create(Number.NaN, Number.POSITIVE_INFINITY));
+
+    expect(out[0]).toBeNaN();
+    expect(out[1]).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('never writes to the input', () => {
+    const a = vec2.create(1.25, 2.75);
+    vec2.round(vec2.create(), a);
+
+    expectComponents(a, 1.25, 2.75);
+  });
+
+  test('out may be the input', () => {
+    const a = vec2.create(1.25, 2.75);
+    vec2.round(a, a);
+
+    expectComponents(a, 1, 3);
+  });
+
+  test('overlapping views: out one element ahead of the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 1);
+    vec2.round(out, viewAt(buffer, 0));
+
+    expectComponents(out, 1, 2);
+  });
+
+  test('overlapping views: out one element behind the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 0);
+    vec2.round(out, viewAt(buffer, 1));
+
+    expectComponents(out, 2, 3);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    vec2.round(viewAt(pool, 2), vec2.create(9.25, 9.25));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 9, 9, 5, 6]);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec2 = vec2.create(1.25, 2.75);
+
+    expectComponents(vec2.round(vec2.create(), a), 1, 3);
+  });
+});
+
 describe('lerp', () => {
   test('moves every component from a towards b, and returns out', () => {
     const out = vec2.create();
