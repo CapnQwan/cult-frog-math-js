@@ -804,3 +804,269 @@ describe('scale', () => {
     expectComponents(vec2.scale(vec2.create(), a, 2), 8 * 2, 18 * 2);
   });
 });
+
+describe('magnitudeSq', () => {
+  test('sums the squared components', () => {
+    expect(vec2.magnitudeSq(vec2.create(3, 4))).toBe(25);
+  });
+
+  test('every axis counts', () => {
+    for (let i = 0; i < 2; i++) {
+      const v = vec2.create();
+      v[i] = 3;
+      expect(vec2.magnitudeSq(v)).toBe(9);
+    }
+  });
+
+  test('negative components square to the same result', () => {
+    expect(vec2.magnitudeSq(vec2.create(-3, -4))).toBe(25);
+  });
+
+  test('a zero vector has a squared length of zero', () => {
+    expect(vec2.magnitudeSq(vec2.create())).toBe(0);
+  });
+
+  test('stays in range at the extremes of float32', () => {
+    expect(vec2.magnitudeSq(vec2.create(3e38, 3e38))).toBeLessThan(Number.POSITIVE_INFINITY);
+    expect(vec2.magnitudeSq(vec2.create(1e-45, 1e-45))).toBeGreaterThan(0);
+  });
+
+  test('reads only the slots of a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    expect(vec2.magnitudeSq(viewAt(pool, 2))).toBe(3 * 3 + 4 * 4);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec2 = vec2.create(3, 4);
+    expect(vec2.magnitudeSq(a)).toBe(25);
+  });
+});
+
+describe('magnitude', () => {
+  test('returns the length', () => {
+    expect(vec2.magnitude(vec2.create(3, 4))).toBe(5);
+  });
+
+  test('every axis counts', () => {
+    for (let i = 0; i < 2; i++) {
+      const v = vec2.create();
+      v[i] = 3;
+      expect(vec2.magnitude(v)).toBe(3);
+    }
+  });
+
+  test('a zero vector has a length of zero', () => {
+    expect(vec2.magnitude(vec2.create())).toBe(0);
+  });
+
+  test('works on the stored float32 value', () => {
+    expect(vec2.magnitude(vec2.create(0.1, 0))).toBe(Math.fround(0.1));
+  });
+
+  test('stays in range at the extremes of float32', () => {
+    expect(vec2.magnitude(vec2.create(3e38, 3e38))).toBeLessThan(Number.POSITIVE_INFINITY);
+    expect(vec2.magnitude(vec2.create(1e-45, 1e-45))).toBeGreaterThan(0);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec2 = vec2.create(3, 4);
+    expect(vec2.magnitude(a)).toBe(5);
+  });
+});
+
+describe('distanceSq', () => {
+  test('sums the squared differences', () => {
+    expect(vec2.distanceSq(vec2.create(4, 6), vec2.create(1, 2))).toBe(25);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec2.create(4, 6);
+    const b = vec2.create(1, 2);
+    expect(vec2.distanceSq(b, a)).toBe(vec2.distanceSq(a, b));
+  });
+
+  test('every axis counts', () => {
+    for (let i = 0; i < 2; i++) {
+      const v = vec2.create();
+      v[i] = 3;
+      expect(vec2.distanceSq(v, vec2.create())).toBe(9);
+    }
+  });
+
+  test('a vector is no distance from itself', () => {
+    const v = vec2.create(3, 4);
+    expect(vec2.distanceSq(v, v)).toBe(0);
+  });
+
+  test('works with overlapping views', () => {
+    const buffer = sequentialBuffer(3);
+    expect(vec2.distanceSq(viewAt(buffer, 1), viewAt(buffer, 0))).toBe(2);
+  });
+
+  test('keeps float64 precision instead of rounding the difference to float32', () => {
+    const a = vec2.create(0, 10000000);
+    const b = vec2.create(0, 0.1);
+    const difference = Math.fround(1e7) - Math.fround(0.1);
+
+    expect(vec2.distanceSq(a, b)).toBe(difference * difference);
+  });
+
+  test('does not overflow at opposite ends of float32', () => {
+    const a = vec2.create(0, 3e38);
+    const b = vec2.create(0, -3e38);
+
+    expect(vec2.distanceSq(a, b)).toBeLessThan(Number.POSITIVE_INFINITY);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec2 = vec2.create(4, 6);
+    const b: ReadonlyVec2 = vec2.create(1, 2);
+    expect(vec2.distanceSq(a, b)).toBe(25);
+  });
+});
+
+describe('distance', () => {
+  test('returns the distance', () => {
+    expect(vec2.distance(vec2.create(4, 6), vec2.create(1, 2))).toBe(5);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec2.create(4, 6);
+    const b = vec2.create(1, 2);
+    expect(vec2.distance(b, a)).toBe(vec2.distance(a, b));
+  });
+
+  test('every axis counts', () => {
+    for (let i = 0; i < 2; i++) {
+      const v = vec2.create();
+      v[i] = 3;
+      expect(vec2.distance(vec2.create(), v)).toBe(3);
+    }
+  });
+
+  test('a vector is no distance from itself', () => {
+    const v = vec2.create(3, 4);
+    expect(vec2.distance(v, v)).toBe(0);
+  });
+
+  test('keeps float64 precision instead of rounding the difference to float32', () => {
+    const a = vec2.create(0, 10000000);
+    const b = vec2.create(0, 0.1);
+
+    expect(vec2.distance(a, b)).toBe(Math.fround(1e7) - Math.fround(0.1));
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec2 = vec2.create(4, 6);
+    const b: ReadonlyVec2 = vec2.create(1, 2);
+    expect(vec2.distance(a, b)).toBe(5);
+  });
+});
+
+describe('normalize', () => {
+  test('keeps the direction, shortens to unit length and returns out', () => {
+    const out = vec2.create();
+    const result = vec2.normalize(out, vec2.create(3, 4));
+
+    expect(result).toBe(out);
+    expectComponents(out, 3 / 5, 4 / 5);
+  });
+
+  test('every axis normalizes to that unit axis', () => {
+    for (let i = 0; i < 2; i++) {
+      const v = vec2.create();
+      v[i] = -3;
+      const out = vec2.normalize(vec2.create(), v);
+
+      expect(out[i]).toBe(-1);
+      expect(vec2.magnitude(out)).toBe(1);
+    }
+  });
+
+  test.each([1e-30, 1e-3, 1, 1e3, 1e30])('gives unit length for inputs of scale %d', (size) => {
+    const out = vec2.normalize(vec2.create(), vec2.create(3 * size, 4 * size));
+    expect(vec2.magnitude(out)).toBeCloseTo(1, 6);
+  });
+
+  test('a zero vector stays zero rather than becoming NaN', () => {
+    expectComponents(vec2.normalize(vec2.create(), vec2.create()), 0, 0);
+  });
+
+  test('a zero vector still overwrites whatever out held', () => {
+    expectComponents(vec2.normalize(vec2.create(9, 9), vec2.create()), 0, 0);
+  });
+
+  test('negative zero counts as a zero vector', () => {
+    const out = vec2.normalize(vec2.create(), vec2.create(-0, -0));
+
+    for (let i = 0; i < 2; i++) expect(out[i]).toBe(-0);
+  });
+
+  test('very short vectors still normalize rather than being treated as zero', () => {
+    const out = vec2.normalize(vec2.create(), vec2.create(0, 1e-7));
+    expectComponents(out, 0, 1);
+  });
+
+  test('handles the extremes of float32', () => {
+    const large = vec2.create(0, 3e38);
+    const small = vec2.create(0, 1e-45);
+
+    expectComponents(vec2.normalize(vec2.create(), large), 0, 1);
+    expectComponents(vec2.normalize(vec2.create(), small), 0, 1);
+  });
+
+  test('a NaN component makes the whole result NaN', () => {
+    const out = vec2.normalize(vec2.create(), vec2.create(Number.NaN, 1));
+    expectComponents(out, Number.NaN, Number.NaN);
+  });
+
+  test('an infinite component gives NaN in its slot and zero in the finite ones', () => {
+    const out = vec2.normalize(vec2.create(), vec2.create(Number.POSITIVE_INFINITY, 1));
+    expectComponents(out, Number.NaN, 0);
+  });
+
+  test('never writes to the input', () => {
+    const a = vec2.create(3, 4);
+    vec2.normalize(vec2.create(), a);
+
+    expectComponents(a, 3, 4);
+  });
+
+  test('out may be the input', () => {
+    const a = vec2.create(3, 4);
+    vec2.normalize(a, a);
+
+    expectComponents(a, 3 / 5, 4 / 5);
+  });
+
+  test('overlapping views: out one element ahead of the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 1);
+    vec2.normalize(out, viewAt(buffer, 0));
+
+    const mag = Math.sqrt(1 * 1 + 2 * 2);
+    expectComponents(out, 1 / mag, 2 / mag);
+  });
+
+  test('overlapping views: out one element behind the input', () => {
+    const buffer = sequentialBuffer(3);
+    const out = viewAt(buffer, 0);
+    vec2.normalize(out, viewAt(buffer, 1));
+
+    const mag = Math.sqrt(2 * 2 + 3 * 3);
+    expectComponents(out, 2 / mag, 3 / mag);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    vec2.normalize(viewAt(pool, 2), vec2.create());
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 5, 6]);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec2 = vec2.create(3, 4);
+
+    expectComponents(vec2.normalize(vec2.create(), a), 3 / 5, 4 / 5);
+  });
+});

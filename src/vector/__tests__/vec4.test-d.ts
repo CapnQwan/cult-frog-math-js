@@ -148,3 +148,36 @@ describe('arithmetic', () => {
     vec4.scale(live, frozen, frozen);
   });
 });
+
+describe('magnitude, distance and normalize', () => {
+  test('measuring takes readonly inputs and returns a number', () => {
+    expectTypeOf(vec4.magnitudeSq).parameters.toEqualTypeOf<[ReadonlyVec4]>();
+    expectTypeOf(vec4.magnitude).parameters.toEqualTypeOf<[ReadonlyVec4]>();
+    expectTypeOf(vec4.distanceSq).parameters.toEqualTypeOf<[ReadonlyVec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.distance).parameters.toEqualTypeOf<[ReadonlyVec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.magnitudeSq).returns.toEqualTypeOf<number>();
+    expectTypeOf(vec4.magnitude).returns.toEqualTypeOf<number>();
+    expectTypeOf(vec4.distanceSq).returns.toEqualTypeOf<number>();
+    expectTypeOf(vec4.distance).returns.toEqualTypeOf<number>();
+  });
+
+  test('normalize writes to a mutable out and returns it', () => {
+    expectTypeOf(vec4.normalize).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.normalize).returns.toEqualTypeOf<Vec4>();
+  });
+
+  test('call sites', () => {
+    vec4.magnitude(frozen);
+    vec4.distance(live, frozen);
+    vec4.distanceSq(shared, live);
+    vec4.normalize(live, frozen);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.normalize(frozen, live);
+    // @ts-expect-error wrong-dimension input
+    vec4.magnitude(other);
+    // @ts-expect-error wrong-dimension input
+    vec4.distance(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.magnitudeSq(raw);
+  });
+});

@@ -34,8 +34,8 @@ export const EPSILON = 1e-6;
  * `EPSILON` squared, `1e-12`.
  *
  * For comparisons against a squared length or squared distance, which lets you
- * skip the `Math.sqrt`: testing `lengthSquared < EPSILON_SQUARED` is equivalent
- * to `length < EPSILON` but cheaper, and is the usual way to check whether a
+ * skip the `Math.sqrt`: testing `magnitudeSq < EPSILON_SQUARED` is equivalent
+ * to `magnitude < EPSILON` but cheaper, and is the usual way to check whether a
  * vector is short enough to treat as zero before normalising.
  *
  * Note that squaring compounds the scale sensitivity described on `EPSILON`:

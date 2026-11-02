@@ -262,3 +262,117 @@ export function scale(out: Vec4, a: ReadonlyVec4, scalar: number): Vec4 {
   out[3] = aw * scalar;
   return out;
 }
+
+/**
+ * Returns the squared length of `a`.
+ *
+ * Skips the square root, so prefer it when comparing lengths:
+ * `magnitudeSq(v) < limit * limit` agrees with `magnitude(v) < limit`. Remember to
+ * square the other side, or use `EPSILON_SQUARED` in place of `EPSILON`.
+ *
+ * Calculated in float64 from the stored float32 components, so it can't overflow
+ * or underflow, even at the extremes of the float32 range.
+ *
+ * `w` counts like any other component, so this is the true 4D result. That's
+ * rarely what you want for a homogeneous point or direction stored in a `Vec4`.
+ *
+ * @param a - The vector to measure.
+ * @returns The squared length.
+ */
+export function magnitudeSq(a: ReadonlyVec4): number {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  return ax * ax + ay * ay + az * az + aw * aw;
+}
+
+/**
+ * Returns the length of `a`.
+ *
+ * Named `magnitude` because `a.length` is already taken: it's the component count,
+ * always `4`, as on any typed array.
+ *
+ * Use {@link magnitudeSq} instead if you're only comparing lengths.
+ *
+ * `w` counts like any other component, so this is the true 4D result. That's
+ * rarely what you want for a homogeneous point or direction stored in a `Vec4`.
+ *
+ * @param a - The vector to measure.
+ * @returns The length.
+ */
+export function magnitude(a: ReadonlyVec4): number {
+  return Math.sqrt(magnitudeSq(a));
+}
+
+/**
+ * Returns the squared distance between `a` and `b`. The order doesn't matter.
+ *
+ * Skips the square root, so prefer it when comparing distances, as in range checks:
+ * `distanceSq(a, b) < range * range`.
+ *
+ * Works on the components directly rather than calling {@link sub}, which would
+ * allocate a scratch vector and round the difference to float32. Here, the
+ * difference between `1e7` and `0.1` keeps its precision, and values at opposite
+ * ends of the float32 range don't overflow.
+ *
+ * `w` counts like any other component, so this is the true 4D result. That's
+ * rarely what you want for a homogeneous point or direction stored in a `Vec4`.
+ *
+ * @param a - The first point.
+ * @param b - The second point.
+ * @returns The squared distance.
+ */
+export function distanceSq(a: ReadonlyVec4, b: ReadonlyVec4): number {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  const dx = ax - bx;
+  const dy = ay - by;
+  const dz = az - bz;
+  const dw = aw - bw;
+  return dx * dx + dy * dy + dz * dz + dw * dw;
+}
+
+/**
+ * Returns the distance between `a` and `b`. The order doesn't matter.
+ *
+ * Use {@link distanceSq} instead if you're only comparing distances.
+ *
+ * `w` counts like any other component, so this is the true 4D result. That's
+ * rarely what you want for a homogeneous point or direction stored in a `Vec4`.
+ *
+ * @param a - The first point.
+ * @param b - The second point.
+ * @returns The distance.
+ */
+export function distance(a: ReadonlyVec4, b: ReadonlyVec4): number {
+  return Math.sqrt(distanceSq(a, b));
+}
+
+/**
+ * Writes a vector with the direction of `a` and a length of `1` into `out`.
+ *
+ * A zero vector gives a zero vector rather than `NaN`, because it's a normal input:
+ * a player with no movement keys held, or two objects in the same spot. Only an
+ * exact zero is treated this way, so very short vectors still normalize correctly.
+ * To ignore tiny noise, check `magnitudeSq(a) < EPSILON_SQUARED` first.
+ *
+ * The result is rounded to float32, so its length is close to `1` but rarely
+ * exact: normalizing `(3, 4, 0, 0)` gives a magnitude of `1.0000000238`. Compare it
+ * using `isEqualEpsilon`.
+ *
+ * Bad input stays visible: a `NaN` component makes the whole result `NaN`, and an
+ * infinite component gives `NaN` in that slot and `0` in the finite ones.
+ *
+ * `w` counts like any other component, so `(2, 0, 0, 1)` normalizes to about
+ * `(0.894, 0, 0, 0.447)`. To normalize a direction stored in a `Vec4`, make sure
+ * its `w` is `0`.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to normalize.
+ * @returns `out`.
+ */
+export function normalize(out: Vec4, a: ReadonlyVec4): Vec4 {
+  const mag = magnitude(a);
+  return scale(out, a, mag === 0 ? 0 : 1 / mag);
+}

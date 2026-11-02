@@ -850,3 +850,269 @@ describe('scale', () => {
     expectComponents(vec3.scale(vec3.create(), a, 2), 8 * 2, 18 * 2, 32 * 2);
   });
 });
+
+describe('magnitudeSq', () => {
+  test('sums the squared components', () => {
+    expect(vec3.magnitudeSq(vec3.create(3, 4, 12))).toBe(169);
+  });
+
+  test('every axis counts', () => {
+    for (let i = 0; i < 3; i++) {
+      const v = vec3.create();
+      v[i] = 3;
+      expect(vec3.magnitudeSq(v)).toBe(9);
+    }
+  });
+
+  test('negative components square to the same result', () => {
+    expect(vec3.magnitudeSq(vec3.create(-3, -4, -12))).toBe(169);
+  });
+
+  test('a zero vector has a squared length of zero', () => {
+    expect(vec3.magnitudeSq(vec3.create())).toBe(0);
+  });
+
+  test('stays in range at the extremes of float32', () => {
+    expect(vec3.magnitudeSq(vec3.create(3e38, 3e38, 3e38))).toBeLessThan(Number.POSITIVE_INFINITY);
+    expect(vec3.magnitudeSq(vec3.create(1e-45, 1e-45, 1e-45))).toBeGreaterThan(0);
+  });
+
+  test('reads only the slots of a pooled view', () => {
+    const pool = sequentialBuffer(9);
+    expect(vec3.magnitudeSq(viewAt(pool, 3))).toBe(4 * 4 + 5 * 5 + 6 * 6);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec3 = vec3.create(3, 4, 12);
+    expect(vec3.magnitudeSq(a)).toBe(169);
+  });
+});
+
+describe('magnitude', () => {
+  test('returns the length', () => {
+    expect(vec3.magnitude(vec3.create(3, 4, 12))).toBe(13);
+  });
+
+  test('every axis counts', () => {
+    for (let i = 0; i < 3; i++) {
+      const v = vec3.create();
+      v[i] = 3;
+      expect(vec3.magnitude(v)).toBe(3);
+    }
+  });
+
+  test('a zero vector has a length of zero', () => {
+    expect(vec3.magnitude(vec3.create())).toBe(0);
+  });
+
+  test('works on the stored float32 value', () => {
+    expect(vec3.magnitude(vec3.create(0.1, 0, 0))).toBe(Math.fround(0.1));
+  });
+
+  test('stays in range at the extremes of float32', () => {
+    expect(vec3.magnitude(vec3.create(3e38, 3e38, 3e38))).toBeLessThan(Number.POSITIVE_INFINITY);
+    expect(vec3.magnitude(vec3.create(1e-45, 1e-45, 1e-45))).toBeGreaterThan(0);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec3 = vec3.create(3, 4, 12);
+    expect(vec3.magnitude(a)).toBe(13);
+  });
+});
+
+describe('distanceSq', () => {
+  test('sums the squared differences', () => {
+    expect(vec3.distanceSq(vec3.create(4, 6, 15), vec3.create(1, 2, 3))).toBe(169);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec3.create(4, 6, 15);
+    const b = vec3.create(1, 2, 3);
+    expect(vec3.distanceSq(b, a)).toBe(vec3.distanceSq(a, b));
+  });
+
+  test('every axis counts', () => {
+    for (let i = 0; i < 3; i++) {
+      const v = vec3.create();
+      v[i] = 3;
+      expect(vec3.distanceSq(v, vec3.create())).toBe(9);
+    }
+  });
+
+  test('a vector is no distance from itself', () => {
+    const v = vec3.create(3, 4, 12);
+    expect(vec3.distanceSq(v, v)).toBe(0);
+  });
+
+  test('works with overlapping views', () => {
+    const buffer = sequentialBuffer(4);
+    expect(vec3.distanceSq(viewAt(buffer, 1), viewAt(buffer, 0))).toBe(3);
+  });
+
+  test('keeps float64 precision instead of rounding the difference to float32', () => {
+    const a = vec3.create(0, 0, 10000000);
+    const b = vec3.create(0, 0, 0.1);
+    const difference = Math.fround(1e7) - Math.fround(0.1);
+
+    expect(vec3.distanceSq(a, b)).toBe(difference * difference);
+  });
+
+  test('does not overflow at opposite ends of float32', () => {
+    const a = vec3.create(0, 0, 3e38);
+    const b = vec3.create(0, 0, -3e38);
+
+    expect(vec3.distanceSq(a, b)).toBeLessThan(Number.POSITIVE_INFINITY);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec3 = vec3.create(4, 6, 15);
+    const b: ReadonlyVec3 = vec3.create(1, 2, 3);
+    expect(vec3.distanceSq(a, b)).toBe(169);
+  });
+});
+
+describe('distance', () => {
+  test('returns the distance', () => {
+    expect(vec3.distance(vec3.create(4, 6, 15), vec3.create(1, 2, 3))).toBe(13);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec3.create(4, 6, 15);
+    const b = vec3.create(1, 2, 3);
+    expect(vec3.distance(b, a)).toBe(vec3.distance(a, b));
+  });
+
+  test('every axis counts', () => {
+    for (let i = 0; i < 3; i++) {
+      const v = vec3.create();
+      v[i] = 3;
+      expect(vec3.distance(vec3.create(), v)).toBe(3);
+    }
+  });
+
+  test('a vector is no distance from itself', () => {
+    const v = vec3.create(3, 4, 12);
+    expect(vec3.distance(v, v)).toBe(0);
+  });
+
+  test('keeps float64 precision instead of rounding the difference to float32', () => {
+    const a = vec3.create(0, 0, 10000000);
+    const b = vec3.create(0, 0, 0.1);
+
+    expect(vec3.distance(a, b)).toBe(Math.fround(1e7) - Math.fround(0.1));
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec3 = vec3.create(4, 6, 15);
+    const b: ReadonlyVec3 = vec3.create(1, 2, 3);
+    expect(vec3.distance(a, b)).toBe(13);
+  });
+});
+
+describe('normalize', () => {
+  test('keeps the direction, shortens to unit length and returns out', () => {
+    const out = vec3.create();
+    const result = vec3.normalize(out, vec3.create(3, 4, 12));
+
+    expect(result).toBe(out);
+    expectComponents(out, 3 / 13, 4 / 13, 12 / 13);
+  });
+
+  test('every axis normalizes to that unit axis', () => {
+    for (let i = 0; i < 3; i++) {
+      const v = vec3.create();
+      v[i] = -3;
+      const out = vec3.normalize(vec3.create(), v);
+
+      expect(out[i]).toBe(-1);
+      expect(vec3.magnitude(out)).toBe(1);
+    }
+  });
+
+  test.each([1e-30, 1e-3, 1, 1e3, 1e30])('gives unit length for inputs of scale %d', (size) => {
+    const out = vec3.normalize(vec3.create(), vec3.create(3 * size, 4 * size, 12 * size));
+    expect(vec3.magnitude(out)).toBeCloseTo(1, 6);
+  });
+
+  test('a zero vector stays zero rather than becoming NaN', () => {
+    expectComponents(vec3.normalize(vec3.create(), vec3.create()), 0, 0, 0);
+  });
+
+  test('a zero vector still overwrites whatever out held', () => {
+    expectComponents(vec3.normalize(vec3.create(9, 9, 9), vec3.create()), 0, 0, 0);
+  });
+
+  test('negative zero counts as a zero vector', () => {
+    const out = vec3.normalize(vec3.create(), vec3.create(-0, -0, -0));
+
+    for (let i = 0; i < 3; i++) expect(out[i]).toBe(-0);
+  });
+
+  test('very short vectors still normalize rather than being treated as zero', () => {
+    const out = vec3.normalize(vec3.create(), vec3.create(0, 0, 1e-7));
+    expectComponents(out, 0, 0, 1);
+  });
+
+  test('handles the extremes of float32', () => {
+    const large = vec3.create(0, 0, 3e38);
+    const small = vec3.create(0, 0, 1e-45);
+
+    expectComponents(vec3.normalize(vec3.create(), large), 0, 0, 1);
+    expectComponents(vec3.normalize(vec3.create(), small), 0, 0, 1);
+  });
+
+  test('a NaN component makes the whole result NaN', () => {
+    const out = vec3.normalize(vec3.create(), vec3.create(Number.NaN, 1, 1));
+    expectComponents(out, Number.NaN, Number.NaN, Number.NaN);
+  });
+
+  test('an infinite component gives NaN in its slot and zero in the finite ones', () => {
+    const out = vec3.normalize(vec3.create(), vec3.create(Number.POSITIVE_INFINITY, 1, 1));
+    expectComponents(out, Number.NaN, 0, 0);
+  });
+
+  test('never writes to the input', () => {
+    const a = vec3.create(3, 4, 12);
+    vec3.normalize(vec3.create(), a);
+
+    expectComponents(a, 3, 4, 12);
+  });
+
+  test('out may be the input', () => {
+    const a = vec3.create(3, 4, 12);
+    vec3.normalize(a, a);
+
+    expectComponents(a, 3 / 13, 4 / 13, 12 / 13);
+  });
+
+  test('overlapping views: out one element ahead of the input', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.normalize(out, viewAt(buffer, 0));
+
+    const mag = Math.sqrt(1 * 1 + 2 * 2 + 3 * 3);
+    expectComponents(out, 1 / mag, 2 / mag, 3 / mag);
+  });
+
+  test('overlapping views: out one element behind the input', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.normalize(out, viewAt(buffer, 1));
+
+    const mag = Math.sqrt(2 * 2 + 3 * 3 + 4 * 4);
+    expectComponents(out, 2 / mag, 3 / mag, 4 / mag);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(9);
+    vec3.normalize(viewAt(pool, 3), vec3.create());
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 0, 0, 0, 7, 8, 9]);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec3 = vec3.create(3, 4, 12);
+
+    expectComponents(vec3.normalize(vec3.create(), a), 3 / 13, 4 / 13, 12 / 13);
+  });
+});
