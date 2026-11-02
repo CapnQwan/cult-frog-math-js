@@ -1,6 +1,7 @@
 // src/vector/__tests__/vec2.test.ts
 import { describe, expect, test } from 'vitest';
 
+import { clamp } from '../../scalars.js';
 import * as vec2 from '../vec2.js';
 
 import type { ReadonlyVec2, Vec2 } from '../_types/vec2.js';
@@ -1068,5 +1069,104 @@ describe('normalize', () => {
     const a: ReadonlyVec2 = vec2.create(3, 4);
 
     expectComponents(vec2.normalize(vec2.create(), a), 3 / 5, 4 / 5);
+  });
+});
+
+describe('dot', () => {
+  test('multiplies matching components and adds the results', () => {
+    expect(vec2.dot(vec2.create(1, 2), vec2.create(3, 4))).toBe(11);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec2.create(1, 2);
+    const b = vec2.create(3, 4);
+
+    expect(vec2.dot(a, b)).toBe(vec2.dot(b, a));
+  });
+
+  test('a vector dotted with itself is its squared magnitude', () => {
+    const a = vec2.create(1, 2);
+
+    expect(vec2.dot(a, a)).toBe(vec2.magnitudeSq(a));
+  });
+
+  test('unit vectors give the cosine of the angle between them', () => {
+    const x = vec2.create(1, 0);
+
+    expect(vec2.dot(x, x)).toBe(1);
+    expect(vec2.dot(x, vec2.create(0, 1))).toBe(0);
+    expect(vec2.dot(x, vec2.create(-1, 0))).toBe(-1);
+  });
+
+  test('the sign holds at any length', () => {
+    const long = vec2.create(10, 0);
+
+    expect(vec2.dot(long, vec2.create(0.5, 0.5))).toBe(5);
+    expect(vec2.dot(long, vec2.create(0, 0.5))).toBe(0);
+    expect(vec2.dot(long, vec2.create(-0.5, 0.5))).toBe(-5);
+  });
+
+  test('a zero vector gives zero', () => {
+    expect(vec2.dot(vec2.create(1, 2), vec2.create())).toBe(0);
+  });
+
+  test('gives -0 when every product is -0', () => {
+    expect(vec2.dot(vec2.create(-1, -1), vec2.create())).toBe(-0);
+  });
+
+  test('does not round the result to float32', () => {
+    const tenth = Math.fround(0.1);
+    const result = vec2.dot(vec2.create(0.1), vec2.create(0.1));
+
+    expect(result).toBe(tenth * tenth);
+    expect(result).not.toBe(Math.fround(result));
+  });
+
+  test('is not limited to the float32 range', () => {
+    const large = Math.fround(3e38);
+
+    expect(vec2.dot(vec2.create(3e38), vec2.create(3e38))).toBe(large * large);
+  });
+
+  test('normalized vectors can exceed 1, so the result needs clamping before acos', () => {
+    const a = vec2.normalize(vec2.create(), vec2.create(3, 4));
+    const result = vec2.dot(a, a);
+
+    expect(result).toBeGreaterThan(1);
+    expect(Math.acos(result)).toBeNaN();
+    expect(Math.acos(clamp(result, -1, 1))).toBe(0);
+  });
+
+  test('a NaN component gives NaN', () => {
+    expect(vec2.dot(vec2.create(Number.NaN), vec2.create(1, 1))).toBeNaN();
+  });
+
+  test('an infinite component gives NaN against zero and Infinity otherwise', () => {
+    const infinite = vec2.create(Number.POSITIVE_INFINITY);
+
+    expect(vec2.dot(infinite, vec2.create(0, 1))).toBeNaN();
+    expect(vec2.dot(infinite, vec2.create(1, 0))).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec2.create(1, 2);
+    const b = vec2.create(3, 4);
+    vec2.dot(a, b);
+
+    expectComponents(a, 1, 2);
+    expectComponents(b, 3, 4);
+  });
+
+  test('reads only its own slots when the inputs are pooled views', () => {
+    const pool = sequentialBuffer(5);
+
+    expect(vec2.dot(viewAt(pool, 1), viewAt(pool, 3))).toBe(23);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec2 = vec2.create(1, 2);
+    const b: ReadonlyVec2 = vec2.create(3, 4);
+
+    expect(vec2.dot(a, b)).toBe(11);
   });
 });

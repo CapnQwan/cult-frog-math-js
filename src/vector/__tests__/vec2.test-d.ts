@@ -179,3 +179,19 @@ describe('magnitude, distance and normalize', () => {
     vec2.magnitudeSq(raw);
   });
 });
+
+describe('dot', () => {
+  test('dot takes readonly inputs and returns a number', () => {
+    expectTypeOf(vec2.dot).parameters.toEqualTypeOf<[ReadonlyVec2, ReadonlyVec2]>();
+    expectTypeOf(vec2.dot).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    vec2.dot(frozen, live);
+    vec2.dot(shared, frozen);
+    // @ts-expect-error wrong-dimension input
+    vec2.dot(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec2.dot(raw, live);
+  });
+});

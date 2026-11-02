@@ -376,3 +376,39 @@ export function normalize(out: Vec4, a: ReadonlyVec4): Vec4 {
   const mag = magnitude(a);
   return scale(out, a, mag === 0 ? 0 : 1 / mag);
 }
+
+/**
+ * Returns the dot product of `a` and `b`, which measures how closely they point
+ * the same way. The order doesn't matter.
+ *
+ * The sign holds at any length: positive means less than 90 degrees apart, `0`
+ * means perpendicular and negative means more than 90 degrees apart. That makes
+ * `dot(facing, toTarget) > 0` a cheap "is it in front of me?" check that needs no
+ * normalizing. The value only reads as the cosine of the angle when both vectors
+ * have a length of `1`: `1` is the same direction and `-1` is the opposite one.
+ *
+ * Clamp the result before passing it to `Math.acos`. A normalized vector's length
+ * is close to `1` but rarely exact, so normalizing `(2, 3, 4, 5)` and dotting it with
+ * itself gives `1.0000000728`, and `Math.acos` of anything above `1` is `NaN`.
+ * Use `Math.acos(clamp(dot(a, b), -1, 1))`.
+ *
+ * `w` counts like any other component, so `(1, 0, 0, 1)` dotted with itself is `2`.
+ * Use `Vec3` to compare 3D directions. That same `w` term is what makes plane tests
+ * work: with a plane stored as `(nx, ny, nz, d)` and a point whose `w` is `1`, the
+ * result is the point's signed distance from the plane.
+ *
+ * The result isn't rounded to float32 or limited to its range. Bad input stays
+ * visible: a `NaN` component gives `NaN`, and so does an infinite component
+ * multiplied by `0`.
+ *
+ * @param a - The first vector.
+ * @param b - The second vector.
+ * @returns The dot product.
+ */
+export function dot(a: ReadonlyVec4, b: ReadonlyVec4): number {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  return ax * bx + ay * by + az * bz + aw * bw;
+}

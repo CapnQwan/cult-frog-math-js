@@ -181,3 +181,19 @@ describe('magnitude, distance and normalize', () => {
     vec4.magnitudeSq(raw);
   });
 });
+
+describe('dot', () => {
+  test('dot takes readonly inputs and returns a number', () => {
+    expectTypeOf(vec4.dot).parameters.toEqualTypeOf<[ReadonlyVec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.dot).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    vec4.dot(frozen, live);
+    vec4.dot(shared, frozen);
+    // @ts-expect-error wrong-dimension input
+    vec4.dot(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.dot(raw, live);
+  });
+});

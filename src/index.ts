@@ -52,7 +52,8 @@
  *
  * **Y is up.** Direction constants such as `Vec2.UP` assume a y-up coordinate
  * system. In screen or canvas space, where y grows downward, `UP` points down
- * the screen.
+ * the screen. In 3D the axes are right-handed, with `Vec3.FORWARD` along negative
+ * z, so `Vec3.cross(out, Vec3.RIGHT, Vec3.UP)` gives `Vec3.BACK`.
  *
  * **Types are branded.** A plain `Float32Array` won't type-check as a `Vec3`.
  * Use `create` for new values, or cast when wrapping existing memory such as a

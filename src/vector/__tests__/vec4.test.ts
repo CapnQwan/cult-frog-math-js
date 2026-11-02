@@ -1,6 +1,7 @@
 // src/vector/__tests__/vec4.test.ts
 import { describe, expect, test } from 'vitest';
 
+import { clamp } from '../../scalars.js';
 import * as vec4 from '../vec4.js';
 
 import type { ReadonlyVec4, Vec4 } from '../_types/vec4.js';
@@ -1147,5 +1148,116 @@ describe('normalize', () => {
     const mag = Math.sqrt(2 * 2 + 1 * 1);
 
     expectComponents(out, 2 / mag, 0, 0, 1 / mag);
+  });
+});
+
+describe('dot', () => {
+  test('multiplies matching components and adds the results', () => {
+    expect(vec4.dot(vec4.create(1, 2, 3, 4), vec4.create(5, 6, 7, 8))).toBe(70);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const b = vec4.create(5, 6, 7, 8);
+
+    expect(vec4.dot(a, b)).toBe(vec4.dot(b, a));
+  });
+
+  test('a vector dotted with itself is its squared magnitude', () => {
+    const a = vec4.create(1, 2, 3, 4);
+
+    expect(vec4.dot(a, a)).toBe(vec4.magnitudeSq(a));
+  });
+
+  test('unit vectors give the cosine of the angle between them', () => {
+    const x = vec4.create(1, 0, 0, 0);
+
+    expect(vec4.dot(x, x)).toBe(1);
+    expect(vec4.dot(x, vec4.create(0, 1, 0, 0))).toBe(0);
+    expect(vec4.dot(x, vec4.create(-1, 0, 0, 0))).toBe(-1);
+  });
+
+  test('the sign holds at any length', () => {
+    const long = vec4.create(10, 0, 0, 0);
+
+    expect(vec4.dot(long, vec4.create(0.5, 0.5, 0, 0))).toBe(5);
+    expect(vec4.dot(long, vec4.create(0, 0.5, 0, 0))).toBe(0);
+    expect(vec4.dot(long, vec4.create(-0.5, 0.5, 0, 0))).toBe(-5);
+  });
+
+  test('a zero vector gives zero', () => {
+    expect(vec4.dot(vec4.create(1, 2, 3, 4), vec4.create())).toBe(0);
+  });
+
+  test('gives -0 when every product is -0', () => {
+    expect(vec4.dot(vec4.create(-1, -1, -1, -1), vec4.create())).toBe(-0);
+  });
+
+  test('does not round the result to float32', () => {
+    const tenth = Math.fround(0.1);
+    const result = vec4.dot(vec4.create(0.1), vec4.create(0.1));
+
+    expect(result).toBe(tenth * tenth);
+    expect(result).not.toBe(Math.fround(result));
+  });
+
+  test('is not limited to the float32 range', () => {
+    const large = Math.fround(3e38);
+
+    expect(vec4.dot(vec4.create(3e38), vec4.create(3e38))).toBe(large * large);
+  });
+
+  test('normalized vectors can exceed 1, so the result needs clamping before acos', () => {
+    const a = vec4.normalize(vec4.create(), vec4.create(2, 3, 4, 5));
+    const result = vec4.dot(a, a);
+
+    expect(result).toBeGreaterThan(1);
+    expect(Math.acos(result)).toBeNaN();
+    expect(Math.acos(clamp(result, -1, 1))).toBe(0);
+  });
+
+  test('a NaN component gives NaN', () => {
+    expect(vec4.dot(vec4.create(Number.NaN), vec4.create(1, 1, 1, 1))).toBeNaN();
+  });
+
+  test('an infinite component gives NaN against zero and Infinity otherwise', () => {
+    const infinite = vec4.create(Number.POSITIVE_INFINITY);
+
+    expect(vec4.dot(infinite, vec4.create(0, 1, 0, 0))).toBeNaN();
+    expect(vec4.dot(infinite, vec4.create(1, 0, 0, 0))).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('w counts like any other component', () => {
+    expect(vec4.dot(vec4.create(0, 0, 0, 2), vec4.create(0, 0, 0, 3))).toBe(6);
+    expect(vec4.dot(vec4.create(1, 0, 0, 1), vec4.create(1, 0, 0, 1))).toBe(2);
+  });
+
+  test('a plane dotted with a point whose w is 1 gives its signed distance', () => {
+    const plane = vec4.create(0, 1, 0, -5);
+
+    expect(vec4.dot(plane, vec4.create(3, 8, 2, 1))).toBe(3);
+    expect(vec4.dot(plane, vec4.create(3, 1, 2, 1))).toBe(-4);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const b = vec4.create(5, 6, 7, 8);
+    vec4.dot(a, b);
+
+    expectComponents(a, 1, 2, 3, 4);
+    expectComponents(b, 5, 6, 7, 8);
+  });
+
+  test('reads only its own slots when the inputs are pooled views', () => {
+    const pool = sequentialBuffer(9);
+
+    expect(vec4.dot(viewAt(pool, 1), viewAt(pool, 5))).toBe(110);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec4 = vec4.create(1, 2, 3, 4);
+    const b: ReadonlyVec4 = vec4.create(5, 6, 7, 8);
+
+    expect(vec4.dot(a, b)).toBe(70);
   });
 });

@@ -1,6 +1,7 @@
 // src/vector/__tests__/vec3.test.ts
 import { describe, expect, test } from 'vitest';
 
+import { clamp } from '../../scalars.js';
 import * as vec3 from '../vec3.js';
 
 import type { ReadonlyVec3, Vec3 } from '../_types/vec3.js';
@@ -303,7 +304,7 @@ describe('isEqualXYZ', () => {
   });
 
   test('accepts a readonly input', () => {
-    expect(vec3.isEqualXYZ(vec3.FORWARD, 0, 0, 1)).toBe(true);
+    expect(vec3.isEqualXYZ(vec3.FORWARD, 0, 0, -1)).toBe(true);
   });
 });
 
@@ -1114,5 +1115,300 @@ describe('normalize', () => {
     const a: ReadonlyVec3 = vec3.create(3, 4, 12);
 
     expectComponents(vec3.normalize(vec3.create(), a), 3 / 13, 4 / 13, 12 / 13);
+  });
+});
+
+describe('dot', () => {
+  test('multiplies matching components and adds the results', () => {
+    expect(vec3.dot(vec3.create(1, 2, 3), vec3.create(4, 5, 6))).toBe(32);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec3.create(1, 2, 3);
+    const b = vec3.create(4, 5, 6);
+
+    expect(vec3.dot(a, b)).toBe(vec3.dot(b, a));
+  });
+
+  test('a vector dotted with itself is its squared magnitude', () => {
+    const a = vec3.create(1, 2, 3);
+
+    expect(vec3.dot(a, a)).toBe(vec3.magnitudeSq(a));
+  });
+
+  test('unit vectors give the cosine of the angle between them', () => {
+    const x = vec3.create(1, 0, 0);
+
+    expect(vec3.dot(x, x)).toBe(1);
+    expect(vec3.dot(x, vec3.create(0, 1, 0))).toBe(0);
+    expect(vec3.dot(x, vec3.create(-1, 0, 0))).toBe(-1);
+  });
+
+  test('the sign holds at any length', () => {
+    const long = vec3.create(10, 0, 0);
+
+    expect(vec3.dot(long, vec3.create(0.5, 0.5, 0))).toBe(5);
+    expect(vec3.dot(long, vec3.create(0, 0.5, 0))).toBe(0);
+    expect(vec3.dot(long, vec3.create(-0.5, 0.5, 0))).toBe(-5);
+  });
+
+  test('a zero vector gives zero', () => {
+    expect(vec3.dot(vec3.create(1, 2, 3), vec3.create())).toBe(0);
+  });
+
+  test('gives -0 when every product is -0', () => {
+    expect(vec3.dot(vec3.create(-1, -1, -1), vec3.create())).toBe(-0);
+  });
+
+  test('does not round the result to float32', () => {
+    const tenth = Math.fround(0.1);
+    const result = vec3.dot(vec3.create(0.1), vec3.create(0.1));
+
+    expect(result).toBe(tenth * tenth);
+    expect(result).not.toBe(Math.fround(result));
+  });
+
+  test('is not limited to the float32 range', () => {
+    const large = Math.fround(3e38);
+
+    expect(vec3.dot(vec3.create(3e38), vec3.create(3e38))).toBe(large * large);
+  });
+
+  test('normalized vectors can exceed 1, so the result needs clamping before acos', () => {
+    const a = vec3.normalize(vec3.create(), vec3.create(1, 2, 3));
+    const result = vec3.dot(a, a);
+
+    expect(result).toBeGreaterThan(1);
+    expect(Math.acos(result)).toBeNaN();
+    expect(Math.acos(clamp(result, -1, 1))).toBe(0);
+  });
+
+  test('a NaN component gives NaN', () => {
+    expect(vec3.dot(vec3.create(Number.NaN), vec3.create(1, 1, 1))).toBeNaN();
+  });
+
+  test('an infinite component gives NaN against zero and Infinity otherwise', () => {
+    const infinite = vec3.create(Number.POSITIVE_INFINITY);
+
+    expect(vec3.dot(infinite, vec3.create(0, 1, 0))).toBeNaN();
+    expect(vec3.dot(infinite, vec3.create(1, 0, 0))).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec3.create(1, 2, 3);
+    const b = vec3.create(4, 5, 6);
+    vec3.dot(a, b);
+
+    expectComponents(a, 1, 2, 3);
+    expectComponents(b, 4, 5, 6);
+  });
+
+  test('reads only its own slots when the inputs are pooled views', () => {
+    const pool = sequentialBuffer(7);
+
+    expect(vec3.dot(viewAt(pool, 1), viewAt(pool, 4))).toBe(56);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec3 = vec3.create(1, 2, 3);
+    const b: ReadonlyVec3 = vec3.create(4, 5, 6);
+
+    expect(vec3.dot(a, b)).toBe(32);
+  });
+});
+
+describe('cross', () => {
+  test('follows the right-hand rule on the axes and returns out', () => {
+    const out = vec3.create();
+    const result = vec3.cross(out, vec3.create(1, 0, 0), vec3.create(0, 1, 0));
+
+    expect(result).toBe(out);
+    expectComponents(out, 0, 0, 1);
+    expectComponents(vec3.cross(out, vec3.create(0, 1, 0), vec3.create(0, 0, 1)), 1, 0, 0);
+    expectComponents(vec3.cross(out, vec3.create(0, 0, 1), vec3.create(1, 0, 0)), 0, 1, 0);
+  });
+
+  test('matches the documented right-handed direction constants', () => {
+    const out = vec3.create();
+
+    expect(vec3.isEqualXYZ(vec3.FORWARD, 0, 0, -1)).toBe(true);
+    expect(vec3.isEqualXYZ(vec3.BACK, 0, 0, 1)).toBe(true);
+    expect(vec3.isEqual(vec3.cross(out, vec3.RIGHT, vec3.UP), vec3.BACK)).toBe(true);
+    expect(vec3.isEqual(vec3.cross(out, vec3.UP, vec3.BACK), vec3.RIGHT)).toBe(true);
+    expect(vec3.isEqual(vec3.cross(out, vec3.BACK, vec3.RIGHT), vec3.UP)).toBe(true);
+    expect(vec3.isEqual(vec3.cross(out, vec3.FORWARD, vec3.UP), vec3.RIGHT)).toBe(true);
+  });
+
+  test('uses every component in the right place', () => {
+    const out = vec3.cross(vec3.create(), vec3.create(1, 2, 3), vec3.create(4, -5, 7));
+
+    expectComponents(out, 29, 5, -13);
+  });
+
+  test('swapping the inputs negates the result', () => {
+    const out = vec3.cross(vec3.create(), vec3.create(4, -5, 7), vec3.create(1, 2, 3));
+
+    expectComponents(out, -29, -5, 13);
+  });
+
+  test('the result is perpendicular to both inputs', () => {
+    const a = vec3.create(1, 2, 3);
+    const b = vec3.create(4, -5, 7);
+    const out = vec3.cross(vec3.create(), a, b);
+
+    expect(vec3.dot(out, a)).toBe(0);
+    expect(vec3.dot(out, b)).toBe(0);
+  });
+
+  test('two unit vectors only give a unit vector when perpendicular', () => {
+    const diagonal = vec3.normalize(vec3.create(), vec3.create(1, 1, 0));
+
+    expect(vec3.magnitude(vec3.cross(vec3.create(), vec3.RIGHT, vec3.UP))).toBe(1);
+    expect(vec3.magnitude(vec3.cross(vec3.create(), vec3.RIGHT, diagonal))).toBeCloseTo(
+      Math.SQRT1_2,
+      6
+    );
+  });
+
+  test('parallel, opposite and zero inputs give a zero vector', () => {
+    const a = vec3.create(1, 2, 3);
+
+    expect(vec3.isEqualXYZ(vec3.cross(vec3.create(), a, a), 0, 0, 0)).toBe(true);
+    expect(vec3.isEqualXYZ(vec3.cross(vec3.create(), a, vec3.create(2, 4, 6)), 0, 0, 0)).toBe(true);
+    expect(vec3.isEqualXYZ(vec3.cross(vec3.create(), a, vec3.create(-1, -2, -3)), 0, 0, 0)).toBe(
+      true
+    );
+    expect(vec3.isEqualXYZ(vec3.cross(vec3.create(), a, vec3.create()), 0, 0, 0)).toBe(true);
+  });
+
+  test('normalizing the result of parallel inputs stays zero', () => {
+    const out = vec3.cross(vec3.create(), vec3.UP, vec3.UP);
+
+    expect(vec3.isEqualXYZ(vec3.normalize(out, out), 0, 0, 0)).toBe(true);
+  });
+
+  test('can produce -0 components', () => {
+    const out = vec3.cross(vec3.create(), vec3.create(0, -1, 0), vec3.create(0, 1, 0));
+
+    expect(out[0]).toBe(-0);
+  });
+
+  test('keeps float64 precision through the subtraction', () => {
+    const e = 2 ** -23;
+    const out = vec3.cross(
+      vec3.create(),
+      vec3.create(1 + e, 1 + 2 * e, 0),
+      vec3.create(1, 1 + e, 0)
+    );
+
+    // In float32 both products round to 1 + 2e and the difference is lost.
+    expectComponents(out, 0, 0, e * e);
+  });
+
+  test('rounds the result to float32 when stored', () => {
+    const tenth = Math.fround(0.1);
+    const out = vec3.cross(vec3.create(), vec3.create(0.1, 0, 0), vec3.create(0, 0.1, 0));
+
+    expect(out[2]).toBe(Math.fround(tenth * tenth));
+  });
+
+  test('a result too large for float32 becomes Infinity', () => {
+    const out = vec3.cross(vec3.create(), vec3.create(3e38, 0, 0), vec3.create(0, 3e38, 0));
+
+    expectComponents(out, 0, 0, Number.POSITIVE_INFINITY);
+  });
+
+  test('a NaN component spreads to the two components that use it', () => {
+    const out = vec3.cross(vec3.create(), vec3.create(Number.NaN, 1, 1), vec3.create(1, 1, 1));
+
+    expectComponents(out, 0, Number.NaN, Number.NaN);
+  });
+
+  test('an infinite input gives NaN where it meets zero', () => {
+    const out = vec3.cross(
+      vec3.create(),
+      vec3.create(Number.POSITIVE_INFINITY, 0, 0),
+      vec3.create(0, 1, 0)
+    );
+
+    expectComponents(out, 0, Number.NaN, Number.POSITIVE_INFINITY);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec3.create(1, 2, 3);
+    const b = vec3.create(4, -5, 7);
+    vec3.cross(vec3.create(), a, b);
+
+    expectComponents(a, 1, 2, 3);
+    expectComponents(b, 4, -5, 7);
+  });
+
+  test('out may be the first input', () => {
+    const a = vec3.create(1, 2, 3);
+    vec3.cross(a, a, vec3.create(4, -5, 7));
+
+    expectComponents(a, 29, 5, -13);
+  });
+
+  test('out may be the second input', () => {
+    const b = vec3.create(4, -5, 7);
+    vec3.cross(b, vec3.create(1, 2, 3), b);
+
+    expectComponents(b, 29, 5, -13);
+  });
+
+  test('out may be both inputs', () => {
+    const a = vec3.create(1, 2, 3);
+    vec3.cross(a, a, a);
+
+    expect(vec3.isEqualXYZ(a, 0, 0, 0)).toBe(true);
+  });
+
+  test('overlapping views: out overlaps both inputs', () => {
+    const buffer = sequentialBuffer(6);
+    const out = viewAt(buffer, 2);
+    vec3.cross(out, viewAt(buffer, 0), viewAt(buffer, 3));
+
+    // a = (1, 2, 3), b = (4, 5, 6)
+    expectComponents(out, -3, 6, -3);
+  });
+
+  test('overlapping views: out one element ahead of the first input', () => {
+    const buffer = sequentialBuffer(7);
+    const out = viewAt(buffer, 1);
+    vec3.cross(out, viewAt(buffer, 0), viewAt(buffer, 4));
+
+    // a = (1, 2, 3), b = (5, 6, 7)
+    expectComponents(out, -4, 8, -4);
+  });
+
+  test('overlapping views: out one element behind the second input', () => {
+    const buffer = sequentialBuffer(7);
+    const out = viewAt(buffer, 3);
+    vec3.cross(out, viewAt(buffer, 0), viewAt(buffer, 4));
+
+    // a = (1, 2, 3), b = (5, 6, 7)
+    expectComponents(out, -4, 8, -4);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(9);
+    vec3.cross(viewAt(pool, 3), vec3.create(1, 0, 0), vec3.create(0, 1, 0));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 0, 0, 1, 7, 8, 9]);
+  });
+
+  test('works on views over a SharedArrayBuffer', () => {
+    const pool = sequentialBuffer(6, true);
+    const out = vec3.cross(vec3.create(), viewAt(pool, 0), viewAt(pool, 3));
+
+    expectComponents(out, -3, 6, -3);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec3 = vec3.create(1, 2, 3);
+    const b: ReadonlyVec3 = vec3.create(4, -5, 7);
+
+    expectComponents(vec3.cross(vec3.create(), a, b), 29, 5, -13);
   });
 });

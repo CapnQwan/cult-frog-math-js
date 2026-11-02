@@ -181,3 +181,33 @@ describe('magnitude, distance and normalize', () => {
     vec3.magnitudeSq(raw);
   });
 });
+
+describe('dot and cross', () => {
+  test('dot takes readonly inputs and returns a number', () => {
+    expectTypeOf(vec3.dot).parameters.toEqualTypeOf<[ReadonlyVec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.dot).returns.toEqualTypeOf<number>();
+  });
+
+  test('cross writes to a mutable out and returns it', () => {
+    expectTypeOf(vec3.cross).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3, ReadonlyVec3]>();
+    expectTypeOf(vec3.cross).returns.toEqualTypeOf<Vec3>();
+  });
+
+  test('call sites', () => {
+    vec3.dot(frozen, live);
+    vec3.dot(shared, frozen);
+    // @ts-expect-error wrong-dimension input
+    vec3.dot(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec3.dot(raw, live);
+    vec3.cross(live, frozen, frozen);
+    vec3.cross(live, live, frozen);
+    vec3.cross(shared, live, frozen);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.cross(frozen, live, live);
+    // @ts-expect-error wrong-dimension input
+    vec3.cross(live, other, live);
+    // @ts-expect-error unbranded arrays are rejected
+    vec3.cross(live, live, raw);
+  });
+});
