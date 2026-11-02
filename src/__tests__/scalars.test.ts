@@ -181,4 +181,16 @@ describe('isEqualEpsilon', () => {
     expect(isEqualEpsilon(0, 0.05, 0.1)).toBe(true);
     expect(isEqualEpsilon(0, 0.5, 0.1)).toBe(false);
   });
+
+  test('returns false for NaN', () => {
+    expect(isEqualEpsilon(Number.NaN, 0)).toBe(false);
+  });
+
+  test('returns false for Infinity', () => {
+    expect(isEqualEpsilon(Infinity, 0)).toBe(false);
+  });
+
+  test('returns false for -Infinity', () => {
+    expect(isEqualEpsilon(-Infinity, 0)).toBe(false);
+  });
 });

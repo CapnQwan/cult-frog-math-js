@@ -128,5 +128,7 @@ export function snapToZero(value: number): number {
  * @returns `true` if the values are within tolerance of each other.
  */
 export function isEqualEpsilon(a: number, b: number, eps = EPSILON): boolean {
+  if (Number.isNaN(a) || Number.isNaN(b)) return false;
+  if (!(Number.isFinite(a) && Number.isFinite(b))) return false;
   return Math.abs(a - b) <= eps * Math.max(1, Math.abs(a), Math.abs(b));
 }
