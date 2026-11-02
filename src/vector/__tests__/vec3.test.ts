@@ -2122,3 +2122,94 @@ describe('angle', () => {
     expect(vec3.angle(a, b)).toBe(Math.PI / 2);
   });
 });
+
+describe('SIZE', () => {
+  test('matches the length of a created vector', () => {
+    expect(vec3.SIZE).toBe(3);
+    expect(vec3.create().length).toBe(vec3.SIZE);
+  });
+});
+
+describe('fromPacked', () => {
+  test('copies the requested row in x, y, z order', () => {
+    const packed = new Float32Array([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+    expectComponents(vec3.fromPacked(vec3.create(), packed, 0), 1, 2, 3);
+    expectComponents(vec3.fromPacked(vec3.create(), packed, 1), 4, 5, 6);
+    expectComponents(vec3.fromPacked(vec3.create(), packed, 2), 7, 8, 9);
+  });
+
+  test('returns out', () => {
+    const out = vec3.create();
+
+    expect(vec3.fromPacked(out, new Float32Array(3), 0)).toBe(out);
+  });
+
+  test('never writes to the packed array', () => {
+    const packed = new Float32Array([1, 2, 3, 4, 5, 6]);
+    vec3.fromPacked(vec3.create(), packed, 1);
+
+    expect(Array.from(packed)).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(5);
+    vec3.fromPacked(viewAt(pool, 1), new Float32Array([10, 20, 30]), 0);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 10, 20, 30, 5]);
+  });
+
+  test('handles out overlapping the row from behind', () => {
+    const pool = sequentialBuffer(7);
+    vec3.fromPacked(viewAt(pool, 2), new Float32Array(pool), 1);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 4, 5, 6, 6, 7]);
+  });
+
+  test('handles out overlapping the row from ahead', () => {
+    const pool = sequentialBuffer(7);
+    vec3.fromPacked(viewAt(pool, 4), new Float32Array(pool), 1);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 4, 4, 5, 6]);
+  });
+
+  test('reads from a plain array, rounding to float32', () => {
+    expectComponents(vec3.fromPacked(vec3.create(), [0.1, 0.2, 0.3], 0), 0.1, 0.2, 0.3);
+  });
+
+  test('reads from a readonly vector', () => {
+    const source: ReadonlyVec3 = vec3.create(1, 2, 3);
+
+    expectComponents(vec3.fromPacked(vec3.create(), source, 0), 1, 2, 3);
+  });
+
+  test('reads from a SharedArrayBuffer', () => {
+    const packed = new Float32Array(sequentialBuffer(6, true));
+
+    expectComponents(vec3.fromPacked(vec3.create(), packed, 1), 4, 5, 6);
+  });
+
+  test('writes NaN for a row past the end', () => {
+    const out = vec3.fromPacked(vec3.create(), new Float32Array(3), 1);
+
+    expect(out[0]).toBeNaN();
+    expect(out[1]).toBeNaN();
+    expect(out[2]).toBeNaN();
+  });
+
+  test('writes NaN for a negative row', () => {
+    const out = vec3.fromPacked(vec3.create(), new Float32Array(3), -1);
+
+    expect(out[0]).toBeNaN();
+    expect(out[1]).toBeNaN();
+    expect(out[2]).toBeNaN();
+  });
+
+  test('writes NaN only for the components past the end', () => {
+    const out = vec3.fromPacked(vec3.create(), new Float32Array([1, 2, 3, 4, 5]), 1);
+
+    expect(out[0]).toBe(4);
+    expect(out[1]).toBe(5);
+    expect(out[2]).toBeNaN();
+  });
+});

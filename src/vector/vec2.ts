@@ -13,6 +13,9 @@ import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
 
 import type { ReadonlyVec2, Vec2 } from './_types/vec2.js';
 
+/** The number of elements in a `Vec2`. */
+export const SIZE = 2;
+
 /**
  * Allocates a new vector. Omitted components default to `0`.
  *
@@ -24,7 +27,7 @@ import type { ReadonlyVec2, Vec2 } from './_types/vec2.js';
  * @returns A new vector with its own buffer.
  */
 export function create(x: number = 0, y: number = 0): Vec2 {
-  const v = new Float32Array(2) as Vec2;
+  const v = new Float32Array(SIZE) as Vec2;
   v[0] = x;
   v[1] = y;
   return v;
@@ -507,6 +510,30 @@ export function angle(a: ReadonlyVec2, b: ReadonlyVec2): number {
   const cos = dot(a, b) / denominator;
 
   return Math.acos(clamp(cos, -1, 1));
+}
+
+/**
+ * Copies row `index` of a tightly packed array into `out`, without making a view.
+ * Row `i` starts at element `i * SIZE`. Values are rounded to float32.
+ *
+ * Bounds aren't checked: a component read from outside `packed` is written to
+ * `out` as `NaN`.
+ *
+ * `out` may be a view into `packed`, including one that overlaps the row.
+ *
+ * @param out - The vector to write to.
+ * @param packed - The packed values to read from.
+ * @param index - The row to read, not an element offset.
+ * @returns `out`.
+ */
+export function fromPacked(out: Vec2, packed: ArrayLike<number>, index: number): Vec2 {
+  const from = index * SIZE;
+  // biome-ignore format: packed component reads
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const x = packed[from]!, y = packed[from + 1]!;
+  out[0] = x;
+  out[1] = y;
+  return out;
 }
 
 /**

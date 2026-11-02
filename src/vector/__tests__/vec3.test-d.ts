@@ -275,3 +275,25 @@ describe('reflect and angle', () => {
     vec3.angle(raw, live);
   });
 });
+
+describe('fromPacked', () => {
+  test('it writes to a mutable out and returns it', () => {
+    expectTypeOf(vec3.fromPacked).parameters.toEqualTypeOf<[Vec3, ArrayLike<number>, number]>();
+    expectTypeOf(vec3.fromPacked).returns.toEqualTypeOf<Vec3>();
+  });
+
+  test('call sites', () => {
+    vec3.fromPacked(live, raw, 0);
+    vec3.fromPacked(shared, rawShared, 0);
+    vec3.fromPacked(live, frozen, 0);
+    vec3.fromPacked(live, [1, 2, 3], 0);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.fromPacked(frozen, raw, 0);
+    // @ts-expect-error unbranded arrays are rejected as out
+    vec3.fromPacked(raw, raw, 0);
+    // @ts-expect-error the packed values must be numbers
+    vec3.fromPacked(live, ['1', '2', '3'], 0);
+    // @ts-expect-error the row index is required
+    vec3.fromPacked(live, raw);
+  });
+});
