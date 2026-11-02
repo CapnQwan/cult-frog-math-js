@@ -43,6 +43,10 @@ describe('Vec3 / ReadonlyVec3 relationship', () => {
     // @ts-expect-error `subarray` would hand out a mutable alias
     frozen.subarray(0, 1);
   });
+
+  test('readonly can be uploaded to the GPU without a cast', () => {
+    expectTypeOf<ReadonlyVec3>().toExtend<ArrayBufferView>();
+  });
 });
 
 describe('vec3 signatures', () => {

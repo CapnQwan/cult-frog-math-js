@@ -27,5 +27,8 @@ export type Mat3 = Brand<FixedFloat32Array<9>, 'Matrix3x3'>;
  *
  * This limits *your* access, not the memory: if it's a view into shared
  * storage, the values can still change underneath you.
+ *
+ * Hand the value itself to a GPU upload, not its `.buffer`: on a pooled view,
+ * `.buffer` is the whole pool, not just this value.
  */
 export type ReadonlyMat3 = Brand<ReadonlyFixedFloat32Array<9>, 'Matrix3x3'>;

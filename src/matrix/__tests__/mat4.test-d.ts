@@ -43,6 +43,10 @@ describe('Mat4 / ReadonlyMat4 relationship', () => {
     // @ts-expect-error `subarray` would hand out a mutable alias
     frozen.subarray(0, 1);
   });
+
+  test('readonly can be uploaded to the GPU without a cast', () => {
+    expectTypeOf<ReadonlyMat4>().toExtend<ArrayBufferView>();
+  });
 });
 
 describe('mat4 signatures', () => {

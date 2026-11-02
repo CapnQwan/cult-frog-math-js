@@ -20,5 +20,8 @@ export type Vec3 = Brand<FixedFloat32Array<3>, 'Vec3'>;
  *
  * This limits *your* access, not the memory: if it's a view into shared
  * storage, the values can still change underneath you.
+ *
+ * Hand the value itself to a GPU upload, not its `.buffer`: on a pooled view,
+ * `.buffer` is the whole pool, not just this value.
  */
 export type ReadonlyVec3 = Brand<ReadonlyFixedFloat32Array<3>, 'Vec3'>;
