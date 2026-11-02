@@ -10,6 +10,7 @@ and this package follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 ### Added
 
 - Vector types `Vec2`, `Vec3` and `Vec4`, with `ReadonlyVec2`, `ReadonlyVec3` and `ReadonlyVec4`, and the `Vec2`, `Vec3` and `Vec4` namespaces with `create`, `clone`, `set`, `copy`, `isEqual` and `isEqualEpsilon`, plus `isEqualXY`, `isEqualXYZ` and `isEqualXYZW` respectively to compare against loose components.
+- Vector arithmetic on `Vec2`, `Vec3` and `Vec4`: `add`, `sub`, `mul`, `div` and `scale`. `mul` and `div` work per component, and `div` follows normal float rules, so a zero divisor gives `Infinity` or `NaN` rather than a guarded value.
 - Direction constants: `ZERO`, `ONE`, `UP`, `DOWN`, `LEFT` and `RIGHT` on `Vec2` and `Vec3`, plus `FORWARD` and `BACK` on `Vec3`.
 - Matrix types `Mat2`, `Mat3` and `Mat4`, with their `Readonly*` variants, and the `Mat2`, `Mat3` and `Mat4` namespaces with `create`, `clone`, `set`, `copy`, `identity`, `isEqual` and `isEqualEpsilon`, plus `IDENTITY` and `SIZE` constants. Matrices are stored column major; `create` and `set` take their arguments in row-major order.
 - Quaternion type `Quat` and `ReadonlyQuat`, and the `Quat` namespace with `create`, `clone`, `set`, `copy`, `identity`, `isEqual`, `isEqualEpsilon` and `isEqualXYZW`, and an `IDENTITY` constant. Quaternions are stored as `[x, y, z, w]`, and equality compares components, so `q` and `-q` are not equal even though they represent the same rotation.

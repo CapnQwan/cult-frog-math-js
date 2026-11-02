@@ -137,3 +137,128 @@ export function isEqualXYZW(a: ReadonlyVec4, x: number, y: number, z: number, w:
     Math.fround(w) === a[3]
   );
 }
+
+/**
+ * Adds `a` and `b`, component by component.
+ *
+ * Each sum is rounded to float32 when stored, so a small step can vanish against
+ * a large value: adding `1` to a component of `16777216` leaves it unchanged.
+ * Keep that in mind when accumulating positions far from the origin.
+ *
+ * `w` is added like any other component, so adding two homogeneous points gives
+ * `w = 2`, not a point.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to add to.
+ * @param b - The vector to add.
+ * @returns `out`.
+ */
+export function add(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  out[0] = ax + bx;
+  out[1] = ay + by;
+  out[2] = az + bz;
+  out[3] = aw + bw;
+  return out;
+}
+
+/**
+ * Subtracts `b` from `a`, component by component.
+ *
+ * The result points from `b` towards `a`, so the direction from `p` to `q` is
+ * `sub(out, q, p)`.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to subtract from.
+ * @param b - The vector to subtract.
+ * @returns `out`.
+ */
+export function sub(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  out[0] = ax - bx;
+  out[1] = ay - by;
+  out[2] = az - bz;
+  out[3] = aw - bw;
+  return out;
+}
+
+/**
+ * Multiplies `a` by `b`, component by component.
+ *
+ * This is neither a dot product nor a cross product: each component only sees its
+ * counterpart. It's for non-uniform factors such as per-axis scaling or colour
+ * tints. For a single factor, use {@link scale}.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to multiply.
+ * @param b - The per-component factors.
+ * @returns `out`.
+ */
+export function mul(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  out[0] = ax * bx;
+  out[1] = ay * by;
+  out[2] = az * bz;
+  out[3] = aw * bw;
+  return out;
+}
+
+/**
+ * Divides `a` by `b`, component by component.
+ *
+ * Follows normal float rules with no guard against zero: a zero divisor gives
+ * `Infinity` or `-Infinity` in that component, and `0 / 0` gives `NaN`. That's
+ * deliberate, as a silent `0` would look like a valid result, while these show up
+ * as soon as they're inspected. Check the divisor first where zero is expected.
+ *
+ * A quotient too large for float32 also becomes `Infinity` when stored, even with
+ * a non-zero divisor.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to divide.
+ * @param b - The per-component divisors.
+ * @returns `out`.
+ */
+export function div(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  out[0] = ax / bx;
+  out[1] = ay / by;
+  out[2] = az / bz;
+  out[3] = aw / bw;
+  return out;
+}
+
+/**
+ * Multiplies every component of `a` by `scalar`.
+ *
+ * `w` is scaled too, so scaling a homogeneous point `(x, y, z, 1)` doesn't move it:
+ * the perspective divide cancels the factor back out.
+ *
+ * For a different factor per component, use {@link mul}.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to scale.
+ * @param scalar - The factor applied to every component.
+ * @returns `out`.
+ */
+export function scale(out: Vec4, a: ReadonlyVec4, scalar: number): Vec4 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  out[0] = ax * scalar;
+  out[1] = ay * scalar;
+  out[2] = az * scalar;
+  out[3] = aw * scalar;
+  return out;
+}

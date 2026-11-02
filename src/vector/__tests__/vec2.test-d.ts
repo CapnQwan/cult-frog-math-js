@@ -115,3 +115,34 @@ describe('equality', () => {
     vec2.isEqualXY(live, 0);
   });
 });
+
+describe('arithmetic', () => {
+  test('out is mutable, inputs are readonly, and out is returned', () => {
+    expectTypeOf(vec2.add).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyVec2]>();
+    expectTypeOf(vec2.sub).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyVec2]>();
+    expectTypeOf(vec2.mul).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyVec2]>();
+    expectTypeOf(vec2.div).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyVec2]>();
+    expectTypeOf(vec2.scale).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, number]>();
+    expectTypeOf(vec2.add).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.sub).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.mul).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.div).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.scale).returns.toEqualTypeOf<Vec2>();
+  });
+
+  test('call sites', () => {
+    vec2.add(live, frozen, frozen);
+    vec2.add(shared, live, shared);
+    vec2.scale(live, frozen, 2);
+    // @ts-expect-error readonly can never be an out parameter
+    vec2.add(frozen, live, live);
+    // @ts-expect-error readonly can never be an out parameter
+    vec2.scale(frozen, live, 2);
+    // @ts-expect-error wrong-dimension input
+    vec2.sub(live, other, live);
+    // @ts-expect-error unbranded arrays are rejected
+    vec2.mul(live, raw, live);
+    // @ts-expect-error scale takes a number, not a vector
+    vec2.scale(live, frozen, frozen);
+  });
+});

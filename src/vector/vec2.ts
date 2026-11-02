@@ -116,6 +116,115 @@ export function isEqualXY(a: ReadonlyVec2, x: number, y: number): boolean {
 }
 
 /**
+ * Adds `a` and `b`, component by component.
+ *
+ * Each sum is rounded to float32 when stored, so a small step can vanish against
+ * a large value: adding `1` to a component of `16777216` leaves it unchanged.
+ * Keep that in mind when accumulating positions far from the origin.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to add to.
+ * @param b - The vector to add.
+ * @returns `out`.
+ */
+export function add(out: Vec2, a: ReadonlyVec2, b: ReadonlyVec2): Vec2 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1];
+  out[0] = ax + bx;
+  out[1] = ay + by;
+  return out;
+}
+
+/**
+ * Subtracts `b` from `a`, component by component.
+ *
+ * The result points from `b` towards `a`, so the direction from `p` to `q` is
+ * `sub(out, q, p)`.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to subtract from.
+ * @param b - The vector to subtract.
+ * @returns `out`.
+ */
+export function sub(out: Vec2, a: ReadonlyVec2, b: ReadonlyVec2): Vec2 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1];
+  out[0] = ax - bx;
+  out[1] = ay - by;
+  return out;
+}
+
+/**
+ * Multiplies `a` by `b`, component by component.
+ *
+ * This is neither a dot product nor a cross product: each component only sees its
+ * counterpart. It's for non-uniform factors such as per-axis scaling or colour
+ * tints. For a single factor, use {@link scale}.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to multiply.
+ * @param b - The per-component factors.
+ * @returns `out`.
+ */
+export function mul(out: Vec2, a: ReadonlyVec2, b: ReadonlyVec2): Vec2 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1];
+  out[0] = ax * bx;
+  out[1] = ay * by;
+  return out;
+}
+
+/**
+ * Divides `a` by `b`, component by component.
+ *
+ * Follows normal float rules with no guard against zero: a zero divisor gives
+ * `Infinity` or `-Infinity` in that component, and `0 / 0` gives `NaN`. That's
+ * deliberate, as a silent `0` would look like a valid result, while these show up
+ * as soon as they're inspected. Check the divisor first where zero is expected.
+ *
+ * A quotient too large for float32 also becomes `Infinity` when stored, even with
+ * a non-zero divisor.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to divide.
+ * @param b - The per-component divisors.
+ * @returns `out`.
+ */
+export function div(out: Vec2, a: ReadonlyVec2, b: ReadonlyVec2): Vec2 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1];
+  out[0] = ax / bx;
+  out[1] = ay / by;
+  return out;
+}
+
+/**
+ * Multiplies every component of `a` by `scalar`.
+ *
+ * For a different factor per component, use {@link mul}.
+ *
+ * @param out - The vector to write to.
+ * @param a - The vector to scale.
+ * @param scalar - The factor applied to every component.
+ * @returns `out`.
+ */
+export function scale(out: Vec2, a: ReadonlyVec2, scalar: number): Vec2 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1];
+  out[0] = ax * scalar;
+  out[1] = ay * scalar;
+  return out;
+}
+
+/**
  * `(0, 0)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Vec2`

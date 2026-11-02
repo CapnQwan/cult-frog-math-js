@@ -306,3 +306,547 @@ describe('isEqualXYZ', () => {
     expect(vec3.isEqualXYZ(vec3.FORWARD, 0, 0, 1)).toBe(true);
   });
 });
+
+describe('add', () => {
+  test('works component by component and returns out', () => {
+    const out = vec3.create();
+    const result = vec3.add(out, vec3.create(8, 18, 32), vec3.create(2, 3, 4));
+
+    expect(result).toBe(out);
+    expectComponents(out, 8 + 2, 18 + 3, 32 + 4);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec3.create(8, 18, 32);
+    const b = vec3.create(2, 3, 4);
+    vec3.add(vec3.create(), a, b);
+
+    expectComponents(a, 8, 18, 32);
+    expectComponents(b, 2, 3, 4);
+  });
+
+  test('out may be the first input', () => {
+    const a = vec3.create(8, 18, 32);
+    vec3.add(a, a, vec3.create(2, 3, 4));
+
+    expectComponents(a, 8 + 2, 18 + 3, 32 + 4);
+  });
+
+  test('out may be the second input', () => {
+    const b = vec3.create(2, 3, 4);
+    vec3.add(b, vec3.create(8, 18, 32), b);
+
+    expectComponents(b, 8 + 2, 18 + 3, 32 + 4);
+  });
+
+  test('both inputs may be the same vector', () => {
+    const v = vec3.create(1, 2, 3);
+
+    expectComponents(vec3.add(vec3.create(), v, v), 1 + 1, 2 + 2, 3 + 3);
+  });
+
+  test('overlapping views: out one element ahead of a', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.add(out, viewAt(buffer, 0), vec3.create(10, 20, 30));
+
+    expectComponents(out, 1 + 10, 2 + 20, 3 + 30);
+  });
+
+  test('overlapping views: out one element behind a', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.add(out, viewAt(buffer, 1), vec3.create(10, 20, 30));
+
+    expectComponents(out, 2 + 10, 3 + 20, 4 + 30);
+  });
+
+  test('overlapping views: out one element ahead of b', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.add(out, vec3.create(10, 20, 30), viewAt(buffer, 0));
+
+    expectComponents(out, 10 + 1, 20 + 2, 30 + 3);
+  });
+
+  test('overlapping views: out one element behind b', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.add(out, vec3.create(10, 20, 30), viewAt(buffer, 1));
+
+    expectComponents(out, 10 + 2, 20 + 3, 30 + 4);
+  });
+
+  test('overlapping views: out overlaps both inputs', () => {
+    // a starts at slot 0, out at slot 1 and b at slot 2.
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 1);
+    vec3.add(out, viewAt(buffer, 0), viewAt(buffer, 2));
+
+    expectComponents(out, 1 + 3, 2 + 4, 3 + 5);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(9);
+    vec3.add(viewAt(pool, 3), vec3.create(8, 18, 32), vec3.create(2, 3, 4));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([
+      1,
+      2,
+      3,
+      Math.fround(8 + 2),
+      Math.fround(18 + 3),
+      Math.fround(32 + 4),
+      7,
+      8,
+      9,
+    ]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec3 = vec3.create(8, 18, 32);
+    const b: ReadonlyVec3 = vec3.create(2, 3, 4);
+
+    expectComponents(vec3.add(vec3.create(), a, b), 8 + 2, 18 + 3, 32 + 4);
+  });
+
+  test('a small step can vanish against a large value', () => {
+    const large = vec3.create(16777216, 16777216, 16777216);
+    const out = vec3.add(vec3.create(), large, vec3.create(1, 1, 1));
+
+    expect(vec3.isEqual(out, large)).toBe(true);
+  });
+});
+
+describe('sub', () => {
+  test('works component by component and returns out', () => {
+    const out = vec3.create();
+    const result = vec3.sub(out, vec3.create(8, 18, 32), vec3.create(2, 3, 4));
+
+    expect(result).toBe(out);
+    expectComponents(out, 8 - 2, 18 - 3, 32 - 4);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec3.create(8, 18, 32);
+    const b = vec3.create(2, 3, 4);
+    vec3.sub(vec3.create(), a, b);
+
+    expectComponents(a, 8, 18, 32);
+    expectComponents(b, 2, 3, 4);
+  });
+
+  test('out may be the first input', () => {
+    const a = vec3.create(8, 18, 32);
+    vec3.sub(a, a, vec3.create(2, 3, 4));
+
+    expectComponents(a, 8 - 2, 18 - 3, 32 - 4);
+  });
+
+  test('out may be the second input', () => {
+    const b = vec3.create(2, 3, 4);
+    vec3.sub(b, vec3.create(8, 18, 32), b);
+
+    expectComponents(b, 8 - 2, 18 - 3, 32 - 4);
+  });
+
+  test('both inputs may be the same vector', () => {
+    const v = vec3.create(1, 2, 3);
+
+    expectComponents(vec3.sub(vec3.create(), v, v), 1 - 1, 2 - 2, 3 - 3);
+  });
+
+  test('overlapping views: out one element ahead of a', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.sub(out, viewAt(buffer, 0), vec3.create(10, 20, 30));
+
+    expectComponents(out, 1 - 10, 2 - 20, 3 - 30);
+  });
+
+  test('overlapping views: out one element behind a', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.sub(out, viewAt(buffer, 1), vec3.create(10, 20, 30));
+
+    expectComponents(out, 2 - 10, 3 - 20, 4 - 30);
+  });
+
+  test('overlapping views: out one element ahead of b', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.sub(out, vec3.create(10, 20, 30), viewAt(buffer, 0));
+
+    expectComponents(out, 10 - 1, 20 - 2, 30 - 3);
+  });
+
+  test('overlapping views: out one element behind b', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.sub(out, vec3.create(10, 20, 30), viewAt(buffer, 1));
+
+    expectComponents(out, 10 - 2, 20 - 3, 30 - 4);
+  });
+
+  test('overlapping views: out overlaps both inputs', () => {
+    // a starts at slot 0, out at slot 1 and b at slot 2.
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 1);
+    vec3.sub(out, viewAt(buffer, 0), viewAt(buffer, 2));
+
+    expectComponents(out, 1 - 3, 2 - 4, 3 - 5);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(9);
+    vec3.sub(viewAt(pool, 3), vec3.create(8, 18, 32), vec3.create(2, 3, 4));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([
+      1,
+      2,
+      3,
+      Math.fround(8 - 2),
+      Math.fround(18 - 3),
+      Math.fround(32 - 4),
+      7,
+      8,
+      9,
+    ]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec3 = vec3.create(8, 18, 32);
+    const b: ReadonlyVec3 = vec3.create(2, 3, 4);
+
+    expectComponents(vec3.sub(vec3.create(), a, b), 8 - 2, 18 - 3, 32 - 4);
+  });
+});
+
+describe('mul', () => {
+  test('works component by component and returns out', () => {
+    const out = vec3.create();
+    const result = vec3.mul(out, vec3.create(8, 18, 32), vec3.create(2, 3, 4));
+
+    expect(result).toBe(out);
+    expectComponents(out, 8 * 2, 18 * 3, 32 * 4);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec3.create(8, 18, 32);
+    const b = vec3.create(2, 3, 4);
+    vec3.mul(vec3.create(), a, b);
+
+    expectComponents(a, 8, 18, 32);
+    expectComponents(b, 2, 3, 4);
+  });
+
+  test('out may be the first input', () => {
+    const a = vec3.create(8, 18, 32);
+    vec3.mul(a, a, vec3.create(2, 3, 4));
+
+    expectComponents(a, 8 * 2, 18 * 3, 32 * 4);
+  });
+
+  test('out may be the second input', () => {
+    const b = vec3.create(2, 3, 4);
+    vec3.mul(b, vec3.create(8, 18, 32), b);
+
+    expectComponents(b, 8 * 2, 18 * 3, 32 * 4);
+  });
+
+  test('both inputs may be the same vector', () => {
+    const v = vec3.create(1, 2, 3);
+
+    expectComponents(vec3.mul(vec3.create(), v, v), 1 * 1, 2 * 2, 3 * 3);
+  });
+
+  test('overlapping views: out one element ahead of a', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.mul(out, viewAt(buffer, 0), vec3.create(10, 20, 30));
+
+    expectComponents(out, 1 * 10, 2 * 20, 3 * 30);
+  });
+
+  test('overlapping views: out one element behind a', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.mul(out, viewAt(buffer, 1), vec3.create(10, 20, 30));
+
+    expectComponents(out, 2 * 10, 3 * 20, 4 * 30);
+  });
+
+  test('overlapping views: out one element ahead of b', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.mul(out, vec3.create(10, 20, 30), viewAt(buffer, 0));
+
+    expectComponents(out, 10 * 1, 20 * 2, 30 * 3);
+  });
+
+  test('overlapping views: out one element behind b', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.mul(out, vec3.create(10, 20, 30), viewAt(buffer, 1));
+
+    expectComponents(out, 10 * 2, 20 * 3, 30 * 4);
+  });
+
+  test('overlapping views: out overlaps both inputs', () => {
+    // a starts at slot 0, out at slot 1 and b at slot 2.
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 1);
+    vec3.mul(out, viewAt(buffer, 0), viewAt(buffer, 2));
+
+    expectComponents(out, 1 * 3, 2 * 4, 3 * 5);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(9);
+    vec3.mul(viewAt(pool, 3), vec3.create(8, 18, 32), vec3.create(2, 3, 4));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([
+      1,
+      2,
+      3,
+      Math.fround(8 * 2),
+      Math.fround(18 * 3),
+      Math.fround(32 * 4),
+      7,
+      8,
+      9,
+    ]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec3 = vec3.create(8, 18, 32);
+    const b: ReadonlyVec3 = vec3.create(2, 3, 4);
+
+    expectComponents(vec3.mul(vec3.create(), a, b), 8 * 2, 18 * 3, 32 * 4);
+  });
+});
+
+describe('div', () => {
+  test('works component by component and returns out', () => {
+    const out = vec3.create();
+    const result = vec3.div(out, vec3.create(8, 18, 32), vec3.create(2, 3, 4));
+
+    expect(result).toBe(out);
+    expectComponents(out, 8 / 2, 18 / 3, 32 / 4);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec3.create(8, 18, 32);
+    const b = vec3.create(2, 3, 4);
+    vec3.div(vec3.create(), a, b);
+
+    expectComponents(a, 8, 18, 32);
+    expectComponents(b, 2, 3, 4);
+  });
+
+  test('out may be the first input', () => {
+    const a = vec3.create(8, 18, 32);
+    vec3.div(a, a, vec3.create(2, 3, 4));
+
+    expectComponents(a, 8 / 2, 18 / 3, 32 / 4);
+  });
+
+  test('out may be the second input', () => {
+    const b = vec3.create(2, 3, 4);
+    vec3.div(b, vec3.create(8, 18, 32), b);
+
+    expectComponents(b, 8 / 2, 18 / 3, 32 / 4);
+  });
+
+  test('both inputs may be the same vector', () => {
+    const v = vec3.create(1, 2, 3);
+
+    expectComponents(vec3.div(vec3.create(), v, v), 1 / 1, 2 / 2, 3 / 3);
+  });
+
+  test('overlapping views: out one element ahead of a', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.div(out, viewAt(buffer, 0), vec3.create(10, 20, 30));
+
+    expectComponents(out, 1 / 10, 2 / 20, 3 / 30);
+  });
+
+  test('overlapping views: out one element behind a', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.div(out, viewAt(buffer, 1), vec3.create(10, 20, 30));
+
+    expectComponents(out, 2 / 10, 3 / 20, 4 / 30);
+  });
+
+  test('overlapping views: out one element ahead of b', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.div(out, vec3.create(10, 20, 30), viewAt(buffer, 0));
+
+    expectComponents(out, 10 / 1, 20 / 2, 30 / 3);
+  });
+
+  test('overlapping views: out one element behind b', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.div(out, vec3.create(10, 20, 30), viewAt(buffer, 1));
+
+    expectComponents(out, 10 / 2, 20 / 3, 30 / 4);
+  });
+
+  test('overlapping views: out overlaps both inputs', () => {
+    // a starts at slot 0, out at slot 1 and b at slot 2.
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 1);
+    vec3.div(out, viewAt(buffer, 0), viewAt(buffer, 2));
+
+    expectComponents(out, 1 / 3, 2 / 4, 3 / 5);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(9);
+    vec3.div(viewAt(pool, 3), vec3.create(8, 18, 32), vec3.create(2, 3, 4));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([
+      1,
+      2,
+      3,
+      Math.fround(8 / 2),
+      Math.fround(18 / 3),
+      Math.fround(32 / 4),
+      7,
+      8,
+      9,
+    ]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec3 = vec3.create(8, 18, 32);
+    const b: ReadonlyVec3 = vec3.create(2, 3, 4);
+
+    expectComponents(vec3.div(vec3.create(), a, b), 8 / 2, 18 / 3, 32 / 4);
+  });
+
+  test('a zero divisor gives a signed Infinity', () => {
+    const out = vec3.create();
+    vec3.div(out, vec3.create(1, -1, 1), vec3.create());
+
+    expectComponents(
+      out,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.POSITIVE_INFINITY
+    );
+  });
+
+  test('a negative zero divisor flips the sign of Infinity', () => {
+    const out = vec3.create();
+    vec3.div(out, vec3.create(1, 1, 1), vec3.create(-0, -0, -0));
+
+    expectComponents(
+      out,
+      Number.NEGATIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      Number.NEGATIVE_INFINITY
+    );
+  });
+
+  test('zero divided by zero is NaN', () => {
+    const out = vec3.div(vec3.create(), vec3.create(), vec3.create());
+
+    expectComponents(out, Number.NaN, Number.NaN, Number.NaN);
+  });
+
+  test('a zero divisor only affects its own component', () => {
+    const divisor = vec3.create(2, 3, 4);
+    divisor[2] = 0;
+    const out = vec3.div(vec3.create(), vec3.create(8, 18, 32), divisor);
+
+    expectComponents(out, 8 / 2, 18 / 3, Number.POSITIVE_INFINITY);
+  });
+
+  test('small divisors divide normally rather than being treated as zero', () => {
+    const tiny = vec3.create(1e-7, 1e-7, 1e-7);
+    const out = vec3.div(vec3.create(), tiny, tiny);
+
+    expectComponents(out, 1, 1, 1);
+  });
+
+  test('a quotient too large for float32 becomes Infinity', () => {
+    const out = vec3.div(
+      vec3.create(),
+      vec3.create(1e30, 1e30, 1e30),
+      vec3.create(1e-30, 1e-30, 1e-30)
+    );
+
+    expectComponents(
+      out,
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY,
+      Number.POSITIVE_INFINITY
+    );
+  });
+});
+
+describe('scale', () => {
+  test('multiplies every component and returns out', () => {
+    const out = vec3.create();
+    const result = vec3.scale(out, vec3.create(8, 18, 32), 2.5);
+
+    expect(result).toBe(out);
+    expectComponents(out, 8 * 2.5, 18 * 2.5, 32 * 2.5);
+  });
+
+  test('never writes to the input', () => {
+    const a = vec3.create(8, 18, 32);
+    vec3.scale(vec3.create(), a, 2);
+
+    expectComponents(a, 8, 18, 32);
+  });
+
+  test('out may be the input', () => {
+    const a = vec3.create(8, 18, 32);
+    vec3.scale(a, a, 2);
+
+    expectComponents(a, 8 * 2, 18 * 2, 32 * 2);
+  });
+
+  test('a negative scalar flips every component', () => {
+    expectComponents(vec3.scale(vec3.create(), vec3.create(8, 18, 32), -1), -8, -18, -32);
+  });
+
+  test('a scalar of zero clears every component', () => {
+    expectComponents(vec3.scale(vec3.create(), vec3.create(8, 18, 32), 0), 0, 0, 0);
+  });
+
+  test('overlapping views: out one element ahead of the input', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 1);
+    vec3.scale(out, viewAt(buffer, 0), 10);
+
+    expectComponents(out, 1 * 10, 2 * 10, 3 * 10);
+  });
+
+  test('overlapping views: out one element behind the input', () => {
+    const buffer = sequentialBuffer(4);
+    const out = viewAt(buffer, 0);
+    vec3.scale(out, viewAt(buffer, 1), 10);
+
+    expectComponents(out, 2 * 10, 3 * 10, 4 * 10);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(9);
+    vec3.scale(viewAt(pool, 3), vec3.create(8, 18, 32), 2);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 16, 36, 64, 7, 8, 9]);
+  });
+
+  test('accepts a readonly input', () => {
+    const a: ReadonlyVec3 = vec3.create(8, 18, 32);
+
+    expectComponents(vec3.scale(vec3.create(), a, 2), 8 * 2, 18 * 2, 32 * 2);
+  });
+});
