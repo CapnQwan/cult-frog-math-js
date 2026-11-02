@@ -287,3 +287,14 @@ describe('fromPacked', () => {
     vec4.fromPacked(live, raw);
   });
 });
+
+describe('constants', () => {
+  test('are readonly and cannot be passed as out', () => {
+    expectTypeOf(vec4.ZERO).toEqualTypeOf<ReadonlyVec4>();
+    expectTypeOf(vec4.ONE).toEqualTypeOf<ReadonlyVec4>();
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.set(vec4.ZERO, 0, 0, 0, 0);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.set(vec4.ONE, 0, 0, 0, 0);
+  });
+});

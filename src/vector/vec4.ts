@@ -622,3 +622,19 @@ export function fromPacked(out: Vec4, packed: ArrayLike<number>, index: number):
   out[3] = w;
   return out;
 }
+
+/**
+ * `(0, 0, 0, 0)`.
+ *
+ * Shared instance, readonly at the type level only. Never cast it to `Vec4`
+ * or write to it; `clone` it if you need a mutable copy.
+ */
+export const ZERO = create(0, 0, 0, 0) as ReadonlyVec4;
+
+/**
+ * `(1, 1, 1, 1)`.
+ *
+ * Shared instance, readonly at the type level only. Never cast it to `Vec4`
+ * or write to it; `clone` it if you need a mutable copy.
+ */
+export const ONE = create(1, 1, 1, 1) as ReadonlyVec4;

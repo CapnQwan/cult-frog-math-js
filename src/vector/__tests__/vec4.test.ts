@@ -1995,6 +1995,24 @@ describe('angle', () => {
   });
 });
 
+describe('constants', () => {
+  test('ZERO has every component at zero', () => {
+    expectComponents(vec4.ZERO, 0, 0, 0, 0);
+  });
+
+  test('ONE has every component at one', () => {
+    expectComponents(vec4.ONE, 1, 1, 1, 1);
+  });
+
+  test('are shared instances that clone into standalone vectors', () => {
+    const copy = vec4.clone(vec4.ONE);
+
+    expect(copy).not.toBe(vec4.ONE);
+    expect(copy.buffer).not.toBe(vec4.ONE.buffer);
+    expectComponents(copy, 1, 1, 1, 1);
+  });
+});
+
 describe('SIZE', () => {
   test('matches the length of a created vector', () => {
     expect(vec4.SIZE).toBe(4);
