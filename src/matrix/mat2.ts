@@ -17,7 +17,13 @@
  * @module mat2
  */
 
+import { EPSILON } from '../constants.js';
+import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+
 import type { Mat2, ReadonlyMat2 } from './_types/mat2.js';
+
+/** The number of elements in a `Mat2`. */
+export const SIZE = 4;
 
 /**
  * Allocates a new matrix from elements given in row-major order.
@@ -34,7 +40,7 @@ export function create(
   a00: number = 0, a01: number = 0,
   a10: number = 0, a11: number = 0
 ): Mat2 {
-  const out = new Float32Array(4) as Mat2;
+  const out = new Float32Array(SIZE) as Mat2;
 
   out[0] = a00; out[2] = a01;
   out[1] = a10; out[3] = a11;
@@ -127,3 +133,33 @@ export function identity(out: Mat2): Mat2 {
  * or write to it; `clone` it if you need a mutable copy.
  */
 export const IDENTITY = identity(create()) as ReadonlyMat2;
+
+/**
+ * Returns whether two matrices have exactly equal elements.
+ *
+ * @param a - The first matrix.
+ * @param b - The second matrix.
+ * @returns `true` if every element is equal.
+ */
+export function isEqual(a: ReadonlyMat2, b: ReadonlyMat2): boolean {
+  for (let i = 0; i < SIZE; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/**
+ * Returns whether two matrices are equal within a tolerance, compared
+ * element by element.
+ *
+ * Each element goes through the scalar `isEqualEpsilon`, so the tolerance is
+ * `eps` near unit scale and widens with the elements' magnitude.
+ *
+ * @param a - The first matrix.
+ * @param b - The second matrix.
+ * @param eps - The base tolerance, before scaling. Defaults to {@link EPSILON}.
+ * @returns `true` if every element is within tolerance.
+ */
+export function isEqualEpsilon(a: ReadonlyMat2, b: ReadonlyMat2, eps = EPSILON): boolean {
+  // biome-ignore lint/style/noNonNullAssertion: i < SIZE, so the index is always in bounds
+  for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
+  return true;
+}

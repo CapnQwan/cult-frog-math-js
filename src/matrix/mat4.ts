@@ -23,7 +23,13 @@
  * @module mat4
  */
 
+import { EPSILON } from '../constants.js';
+import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+
 import type { Mat4, ReadonlyMat4 } from './_types/mat4.js';
+
+/** The number of elements in a `Mat4`. */
+export const SIZE = 16;
 
 /**
  * Allocates a new matrix from elements given in row-major order.
@@ -43,7 +49,7 @@ export function create(
   a20: number = 0, a21: number = 0, a22: number = 0, a23: number = 0,
   a30: number = 0, a31: number = 0, a32: number = 0, a33: number = 0
 ): Mat4 {
-  const out = new Float32Array(16) as Mat4;
+  const out = new Float32Array(SIZE) as Mat4;
 
   out[0] = a00; out[4] = a01; out[8]  = a02; out[12] = a03;
   out[1] = a10; out[5] = a11; out[9]  = a12; out[13] = a13;
@@ -150,3 +156,33 @@ export function identity(out: Mat4): Mat4 {
  * or write to it; `clone` it if you need a mutable copy.
  */
 export const IDENTITY = identity(create()) as ReadonlyMat4;
+
+/**
+ * Returns whether two matrices have exactly equal elements.
+ *
+ * @param a - The first matrix.
+ * @param b - The second matrix.
+ * @returns `true` if every element is equal.
+ */
+export function isEqual(a: ReadonlyMat4, b: ReadonlyMat4): boolean {
+  for (let i = 0; i < SIZE; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/**
+ * Returns whether two matrices are equal within a tolerance, compared
+ * element by element.
+ *
+ * Each element goes through the scalar `isEqualEpsilon`, so the tolerance is
+ * `eps` near unit scale and widens with the elements' magnitude.
+ *
+ * @param a - The first matrix.
+ * @param b - The second matrix.
+ * @param eps - The base tolerance, before scaling. Defaults to {@link EPSILON}.
+ * @returns `true` if every element is within tolerance.
+ */
+export function isEqualEpsilon(a: ReadonlyMat4, b: ReadonlyMat4, eps = EPSILON): boolean {
+  // biome-ignore lint/style/noNonNullAssertion: i < SIZE, so the index is always in bounds
+  for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
+  return true;
+}

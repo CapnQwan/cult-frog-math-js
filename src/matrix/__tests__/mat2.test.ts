@@ -270,3 +270,86 @@ describe('IDENTITY', () => {
     expect(mat2.IDENTITY).toBe(mat2.IDENTITY);
   });
 });
+
+describe('SIZE', () => {
+  test('matches the length of an allocated matrix', () => {
+    expect(mat2.SIZE).toBe(4);
+    expect(mat2.create().length).toBe(mat2.SIZE);
+  });
+});
+
+describe('isEqual', () => {
+  test('matrices with the same elements are equal', () => {
+    expect(mat2.isEqual(mat2.create(1, 2, 3, 4), mat2.create(1, 2, 3, 4))).toBe(true);
+  });
+
+  test('a matrix equals itself', () => {
+    const m = mat2.create(1, 2, 3, 4);
+    expect(mat2.isEqual(m, m)).toBe(true);
+  });
+
+  test('a difference in any single element makes them unequal', () => {
+    const a = mat2.create(1, 2, 3, 4);
+    for (let i = 0; i < mat2.SIZE; i++) {
+      const b = mat2.clone(a);
+      b[i] = 99;
+      expect(mat2.isEqual(a, b)).toBe(false);
+    }
+  });
+
+  test('a matrix is not equal to its transpose', () => {
+    expect(mat2.isEqual(mat2.create(1, 2, 3, 4), mat2.create(1, 3, 2, 4))).toBe(false);
+  });
+
+  test('treats -0 and 0 as equal', () => {
+    expect(mat2.isEqual(mat2.create(-0, 0, 0, -0), mat2.create())).toBe(true);
+  });
+
+  test('NaN is never equal, even to itself', () => {
+    const m = mat2.create(1, 0, 0, Number.NaN);
+    expect(mat2.isEqual(m, m)).toBe(false);
+  });
+
+  test('IDENTITY equals a freshly written identity', () => {
+    expect(mat2.isEqual(mat2.IDENTITY, mat2.identity(mat2.create()))).toBe(true);
+  });
+});
+
+describe('isEqualEpsilon', () => {
+  test('matrices with the same elements are equal', () => {
+    expect(mat2.isEqualEpsilon(mat2.create(1, 2, 3, 4), mat2.create(1, 2, 3, 4))).toBe(true);
+  });
+
+  test('differences within the default tolerance are equal', () => {
+    expect(mat2.isEqualEpsilon(mat2.IDENTITY, mat2.create(1 + 2 ** -23, 1e-7, -1e-7, 1))).toBe(
+      true
+    );
+  });
+
+  test('a difference beyond tolerance in any single element makes them unequal', () => {
+    const a = mat2.create(1, 2, 3, 4);
+    for (let i = 0; i < mat2.SIZE; i++) {
+      const b = mat2.clone(a);
+      b[i] = 99;
+      expect(mat2.isEqualEpsilon(a, b)).toBe(false);
+    }
+  });
+
+  test('tolerance scales with magnitude', () => {
+    // Adjacent float32 values near 10,000 are ~0.001 apart, far beyond EPSILON.
+    const a = mat2.create(10000.5, 0, 0, 1);
+    const b = mat2.create(10000.5 + 0.001, 0, 0, 1);
+    expect(mat2.isEqual(a, b)).toBe(false);
+    expect(mat2.isEqualEpsilon(a, b)).toBe(true);
+  });
+
+  test('accepts a custom tolerance', () => {
+    expect(mat2.isEqualEpsilon(mat2.create(), mat2.create(0, 0.05, 0, 0), 0.1)).toBe(true);
+    expect(mat2.isEqualEpsilon(mat2.create(), mat2.create(0, 0.5, 0, 0), 0.1)).toBe(false);
+  });
+
+  test('NaN is never equal', () => {
+    const m = mat2.create(Number.NaN, 0, 0, 1);
+    expect(mat2.isEqualEpsilon(m, m)).toBe(false);
+  });
+});

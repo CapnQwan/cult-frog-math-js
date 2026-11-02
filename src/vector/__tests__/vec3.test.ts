@@ -196,3 +196,113 @@ describe('copy', () => {
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 0, 0, 0, 7, 8, 9]);
   });
 });
+
+describe('isEqual', () => {
+  test('vectors with the same components are equal', () => {
+    expect(vec3.isEqual(vec3.create(1, 2, 3), vec3.create(1, 2, 3))).toBe(true);
+  });
+
+  test('a vector equals itself', () => {
+    const v = vec3.create(1, 2, 3);
+    expect(vec3.isEqual(v, v)).toBe(true);
+  });
+
+  test('a difference in any single component makes them unequal', () => {
+    const a = vec3.create(1, 2, 3);
+    for (let i = 0; i < 3; i++) {
+      const b = vec3.clone(a);
+      b[i] = 99;
+      expect(vec3.isEqual(a, b)).toBe(false);
+    }
+  });
+
+  test('is exact: a float32-sized difference is unequal', () => {
+    expect(vec3.isEqual(vec3.create(1, 0, 0), vec3.create(1 + 2 ** -23, 0, 0))).toBe(false);
+  });
+
+  test('treats -0 and 0 as equal', () => {
+    expect(vec3.isEqual(vec3.create(-0, 0, -0), vec3.create(0, -0, 0))).toBe(true);
+  });
+
+  test('NaN is never equal, even to itself', () => {
+    const v = vec3.create(0, 0, Number.NaN);
+    expect(vec3.isEqual(v, v)).toBe(false);
+  });
+
+  test('compares only the slots of each view', () => {
+    // Buffer [1, 2, 3, 1, 2, 3]; views at 0 and 3 hold the same components.
+    const buffer = new Float32Array([1, 2, 3, 1, 2, 3]).buffer;
+    expect(vec3.isEqual(viewAt(buffer, 0), viewAt(buffer, 3))).toBe(true);
+    expect(vec3.isEqual(viewAt(buffer, 0), viewAt(buffer, 1))).toBe(false);
+  });
+
+  test('accepts readonly inputs', () => {
+    expect(vec3.isEqual(vec3.ZERO, vec3.create())).toBe(true);
+  });
+});
+
+describe('isEqualEpsilon', () => {
+  test('vectors with the same components are equal', () => {
+    expect(vec3.isEqualEpsilon(vec3.create(1, 2, 3), vec3.create(1, 2, 3))).toBe(true);
+  });
+
+  test('differences within the default tolerance are equal', () => {
+    expect(vec3.isEqualEpsilon(vec3.create(1, 0, 0), vec3.create(1 + 2 ** -23, 1e-7, -1e-7))).toBe(
+      true
+    );
+  });
+
+  test('a difference beyond tolerance in any single component makes them unequal', () => {
+    const a = vec3.create(1, 2, 3);
+    for (let i = 0; i < 3; i++) {
+      const b = vec3.clone(a);
+      b[i] = 99;
+      expect(vec3.isEqualEpsilon(a, b)).toBe(false);
+    }
+  });
+
+  test('tolerance scales with magnitude', () => {
+    // Adjacent float32 values near 10,000 are ~0.001 apart, far beyond EPSILON.
+    const a = vec3.create(0, 0, 10000.5);
+    const b = vec3.create(0, 0, 10000.5 + 0.001);
+    expect(vec3.isEqual(a, b)).toBe(false);
+    expect(vec3.isEqualEpsilon(a, b)).toBe(true);
+  });
+
+  test('accepts a custom tolerance', () => {
+    expect(vec3.isEqualEpsilon(vec3.create(0, 0, 0), vec3.create(0, 0, 0.05), 0.1)).toBe(true);
+    expect(vec3.isEqualEpsilon(vec3.create(0, 0, 0), vec3.create(0, 0, 0.5), 0.1)).toBe(false);
+  });
+
+  test('NaN is never equal', () => {
+    const v = vec3.create(0, Number.NaN, 0);
+    expect(vec3.isEqualEpsilon(v, v)).toBe(false);
+  });
+});
+
+describe('isEqualXYZ', () => {
+  test('matches the values just written by set', () => {
+    const v = vec3.set(vec3.create(), 0.1, 0.2, 0.3);
+    expect(v[0]).not.toBe(0.1);
+    expect(vec3.isEqualXYZ(v, 0.1, 0.2, 0.3)).toBe(true);
+  });
+
+  test('a difference in any single component makes them unequal', () => {
+    const v = vec3.create(1, 2, 3);
+    expect(vec3.isEqualXYZ(v, 99, 2, 3)).toBe(false);
+    expect(vec3.isEqualXYZ(v, 1, 99, 3)).toBe(false);
+    expect(vec3.isEqualXYZ(v, 1, 2, 99)).toBe(false);
+  });
+
+  test('treats -0 and 0 as equal', () => {
+    expect(vec3.isEqualXYZ(vec3.create(0, -0, 0), -0, 0, -0)).toBe(true);
+  });
+
+  test('NaN is never equal', () => {
+    expect(vec3.isEqualXYZ(vec3.create(0, 0, Number.NaN), 0, 0, Number.NaN)).toBe(false);
+  });
+
+  test('accepts a readonly input', () => {
+    expect(vec3.isEqualXYZ(vec3.FORWARD, 0, 0, 1)).toBe(true);
+  });
+});

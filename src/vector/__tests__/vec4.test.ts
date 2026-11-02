@@ -199,3 +199,112 @@ describe('copy', () => {
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 4, 0, 0, 0, 0, 9, 10, 11, 12]);
   });
 });
+
+describe('isEqual', () => {
+  test('vectors with the same components are equal', () => {
+    expect(vec4.isEqual(vec4.create(1, 2, 3, 4), vec4.create(1, 2, 3, 4))).toBe(true);
+  });
+
+  test('a vector equals itself', () => {
+    const v = vec4.create(1, 2, 3, 4);
+    expect(vec4.isEqual(v, v)).toBe(true);
+  });
+
+  test('a difference in any single component makes them unequal', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    for (let i = 0; i < 4; i++) {
+      const b = vec4.clone(a);
+      b[i] = 99;
+      expect(vec4.isEqual(a, b)).toBe(false);
+    }
+  });
+
+  test('is exact: a float32-sized difference is unequal', () => {
+    expect(vec4.isEqual(vec4.create(0, 0, 0, 1), vec4.create(0, 0, 0, 1 + 2 ** -23))).toBe(false);
+  });
+
+  test('treats -0 and 0 as equal', () => {
+    expect(vec4.isEqual(vec4.create(-0, 0, -0, 0), vec4.create(0, -0, 0, -0))).toBe(true);
+  });
+
+  test('NaN is never equal, even to itself', () => {
+    const v = vec4.create(0, 0, 0, Number.NaN);
+    expect(vec4.isEqual(v, v)).toBe(false);
+  });
+
+  test('compares only the slots of each view', () => {
+    // Buffer [1, 2, 3, 4, 1, 2, 3, 4]; views at 0 and 4 hold the same components.
+    const buffer = new Float32Array([1, 2, 3, 4, 1, 2, 3, 4]).buffer;
+    expect(vec4.isEqual(viewAt(buffer, 0), viewAt(buffer, 4))).toBe(true);
+    expect(vec4.isEqual(viewAt(buffer, 0), viewAt(buffer, 1))).toBe(false);
+  });
+
+  test('accepts readonly inputs', () => {
+    const frozen: ReadonlyVec4 = vec4.create(1, 2, 3, 4);
+    expect(vec4.isEqual(frozen, vec4.create(1, 2, 3, 4))).toBe(true);
+  });
+});
+
+describe('isEqualEpsilon', () => {
+  test('vectors with the same components are equal', () => {
+    expect(vec4.isEqualEpsilon(vec4.create(1, 2, 3, 4), vec4.create(1, 2, 3, 4))).toBe(true);
+  });
+
+  test('differences within the default tolerance are equal', () => {
+    expect(
+      vec4.isEqualEpsilon(vec4.create(1, 0, 0, 0), vec4.create(1 + 2 ** -23, 1e-7, -1e-7, 1e-7))
+    ).toBe(true);
+  });
+
+  test('a difference beyond tolerance in any single component makes them unequal', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    for (let i = 0; i < 4; i++) {
+      const b = vec4.clone(a);
+      b[i] = 99;
+      expect(vec4.isEqualEpsilon(a, b)).toBe(false);
+    }
+  });
+
+  test('tolerance scales with magnitude', () => {
+    // Adjacent float32 values near 10,000 are ~0.001 apart, far beyond EPSILON.
+    const a = vec4.create(0, 0, 0, 10000.5);
+    const b = vec4.create(0, 0, 0, 10000.5 + 0.001);
+    expect(vec4.isEqual(a, b)).toBe(false);
+    expect(vec4.isEqualEpsilon(a, b)).toBe(true);
+  });
+
+  test('accepts a custom tolerance', () => {
+    const zero = vec4.create();
+    expect(vec4.isEqualEpsilon(zero, vec4.create(0, 0, 0, 0.05), 0.1)).toBe(true);
+    expect(vec4.isEqualEpsilon(zero, vec4.create(0, 0, 0, 0.5), 0.1)).toBe(false);
+  });
+
+  test('NaN is never equal', () => {
+    const v = vec4.create(Number.NaN, 0, 0, 0);
+    expect(vec4.isEqualEpsilon(v, v)).toBe(false);
+  });
+});
+
+describe('isEqualXYZW', () => {
+  test('matches the values just written by set', () => {
+    const v = vec4.set(vec4.create(), 0.1, 0.2, 0.3, 0.4);
+    expect(v[0]).not.toBe(0.1);
+    expect(vec4.isEqualXYZW(v, 0.1, 0.2, 0.3, 0.4)).toBe(true);
+  });
+
+  test('a difference in any single component makes them unequal', () => {
+    const v = vec4.create(1, 2, 3, 4);
+    expect(vec4.isEqualXYZW(v, 99, 2, 3, 4)).toBe(false);
+    expect(vec4.isEqualXYZW(v, 1, 99, 3, 4)).toBe(false);
+    expect(vec4.isEqualXYZW(v, 1, 2, 99, 4)).toBe(false);
+    expect(vec4.isEqualXYZW(v, 1, 2, 3, 99)).toBe(false);
+  });
+
+  test('treats -0 and 0 as equal', () => {
+    expect(vec4.isEqualXYZW(vec4.create(0, -0, 0, -0), -0, 0, -0, 0)).toBe(true);
+  });
+
+  test('NaN is never equal', () => {
+    expect(vec4.isEqualXYZW(vec4.create(0, 0, 0, Number.NaN), 0, 0, 0, Number.NaN)).toBe(false);
+  });
+});

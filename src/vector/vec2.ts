@@ -7,6 +7,9 @@
  * @module vec2
  */
 
+import { EPSILON } from '../constants.js';
+import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+
 import type { ReadonlyVec2, Vec2 } from './_types/vec2.js';
 
 /**
@@ -68,6 +71,48 @@ export function copy(out: Vec2, a: ReadonlyVec2): Vec2 {
   out[0] = x;
   out[1] = y;
   return out;
+}
+
+/**
+ * Returns whether two vectors have exactly equal components.
+ *
+ * @param a - The first vector.
+ * @param b - The second vector.
+ * @returns `true` if every component is equal.
+ */
+export function isEqual(a: ReadonlyVec2, b: ReadonlyVec2): boolean {
+  return a[0] === b[0] && a[1] === b[1];
+}
+
+/**
+ * Returns whether two vectors are equal within a tolerance, compared
+ * component by component.
+ *
+ * Each component goes through the scalar `isEqualEpsilon`, so the tolerance is
+ * `eps` near unit scale and widens with the components' magnitude.
+ *
+ * @param a - The first vector.
+ * @param b - The second vector.
+ * @param eps - The base tolerance, before scaling. Defaults to {@link EPSILON}.
+ * @returns `true` if every component is within tolerance.
+ */
+export function isEqualEpsilon(a: ReadonlyVec2, b: ReadonlyVec2, eps = EPSILON): boolean {
+  return isEqualEpsilonScalar(a[0], b[0], eps) && isEqualEpsilonScalar(a[1], b[1], eps);
+}
+
+/**
+ * Returns whether a vector's components equal `x` and `y`.
+ *
+ * `x` and `y` are rounded to 32-bit floats first, as {@link set} stores them, so
+ * `isEqualXY(v, x, y)` is `true` immediately after `set(v, x, y)`.
+ *
+ * @param a - The vector.
+ * @param x - The x component to compare.
+ * @param y - The y component to compare.
+ * @returns `true` if both components are equal.
+ */
+export function isEqualXY(a: ReadonlyVec2, x: number, y: number): boolean {
+  return Math.fround(x) === a[0] && Math.fround(y) === a[1];
 }
 
 /**

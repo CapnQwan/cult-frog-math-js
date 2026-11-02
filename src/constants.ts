@@ -23,7 +23,7 @@
  * adjacent-but-distinct world coordinates at that scale will never compare
  * equal against it.
  *
- * `equalsEpsilon` already handles that: it scales the tolerance by the larger
+ * `isEqualEpsilon` already handles that: it scales the tolerance by the larger
  * of the two magnitudes, floored at `1`, so it behaves like an absolute `1e-6`
  * near unit scale and widens from there. Prefer it over comparing against
  * `EPSILON` by hand whenever the values might be large.

@@ -127,6 +127,6 @@ export function snapToZero(value: number): number {
  * @param eps - The base tolerance, before scaling. Defaults to `EPSILON`.
  * @returns `true` if the values are within tolerance of each other.
  */
-export function equalsEpsilon(a: number, b: number, eps = EPSILON): boolean {
+export function isEqualEpsilon(a: number, b: number, eps = EPSILON): boolean {
   return Math.abs(a - b) <= eps * Math.max(1, Math.abs(a), Math.abs(b));
 }

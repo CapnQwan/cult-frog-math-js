@@ -85,3 +85,31 @@ describe('shared memory', () => {
     expectTypeOf<typeof rawShared>().not.toExtend<ReadonlyVec4>();
   });
 });
+
+describe('equality', () => {
+  test('inputs are readonly and the result is a boolean', () => {
+    expectTypeOf(vec4.isEqual).parameters.toEqualTypeOf<[ReadonlyVec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.isEqualEpsilon).parameters.toEqualTypeOf<
+      [ReadonlyVec4, ReadonlyVec4, (number | undefined)?]
+    >();
+    expectTypeOf(vec4.isEqualXYZW).parameters.toEqualTypeOf<
+      [ReadonlyVec4, number, number, number, number]
+    >();
+    expectTypeOf(vec4.isEqual).returns.toEqualTypeOf<boolean>();
+    expectTypeOf(vec4.isEqualEpsilon).returns.toEqualTypeOf<boolean>();
+    expectTypeOf(vec4.isEqualXYZW).returns.toEqualTypeOf<boolean>();
+  });
+
+  test('call sites', () => {
+    vec4.isEqual(live, frozen);
+    vec4.isEqual(shared, live);
+    vec4.isEqualEpsilon(frozen, live, 0.1);
+    vec4.isEqualXYZW(frozen, 0, 0, 0, 0);
+    // @ts-expect-error wrong-dimension input
+    vec4.isEqual(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.isEqualEpsilon(live, raw);
+    // @ts-expect-error every component is required
+    vec4.isEqualXYZW(live, 0, 0, 0);
+  });
+});

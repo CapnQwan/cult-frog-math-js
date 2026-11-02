@@ -322,3 +322,103 @@ describe('IDENTITY', () => {
     expect(mat4.IDENTITY).toBe(mat4.IDENTITY);
   });
 });
+
+describe('SIZE', () => {
+  test('matches the length of an allocated matrix', () => {
+    expect(mat4.SIZE).toBe(ELEMENTS);
+    expect(mat4.create().length).toBe(mat4.SIZE);
+  });
+});
+
+describe('isEqual', () => {
+  test('matrices with the same elements are equal', () => {
+    expect(mat4.isEqual(mat4.create(...ROW_MAJOR_ARGS), mat4.create(...ROW_MAJOR_ARGS))).toBe(true);
+  });
+
+  test('a matrix equals itself', () => {
+    const m = mat4.create(...ROW_MAJOR_ARGS);
+    expect(mat4.isEqual(m, m)).toBe(true);
+  });
+
+  test('a difference in any single element makes them unequal', () => {
+    const a = mat4.create(...ROW_MAJOR_ARGS);
+    for (let i = 0; i < mat4.SIZE; i++) {
+      const b = mat4.clone(a);
+      b[i] = 99;
+      expect(mat4.isEqual(a, b)).toBe(false);
+    }
+  });
+
+  test('a matrix is not equal to its transpose', () => {
+    // Passing the storage order as row-major arguments builds the transpose.
+    expect(mat4.isEqual(mat4.create(...ROW_MAJOR_ARGS), mat4.create(...COLUMN_MAJOR_STORAGE))).toBe(
+      false
+    );
+  });
+
+  test('treats -0 and 0 as equal', () => {
+    const negativeZeros = mat4.create();
+    negativeZeros.fill(-0);
+    expect(mat4.isEqual(negativeZeros, mat4.create())).toBe(true);
+  });
+
+  test('NaN is never equal, even to itself', () => {
+    const m = mat4.identity(mat4.create());
+    m[15] = Number.NaN;
+    expect(mat4.isEqual(m, m)).toBe(false);
+  });
+
+  test('IDENTITY equals a freshly written identity', () => {
+    expect(mat4.isEqual(mat4.IDENTITY, mat4.identity(mat4.create()))).toBe(true);
+  });
+});
+
+describe('isEqualEpsilon', () => {
+  test('matrices with the same elements are equal', () => {
+    expect(
+      mat4.isEqualEpsilon(mat4.create(...ROW_MAJOR_ARGS), mat4.create(...ROW_MAJOR_ARGS))
+    ).toBe(true);
+  });
+
+  test('differences within the default tolerance are equal', () => {
+    const m = mat4.identity(mat4.create());
+    m[0] = 1 + 2 ** -23;
+    m[1] = 1e-7;
+    m[14] = -1e-7;
+    expect(mat4.isEqualEpsilon(mat4.IDENTITY, m)).toBe(true);
+  });
+
+  test('a difference beyond tolerance in any single element makes them unequal', () => {
+    const a = mat4.create(...ROW_MAJOR_ARGS);
+    for (let i = 0; i < mat4.SIZE; i++) {
+      const b = mat4.clone(a);
+      b[i] = 99;
+      expect(mat4.isEqualEpsilon(a, b)).toBe(false);
+    }
+  });
+
+  test('tolerance scales with magnitude', () => {
+    // A translation near 10,000: adjacent float32 values are ~0.001 apart there.
+    const a = mat4.identity(mat4.create());
+    const b = mat4.identity(mat4.create());
+    a[12] = 10000.5;
+    b[12] = 10000.5 + 0.001;
+    expect(mat4.isEqual(a, b)).toBe(false);
+    expect(mat4.isEqualEpsilon(a, b)).toBe(true);
+  });
+
+  test('accepts a custom tolerance', () => {
+    const near = mat4.create();
+    const far = mat4.create();
+    near[5] = 0.05;
+    far[5] = 0.5;
+    expect(mat4.isEqualEpsilon(mat4.create(), near, 0.1)).toBe(true);
+    expect(mat4.isEqualEpsilon(mat4.create(), far, 0.1)).toBe(false);
+  });
+
+  test('NaN is never equal', () => {
+    const m = mat4.identity(mat4.create());
+    m[0] = Number.NaN;
+    expect(mat4.isEqualEpsilon(m, m)).toBe(false);
+  });
+});

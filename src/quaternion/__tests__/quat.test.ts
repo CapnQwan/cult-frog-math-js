@@ -283,3 +283,104 @@ describe('IDENTITY', () => {
     expect(quat.IDENTITY).toBe(quat.IDENTITY);
   });
 });
+
+describe('isEqual', () => {
+  test('quaternions with the same components are equal', () => {
+    expect(quat.isEqual(quat.create(1, 2, 3, 4), quat.create(1, 2, 3, 4))).toBe(true);
+  });
+
+  test('a quaternion equals itself', () => {
+    const q = quat.create(1, 2, 3, 4);
+    expect(quat.isEqual(q, q)).toBe(true);
+  });
+
+  test('a difference in any single component makes them unequal', () => {
+    const a = quat.create(1, 2, 3, 4);
+    for (let i = 0; i < 4; i++) {
+      const b = quat.clone(a);
+      b[i] = 99;
+      expect(quat.isEqual(a, b)).toBe(false);
+    }
+  });
+
+  test('compares components, not rotations: q and -q are unequal', () => {
+    expect(quat.isEqual(quat.IDENTITY, quat.create(0, 0, 0, -1))).toBe(false);
+  });
+
+  test('treats -0 and 0 as equal', () => {
+    expect(quat.isEqual(quat.create(-0, 0, -0, 1), quat.IDENTITY)).toBe(true);
+  });
+
+  test('NaN is never equal, even to itself', () => {
+    const q = quat.create(0, 0, 0, Number.NaN);
+    expect(quat.isEqual(q, q)).toBe(false);
+  });
+
+  test('IDENTITY equals a freshly written identity', () => {
+    expect(quat.isEqual(quat.IDENTITY, quat.identity(quat.create()))).toBe(true);
+  });
+});
+
+describe('isEqualEpsilon', () => {
+  test('quaternions with the same components are equal', () => {
+    expect(quat.isEqualEpsilon(quat.create(1, 2, 3, 4), quat.create(1, 2, 3, 4))).toBe(true);
+  });
+
+  test('differences within the default tolerance are equal', () => {
+    expect(quat.isEqualEpsilon(quat.IDENTITY, quat.create(1e-7, -1e-7, 0, 1 + 2 ** -23))).toBe(
+      true
+    );
+  });
+
+  test('a difference beyond tolerance in any single component makes them unequal', () => {
+    const a = quat.create(1, 2, 3, 4);
+    for (let i = 0; i < 4; i++) {
+      const b = quat.clone(a);
+      b[i] = 99;
+      expect(quat.isEqualEpsilon(a, b)).toBe(false);
+    }
+  });
+
+  test('compares components, not rotations: q and -q are unequal', () => {
+    expect(quat.isEqualEpsilon(quat.IDENTITY, quat.create(0, 0, 0, -1))).toBe(false);
+  });
+
+  test('accepts a custom tolerance', () => {
+    expect(quat.isEqualEpsilon(quat.IDENTITY, quat.create(0.05, 0, 0, 1), 0.1)).toBe(true);
+    expect(quat.isEqualEpsilon(quat.IDENTITY, quat.create(0.5, 0, 0, 1), 0.1)).toBe(false);
+  });
+
+  test('NaN is never equal', () => {
+    const q = quat.create(Number.NaN, 0, 0, 1);
+    expect(quat.isEqualEpsilon(q, q)).toBe(false);
+  });
+});
+
+describe('isEqualXYZW', () => {
+  test('matches the values just written by set', () => {
+    const q = quat.set(quat.create(), 0.1, 0.2, 0.3, 0.4);
+    expect(q[0]).not.toBe(0.1);
+    expect(quat.isEqualXYZW(q, 0.1, 0.2, 0.3, 0.4)).toBe(true);
+  });
+
+  test('takes the scalar last', () => {
+    expect(quat.isEqualXYZW(quat.IDENTITY, 0, 0, 0, 1)).toBe(true);
+    expect(quat.isEqualXYZW(quat.IDENTITY, 1, 0, 0, 0)).toBe(false);
+  });
+
+  test('a difference in any single component makes them unequal', () => {
+    const q = quat.create(1, 2, 3, 4);
+    expect(quat.isEqualXYZW(q, 99, 2, 3, 4)).toBe(false);
+    expect(quat.isEqualXYZW(q, 1, 99, 3, 4)).toBe(false);
+    expect(quat.isEqualXYZW(q, 1, 2, 99, 4)).toBe(false);
+    expect(quat.isEqualXYZW(q, 1, 2, 3, 99)).toBe(false);
+  });
+
+  test('treats -0 and 0 as equal', () => {
+    expect(quat.isEqualXYZW(quat.IDENTITY, -0, -0, -0, 1)).toBe(true);
+  });
+
+  test('NaN is never equal', () => {
+    expect(quat.isEqualXYZW(quat.create(0, 0, 0, Number.NaN), 0, 0, 0, Number.NaN)).toBe(false);
+  });
+});

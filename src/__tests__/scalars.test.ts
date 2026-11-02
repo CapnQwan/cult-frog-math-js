@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'vitest';
 
 import { EPSILON } from '../constants.js';
-import { clamp, equalsEpsilon, round, saturate, snapToZero, wrap } from '../scalars.js';
+import { clamp, isEqualEpsilon, round, saturate, snapToZero, wrap } from '../scalars.js';
 
 describe('clamp', () => {
   test('leaves a value inside the range untouched', () => {
@@ -141,25 +141,25 @@ describe('snapToZero', () => {
   });
 });
 
-describe('equalsEpsilon', () => {
+describe('isEqualEpsilon', () => {
   test('identical values are equal', () => {
-    expect(equalsEpsilon(1, 1)).toBe(true);
-    expect(equalsEpsilon(0, 0)).toBe(true);
+    expect(isEqualEpsilon(1, 1)).toBe(true);
+    expect(isEqualEpsilon(0, 0)).toBe(true);
   });
 
   test('values within tolerance are equal', () => {
-    expect(equalsEpsilon(1, 1 + 1e-9)).toBe(true);
-    expect(equalsEpsilon(0, 1e-9)).toBe(true);
+    expect(isEqualEpsilon(1, 1 + 1e-9)).toBe(true);
+    expect(isEqualEpsilon(0, 1e-9)).toBe(true);
   });
 
   test('values outside tolerance are not', () => {
-    expect(equalsEpsilon(0, 0.1)).toBe(false);
-    expect(equalsEpsilon(1, 1.1)).toBe(false);
+    expect(isEqualEpsilon(0, 0.1)).toBe(false);
+    expect(isEqualEpsilon(1, 1.1)).toBe(false);
   });
 
   test('the boundary is inclusive', () => {
     // Near unit scale the scale factor is 1, so the tolerance is exactly eps.
-    expect(equalsEpsilon(0, EPSILON)).toBe(true);
+    expect(isEqualEpsilon(0, EPSILON)).toBe(true);
   });
 
   test('tolerance scales with magnitude', () => {
@@ -169,16 +169,16 @@ describe('equalsEpsilon', () => {
     const b = Math.fround(10000.5 + 0.001);
 
     expect(a).not.toBe(b);
-    expect(equalsEpsilon(a, b)).toBe(true);
+    expect(isEqualEpsilon(a, b)).toBe(true);
     expect(Math.abs(a - b)).toBeGreaterThan(EPSILON);
   });
 
   test('still separates genuinely different large values', () => {
-    expect(equalsEpsilon(10000, 10001)).toBe(false);
+    expect(isEqualEpsilon(10000, 10001)).toBe(false);
   });
 
   test('accepts a custom tolerance', () => {
-    expect(equalsEpsilon(0, 0.05, 0.1)).toBe(true);
-    expect(equalsEpsilon(0, 0.5, 0.1)).toBe(false);
+    expect(isEqualEpsilon(0, 0.05, 0.1)).toBe(true);
+    expect(isEqualEpsilon(0, 0.5, 0.1)).toBe(false);
   });
 });

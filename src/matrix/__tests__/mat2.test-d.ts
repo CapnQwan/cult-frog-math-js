@@ -106,3 +106,24 @@ describe('shared memory', () => {
     expectTypeOf<typeof rawShared>().not.toExtend<ReadonlyMat2>();
   });
 });
+
+describe('equality', () => {
+  test('inputs are readonly and the result is a boolean', () => {
+    expectTypeOf(mat2.isEqual).parameters.toEqualTypeOf<[ReadonlyMat2, ReadonlyMat2]>();
+    expectTypeOf(mat2.isEqualEpsilon).parameters.toEqualTypeOf<
+      [ReadonlyMat2, ReadonlyMat2, (number | undefined)?]
+    >();
+    expectTypeOf(mat2.isEqual).returns.toEqualTypeOf<boolean>();
+    expectTypeOf(mat2.isEqualEpsilon).returns.toEqualTypeOf<boolean>();
+  });
+
+  test('call sites', () => {
+    mat2.isEqual(live, frozen);
+    mat2.isEqual(shared, live);
+    mat2.isEqualEpsilon(frozen, live, 0.1);
+    // @ts-expect-error wrong-dimension input
+    mat2.isEqual(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat2.isEqualEpsilon(live, raw);
+  });
+});

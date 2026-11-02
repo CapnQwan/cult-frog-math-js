@@ -114,3 +114,31 @@ describe('shared memory', () => {
     expectTypeOf<typeof rawShared>().not.toExtend<ReadonlyQuat>();
   });
 });
+
+describe('equality', () => {
+  test('inputs are readonly and the result is a boolean', () => {
+    expectTypeOf(quat.isEqual).parameters.toEqualTypeOf<[ReadonlyQuat, ReadonlyQuat]>();
+    expectTypeOf(quat.isEqualEpsilon).parameters.toEqualTypeOf<
+      [ReadonlyQuat, ReadonlyQuat, (number | undefined)?]
+    >();
+    expectTypeOf(quat.isEqualXYZW).parameters.toEqualTypeOf<
+      [ReadonlyQuat, number, number, number, number]
+    >();
+    expectTypeOf(quat.isEqual).returns.toEqualTypeOf<boolean>();
+    expectTypeOf(quat.isEqualEpsilon).returns.toEqualTypeOf<boolean>();
+    expectTypeOf(quat.isEqualXYZW).returns.toEqualTypeOf<boolean>();
+  });
+
+  test('call sites', () => {
+    quat.isEqual(live, frozen);
+    quat.isEqual(shared, live);
+    quat.isEqualEpsilon(frozen, live, 0.1);
+    quat.isEqualXYZW(frozen, 0, 0, 0, 1);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.isEqual(live, vector);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.isEqualEpsilon(live, raw);
+    // @ts-expect-error the scalar component is required
+    quat.isEqualXYZW(live, 0, 0, 0);
+  });
+});

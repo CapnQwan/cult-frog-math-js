@@ -19,6 +19,9 @@
  * @module quat
  */
 
+import { EPSILON } from '../constants.js';
+import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+
 import type { Quat, ReadonlyQuat } from './_types/quat.js';
 
 /**
@@ -123,3 +126,64 @@ export function identity(out: Quat): Quat {
  * or write to it; `clone` it if you need a mutable copy.
  */
 export const IDENTITY = create(0, 0, 0, 1) as ReadonlyQuat;
+
+/**
+ * Returns whether two quaternions have exactly equal components.
+ *
+ * This compares the stored numbers, not the rotations they represent: `q` and
+ * `-q` describe the same rotation but are not equal here.
+ *
+ * @param a - The first quaternion.
+ * @param b - The second quaternion.
+ * @returns `true` if every component is equal.
+ */
+export function isEqual(a: ReadonlyQuat, b: ReadonlyQuat): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
+}
+
+/**
+ * Returns whether two quaternions are equal within a tolerance, compared
+ * component by component.
+ *
+ * Each component goes through the scalar `isEqualEpsilon`, so the tolerance is
+ * `eps` near unit scale and widens with the components' magnitude.
+ *
+ * Like {@link isEqual}, this compares components rather than rotations, so
+ * `q` and `-q` are not considered equal.
+ *
+ * @param a - The first quaternion.
+ * @param b - The second quaternion.
+ * @param eps - The base tolerance, before scaling. Defaults to {@link EPSILON}.
+ * @returns `true` if every component is within tolerance.
+ */
+export function isEqualEpsilon(a: ReadonlyQuat, b: ReadonlyQuat, eps = EPSILON): boolean {
+  return (
+    isEqualEpsilonScalar(a[0], b[0], eps) &&
+    isEqualEpsilonScalar(a[1], b[1], eps) &&
+    isEqualEpsilonScalar(a[2], b[2], eps) &&
+    isEqualEpsilonScalar(a[3], b[3], eps)
+  );
+}
+
+/**
+ * Returns whether a quaternion's components equal `x`, `y`, `z` and `w`.
+ *
+ * `x`, `y`, `z` and `w` are rounded to 32-bit floats first, as {@link set}
+ * stores them, so `isEqualXYZW(q, x, y, z, w)` is `true` immediately after
+ * `set(q, x, y, z, w)`.
+ *
+ * @param a - The quaternion.
+ * @param x - The x component to compare.
+ * @param y - The y component to compare.
+ * @param z - The z component to compare.
+ * @param w - The w component to compare.
+ * @returns `true` if all components are equal.
+ */
+export function isEqualXYZW(a: ReadonlyQuat, x: number, y: number, z: number, w: number): boolean {
+  return (
+    Math.fround(x) === a[0] &&
+    Math.fround(y) === a[1] &&
+    Math.fround(z) === a[2] &&
+    Math.fround(w) === a[3]
+  );
+}

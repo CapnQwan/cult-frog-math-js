@@ -22,7 +22,13 @@
  * @module mat3
  */
 
+import { EPSILON } from '../constants.js';
+import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+
 import type { Mat3, ReadonlyMat3 } from './_types/mat3.js';
+
+/** The number of elements in a `Mat3`. */
+export const SIZE = 9;
 
 /**
  * Allocates a new matrix from elements given in row-major order.
@@ -40,7 +46,7 @@ export function create(
   a10: number = 0, a11: number = 0, a12: number = 0,
   a20: number = 0, a21: number = 0, a22: number = 0
 ): Mat3 {
-  const out = new Float32Array(9) as Mat3;
+  const out = new Float32Array(SIZE) as Mat3;
 
   out[0] = a00; out[3] = a01; out[6] = a02;
   out[1] = a10; out[4] = a11; out[7] = a12;
@@ -140,3 +146,33 @@ export function identity(out: Mat3): Mat3 {
  * or write to it; `clone` it if you need a mutable copy.
  */
 export const IDENTITY = identity(create()) as ReadonlyMat3;
+
+/**
+ * Returns whether two matrices have exactly equal elements.
+ *
+ * @param a - The first matrix.
+ * @param b - The second matrix.
+ * @returns `true` if every element is equal.
+ */
+export function isEqual(a: ReadonlyMat3, b: ReadonlyMat3): boolean {
+  for (let i = 0; i < SIZE; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+/**
+ * Returns whether two matrices are equal within a tolerance, compared
+ * element by element.
+ *
+ * Each element goes through the scalar `isEqualEpsilon`, so the tolerance is
+ * `eps` near unit scale and widens with the elements' magnitude.
+ *
+ * @param a - The first matrix.
+ * @param b - The second matrix.
+ * @param eps - The base tolerance, before scaling. Defaults to {@link EPSILON}.
+ * @returns `true` if every element is within tolerance.
+ */
+export function isEqualEpsilon(a: ReadonlyMat3, b: ReadonlyMat3, eps = EPSILON): boolean {
+  // biome-ignore lint/style/noNonNullAssertion: i < SIZE, so the index is always in bounds
+  for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
+  return true;
+}
