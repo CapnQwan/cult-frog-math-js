@@ -1546,3 +1546,295 @@ describe('lerp', () => {
     expectComponents(vec2.lerp(vec2.create(), a, b, 0.5), 5.5, 11);
   });
 });
+
+describe('reflect', () => {
+  test('flips the part along the normal, keeps the rest, and returns out', () => {
+    const out = vec2.create();
+    const result = vec2.reflect(out, vec2.create(1, -1), vec2.create(0, 1));
+
+    expect(result).toBe(out);
+    expectComponents(out, 1, 1);
+  });
+
+  test('a normal along each axis flips only that component', () => {
+    const a = vec2.create(1, 2);
+
+    expectComponents(vec2.reflect(vec2.create(), a, vec2.create(1, 0)), -1, 2);
+    expectComponents(vec2.reflect(vec2.create(), a, vec2.create(0, 1)), 1, -2);
+  });
+
+  test('uses every component of a diagonal normal', () => {
+    const normal = vec2.normalize(vec2.create(), vec2.create(1, 2));
+    const out = vec2.reflect(vec2.create(), vec2.create(1, 2), normal);
+
+    // A vector along the normal comes straight back.
+    expect(out[0]).toBeCloseTo(-1, 5);
+    expect(out[1]).toBeCloseTo(-2, 5);
+  });
+
+  test('a vector along the surface is unchanged', () => {
+    const out = vec2.reflect(vec2.create(), vec2.create(3, 0), vec2.create(0, 1));
+
+    expectComponents(out, 3, 0);
+  });
+
+  test('a head-on vector comes straight back', () => {
+    const out = vec2.reflect(vec2.create(), vec2.create(0, -2), vec2.create(0, 1));
+
+    expectComponents(out, 0, 2);
+  });
+
+  test('which side the normal points to does not matter', () => {
+    const a = vec2.create(1, -1);
+    const up = vec2.reflect(vec2.create(), a, vec2.create(0, 1));
+    const down = vec2.reflect(vec2.create(), a, vec2.create(0, -1));
+
+    expect(vec2.isEqual(up, down)).toBe(true);
+  });
+
+  test('keeps the length apart from rounding', () => {
+    const a = vec2.create(1, 2);
+    const normal = vec2.normalize(vec2.create(), vec2.create(7, 6));
+
+    expect(vec2.magnitude(vec2.reflect(vec2.create(), a, normal))).toBeCloseTo(
+      vec2.magnitude(a),
+      5
+    );
+  });
+
+  test('reflecting twice gives the original back', () => {
+    const a = vec2.create(1, 2);
+    const normal = vec2.create(0, 1);
+    const once = vec2.reflect(vec2.create(), a, normal);
+
+    expectComponents(vec2.reflect(once, once, normal), 1, 2);
+  });
+
+  test('a normal of the wrong length changes the direction too', () => {
+    const a = vec2.create(1, -1);
+
+    expectComponents(vec2.reflect(vec2.create(), a, vec2.create(0, 2)), 1, 7);
+    expectComponents(vec2.reflect(vec2.create(), a, vec2.create(0, 0.5)), 1, -0.5);
+  });
+
+  test('a zero normal leaves a unchanged', () => {
+    const out = vec2.reflect(vec2.create(), vec2.create(1, 2), vec2.create());
+
+    expectComponents(out, 1, 2);
+  });
+
+  test('a zero vector stays zero', () => {
+    const out = vec2.reflect(vec2.create(), vec2.create(), vec2.create(0, 1));
+
+    expect(vec2.isEqual(out, vec2.create())).toBe(true);
+  });
+
+  test('flips a vector that is already heading away from the surface', () => {
+    const out = vec2.reflect(vec2.create(), vec2.create(1, 1), vec2.create(0, 1));
+
+    expectComponents(out, 1, -1);
+  });
+
+  test('intermediate values do not overflow float32', () => {
+    const out = vec2.reflect(vec2.create(), vec2.create(3e38, 3e38), vec2.create(0, 1));
+
+    expectComponents(out, 3e38, -3e38);
+  });
+
+  test('a NaN component makes the whole result NaN', () => {
+    const out = vec2.reflect(vec2.create(), vec2.create(Number.NaN, -1), vec2.create(0, 1));
+
+    expectComponents(out, Number.NaN, Number.NaN);
+  });
+
+  test('an infinite component that meets zero makes the whole result NaN', () => {
+    const out = vec2.reflect(
+      vec2.create(),
+      vec2.create(Number.POSITIVE_INFINITY, -1),
+      vec2.create(0, 1)
+    );
+
+    expectComponents(out, Number.NaN, Number.NaN);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec2.create(1, 2);
+    const normal = vec2.create(0, 1);
+    vec2.reflect(vec2.create(), a, normal);
+
+    expectComponents(a, 1, 2);
+    expectComponents(normal, 0, 1);
+  });
+
+  test('out may be the incoming vector', () => {
+    const a = vec2.create(1, 2);
+    vec2.reflect(a, a, vec2.create(3, 4));
+
+    expectComponents(a, -65, -86);
+  });
+
+  test('out may be the normal', () => {
+    const normal = vec2.create(3, 4);
+    vec2.reflect(normal, vec2.create(1, 2), normal);
+
+    expectComponents(normal, -65, -86);
+  });
+
+  test('out may be both inputs', () => {
+    const normal = vec2.create(0, 1);
+    vec2.reflect(normal, normal, normal);
+
+    expectComponents(normal, 0, -1);
+  });
+
+  test('overlapping views: out one element ahead of the incoming vector', () => {
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 1);
+    vec2.reflect(out, viewAt(buffer, 0), viewAt(buffer, 2));
+
+    expectComponents(out, -65, -86);
+  });
+
+  test('overlapping views: out one element behind the incoming vector', () => {
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 0);
+    vec2.reflect(out, viewAt(buffer, 1), viewAt(buffer, 3));
+
+    expectComponents(out, -182, -227);
+  });
+
+  test('overlapping views: out one element ahead of the normal', () => {
+    const buffer = sequentialBuffer(5);
+    const out = viewAt(buffer, 3);
+    vec2.reflect(out, viewAt(buffer, 0), viewAt(buffer, 2));
+
+    expectComponents(out, -65, -86);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(6);
+    vec2.reflect(viewAt(pool, 2), vec2.create(1, -1), vec2.create(0, 1));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 1, 1, 5, 6]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec2 = vec2.create(1, -1);
+    const normal: ReadonlyVec2 = vec2.create(0, 1);
+
+    expectComponents(vec2.reflect(vec2.create(), a, normal), 1, 1);
+  });
+});
+
+describe('angle', () => {
+  test('is 0 for the same direction and pi for the opposite one', () => {
+    const x = vec2.create(1, 0);
+
+    expect(vec2.angle(x, x)).toBe(0);
+    expect(vec2.angle(x, vec2.create(-1, 0))).toBe(Math.PI);
+  });
+
+  test('every axis counts', () => {
+    const x = vec2.create(1, 0);
+
+    expect(vec2.angle(x, vec2.create(0, 1))).toBe(Math.PI / 2);
+    expect(vec2.angle(x, vec2.create(1, 1))).toBeCloseTo(Math.PI / 4, 12);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec2.create(1, 2);
+    const b = vec2.create(7, 6);
+
+    expect(vec2.angle(a, b)).toBe(vec2.angle(b, a));
+  });
+
+  test('lengths do not matter', () => {
+    expect(vec2.angle(vec2.create(500, 0), vec2.create(0.01, 0.01))).toBeCloseTo(Math.PI / 4, 6);
+    expect(vec2.angle(vec2.create(500, 0), vec2.create(-0.01, 0.01))).toBeCloseTo(
+      (3 * Math.PI) / 4,
+      6
+    );
+  });
+
+  test('a zero vector gives 0', () => {
+    const zero = vec2.create();
+    const x = vec2.create(1, 0);
+
+    expect(vec2.angle(zero, x)).toBe(0);
+    expect(vec2.angle(x, zero)).toBe(0);
+    expect(vec2.angle(zero, zero)).toBe(0);
+  });
+
+  test('very short vectors still give the right angle', () => {
+    const y = vec2.create(0, 1);
+
+    expect(vec2.angle(vec2.create(1e-7, 0), y)).toBe(Math.PI / 2);
+    expect(vec2.angle(vec2.create(1e-7, 0), vec2.create(0, 1e-7))).toBe(Math.PI / 2);
+  });
+
+  test('handles the extremes of float32', () => {
+    expect(vec2.angle(vec2.create(1e-45, 0), vec2.create(0, 1e-45))).toBe(Math.PI / 2);
+    expect(vec2.angle(vec2.create(3e38, 0), vec2.create(0, 3e38))).toBe(Math.PI / 2);
+    expect(vec2.angle(vec2.create(3e38, 0), vec2.create(3e38, 3e38))).toBeCloseTo(Math.PI / 4, 12);
+  });
+
+  test('a cosine rounded just above 1 is clamped rather than giving NaN', () => {
+    const a = vec2.create(1, 20);
+    const b = vec2.scale(vec2.create(), a, 0.3);
+
+    expect(vec2.dot(a, b) / Math.sqrt(vec2.magnitudeSq(a) * vec2.magnitudeSq(b))).toBeGreaterThan(
+      1
+    );
+    expect(vec2.angle(a, b)).toBe(0);
+  });
+
+  test('rounding can leave parallel vectors very slightly apart', () => {
+    const a = vec2.create(1, 3);
+    const result = vec2.angle(a, vec2.scale(vec2.create(), a, 0.3));
+
+    expect(result).toBeGreaterThan(0);
+    expect(result).toBeLessThan(1e-7);
+  });
+
+  test('the dot comparison in the docs agrees with the angle', () => {
+    const facing = vec2.create(1, 0);
+    const limit = Math.PI / 4;
+    const inside = vec2.normalize(vec2.create(), vec2.create(2, 1));
+    const outside = vec2.normalize(vec2.create(), vec2.create(1, 2));
+
+    expect(vec2.angle(facing, inside)).toBeLessThan(limit);
+    expect(vec2.dot(facing, inside)).toBeGreaterThan(Math.cos(limit));
+    expect(vec2.angle(facing, outside)).toBeGreaterThan(limit);
+    expect(vec2.dot(facing, outside)).toBeLessThan(Math.cos(limit));
+  });
+
+  test('a NaN or infinite component gives NaN', () => {
+    const y = vec2.create(0, 1);
+
+    expect(vec2.angle(vec2.create(Number.NaN, 1), y)).toBeNaN();
+    expect(vec2.angle(vec2.create(Number.POSITIVE_INFINITY, 1), y)).toBeNaN();
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec2.create(1, 2);
+    const b = vec2.create(3, 4);
+    vec2.angle(a, b);
+
+    expectComponents(a, 1, 2);
+    expectComponents(b, 3, 4);
+  });
+
+  test('reads only its own slots when the inputs are pooled views', () => {
+    const pool = sequentialBuffer(5);
+    const direct = vec2.angle(vec2.create(2, 3), vec2.create(4, 5));
+
+    expect(vec2.angle(viewAt(pool, 1), viewAt(pool, 3))).toBe(direct);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec2 = vec2.create(1, 0);
+    const b: ReadonlyVec2 = vec2.create(0, 1);
+
+    expect(vec2.angle(a, b)).toBe(Math.PI / 2);
+  });
+});

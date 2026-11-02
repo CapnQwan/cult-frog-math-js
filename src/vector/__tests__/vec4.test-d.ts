@@ -236,3 +236,32 @@ describe('scaleAndAdd, negate and lerp', () => {
     vec4.lerp(live, rotation, rotation, 0.5);
   });
 });
+
+describe('reflect and angle', () => {
+  test('reflect writes to a mutable out and returns it', () => {
+    expectTypeOf(vec4.reflect).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.reflect).returns.toEqualTypeOf<Vec4>();
+  });
+
+  test('angle takes readonly inputs and returns a number', () => {
+    expectTypeOf(vec4.angle).parameters.toEqualTypeOf<[ReadonlyVec4, ReadonlyVec4]>();
+    expectTypeOf(vec4.angle).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    vec4.reflect(live, live, frozen);
+    vec4.reflect(shared, frozen, frozen);
+    vec4.angle(frozen, live);
+    vec4.angle(shared, frozen);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.reflect(frozen, live, live);
+    // @ts-expect-error wrong-dimension input
+    vec4.reflect(live, other, live);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.reflect(live, live, raw);
+    // @ts-expect-error wrong-dimension input
+    vec4.angle(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.angle(raw, live);
+  });
+});

@@ -9,7 +9,7 @@
 
 import { EPSILON } from '../constants.js';
 import { lerp as lerpScalar } from '../interpolation.js';
-import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
 
 import type { ReadonlyVec2, Vec2 } from './_types/vec2.js';
 
@@ -435,6 +435,78 @@ export function lerp(out: Vec2, a: ReadonlyVec2, b: ReadonlyVec2, t: number): Ve
   out[0] = lerpScalar(ax, bx, t);
   out[1] = lerpScalar(ay, by, t);
   return out;
+}
+
+/**
+ * Writes `a` bounced off a surface into `out`: `a - 2 (a · normal) normal`. The part
+ * of `a` along `normal` flips and the rest is kept, as with a ball hitting a wall.
+ * Apart from float32 rounding, the result is the same length as `a`.
+ *
+ * `normal` must have a length of `1`, and nothing checks this, so that a known unit
+ * normal doesn't pay for a square root on every bounce. Any other length changes the
+ * direction as well as the size: `(1, -1)` off `(0, 2)` gives `(1, 7)` rather than
+ * `(1, 1)`. Which side of the surface the normal points to doesn't matter.
+ *
+ * It doesn't check which way `a` is heading: `(1, 1)` moving away from a floor with a
+ * normal of `(0, 1)` still flips to `(1, -1)`. For bounces, check
+ * `dot(velocity, normal) < 0` first, or an object can get stuck flipping back and
+ * forth inside a surface.
+ *
+ * Bad input stays visible: a `NaN` component makes the whole result `NaN`, and so does
+ * an infinite one that meets `0` in the dot product, as with `(Infinity, -1)` off
+ * `(0, 1)`.
+ *
+ * @param out - The vector to write to.
+ * @param a - The incoming vector.
+ * @param normal - The surface's normal, with a length of `1`.
+ * @returns `out`.
+ */
+export function reflect(out: Vec2, a: ReadonlyVec2, normal: ReadonlyVec2): Vec2 {
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1];
+  // biome-ignore format: packed component reads
+  const nx = normal[0], ny = normal[1];
+  const k = 2 * dot(a, normal);
+
+  out[0] = ax - k * nx;
+  out[1] = ay - k * ny;
+
+  return out;
+}
+
+/**
+ * Returns the angle between `a` and `b` in radians, from `0` to `π`. Neither the order
+ * nor their lengths matter. The angle has no sign, so it can't tell a left turn from
+ * a right one.
+ *
+ * A zero vector has no direction and gives `0`, the same as two parallel vectors.
+ * Only an exact zero is treated this way, so very short vectors still give the right
+ * angle. To ignore tiny noise, check `magnitudeSq(a) < EPSILON_SQUARED` first.
+ *
+ * The cosine is clamped before `Math.acos`, so rounding can't produce `NaN`. Rounding
+ * can still make parallel vectors come out very slightly apart, at around `5e-8`, so
+ * compare the result using a tolerance rather than `=== 0`. Precision also falls away
+ * for angles below about `1e-6`.
+ *
+ * To compare against a limit, as in a view cone, you can skip the `Math.acos`: with
+ * unit vectors, `dot(a, b) > Math.cos(limit)` gives the same answer.
+ *
+ * A `NaN` or infinite component gives `NaN`.
+ *
+ * @param a - The first vector.
+ * @param b - The second vector.
+ * @returns The angle in radians, from `0` to `π`.
+ */
+export function angle(a: ReadonlyVec2, b: ReadonlyVec2): number {
+  const magSqA = magnitudeSq(a);
+  const magSqB = magnitudeSq(b);
+
+  if (magSqA === 0 || magSqB === 0) return 0;
+
+  const denominator = Math.sqrt(magSqA * magSqB);
+  const cos = dot(a, b) / denominator;
+
+  return Math.acos(clamp(cos, -1, 1));
 }
 
 /**

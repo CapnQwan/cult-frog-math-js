@@ -1666,3 +1666,331 @@ describe('lerp', () => {
     expectComponents(vec4.lerp(vec4.create(), a, b, 0.5), 5.5, 11, 16.5, 22);
   });
 });
+
+describe('reflect', () => {
+  test('flips the part along the normal, keeps the rest, and returns out', () => {
+    const out = vec4.create();
+    const result = vec4.reflect(out, vec4.create(1, -1, 0, 0), vec4.create(0, 1, 0, 0));
+
+    expect(result).toBe(out);
+    expectComponents(out, 1, 1, 0, 0);
+  });
+
+  test('a normal along each axis flips only that component', () => {
+    const a = vec4.create(1, 2, 3, 4);
+
+    expectComponents(vec4.reflect(vec4.create(), a, vec4.create(1, 0, 0, 0)), -1, 2, 3, 4);
+    expectComponents(vec4.reflect(vec4.create(), a, vec4.create(0, 1, 0, 0)), 1, -2, 3, 4);
+    expectComponents(vec4.reflect(vec4.create(), a, vec4.create(0, 0, 1, 0)), 1, 2, -3, 4);
+    expectComponents(vec4.reflect(vec4.create(), a, vec4.create(0, 0, 0, 1)), 1, 2, 3, -4);
+  });
+
+  test('uses every component of a diagonal normal', () => {
+    const normal = vec4.normalize(vec4.create(), vec4.create(1, 2, 3, 4));
+    const out = vec4.reflect(vec4.create(), vec4.create(1, 2, 3, 4), normal);
+
+    // A vector along the normal comes straight back.
+    expect(out[0]).toBeCloseTo(-1, 5);
+    expect(out[1]).toBeCloseTo(-2, 5);
+    expect(out[2]).toBeCloseTo(-3, 5);
+    expect(out[3]).toBeCloseTo(-4, 5);
+  });
+
+  test('a vector along the surface is unchanged', () => {
+    const out = vec4.reflect(vec4.create(), vec4.create(3, 0, 0, 0), vec4.create(0, 1, 0, 0));
+
+    expectComponents(out, 3, 0, 0, 0);
+  });
+
+  test('a head-on vector comes straight back', () => {
+    const out = vec4.reflect(vec4.create(), vec4.create(0, -2, 0, 0), vec4.create(0, 1, 0, 0));
+
+    expectComponents(out, 0, 2, 0, 0);
+  });
+
+  test('which side the normal points to does not matter', () => {
+    const a = vec4.create(1, -1, 0, 0);
+    const up = vec4.reflect(vec4.create(), a, vec4.create(0, 1, 0, 0));
+    const down = vec4.reflect(vec4.create(), a, vec4.create(0, -1, 0, 0));
+
+    expect(vec4.isEqual(up, down)).toBe(true);
+  });
+
+  test('keeps the length apart from rounding', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const normal = vec4.normalize(vec4.create(), vec4.create(7, 6, 5, 4));
+
+    expect(vec4.magnitude(vec4.reflect(vec4.create(), a, normal))).toBeCloseTo(
+      vec4.magnitude(a),
+      5
+    );
+  });
+
+  test('reflecting twice gives the original back', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const normal = vec4.create(0, 1, 0, 0);
+    const once = vec4.reflect(vec4.create(), a, normal);
+
+    expectComponents(vec4.reflect(once, once, normal), 1, 2, 3, 4);
+  });
+
+  test('a normal of the wrong length changes the direction too', () => {
+    const a = vec4.create(1, -1, 0, 0);
+
+    expectComponents(vec4.reflect(vec4.create(), a, vec4.create(0, 2, 0, 0)), 1, 7, 0, 0);
+    expectComponents(vec4.reflect(vec4.create(), a, vec4.create(0, 0.5, 0, 0)), 1, -0.5, 0, 0);
+  });
+
+  test('a zero normal leaves a unchanged', () => {
+    const out = vec4.reflect(vec4.create(), vec4.create(1, 2, 3, 4), vec4.create());
+
+    expectComponents(out, 1, 2, 3, 4);
+  });
+
+  test('a zero vector stays zero', () => {
+    const out = vec4.reflect(vec4.create(), vec4.create(), vec4.create(0, 1, 0, 0));
+
+    expect(vec4.isEqual(out, vec4.create())).toBe(true);
+  });
+
+  test('flips a vector that is already heading away from the surface', () => {
+    const out = vec4.reflect(vec4.create(), vec4.create(1, 1, 0, 0), vec4.create(0, 1, 0, 0));
+
+    expectComponents(out, 1, -1, 0, 0);
+  });
+
+  test('intermediate values do not overflow float32', () => {
+    const out = vec4.reflect(vec4.create(), vec4.create(3e38, 3e38, 0, 0), vec4.create(0, 1, 0, 0));
+
+    expectComponents(out, 3e38, -3e38, 0, 0);
+  });
+
+  test('a NaN component makes the whole result NaN', () => {
+    const out = vec4.reflect(
+      vec4.create(),
+      vec4.create(Number.NaN, -1, 0, 0),
+      vec4.create(0, 1, 0, 0)
+    );
+
+    expectComponents(out, Number.NaN, Number.NaN, Number.NaN, Number.NaN);
+  });
+
+  test('an infinite component that meets zero makes the whole result NaN', () => {
+    const out = vec4.reflect(
+      vec4.create(),
+      vec4.create(Number.POSITIVE_INFINITY, -1, 0, 0),
+      vec4.create(0, 1, 0, 0)
+    );
+
+    expectComponents(out, Number.NaN, Number.NaN, Number.NaN, Number.NaN);
+  });
+
+  test('a normal whose w is 0 leaves w alone, and any other w mixes it in', () => {
+    const point = vec4.create(1, -1, 0, 1);
+
+    expectComponents(vec4.reflect(vec4.create(), point, vec4.create(0, 1, 0, 0)), 1, 1, 0, 1);
+    expectComponents(vec4.reflect(vec4.create(), point, vec4.create(0, 0, 0, 1)), 1, -1, 0, -1);
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const normal = vec4.create(0, 1, 0, 0);
+    vec4.reflect(vec4.create(), a, normal);
+
+    expectComponents(a, 1, 2, 3, 4);
+    expectComponents(normal, 0, 1, 0, 0);
+  });
+
+  test('out may be the incoming vector', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    vec4.reflect(a, a, vec4.create(5, 6, 7, 8));
+
+    expectComponents(a, -699, -838, -977, -1116);
+  });
+
+  test('out may be the normal', () => {
+    const normal = vec4.create(5, 6, 7, 8);
+    vec4.reflect(normal, vec4.create(1, 2, 3, 4), normal);
+
+    expectComponents(normal, -699, -838, -977, -1116);
+  });
+
+  test('out may be both inputs', () => {
+    const normal = vec4.create(0, 1, 0, 0);
+    vec4.reflect(normal, normal, normal);
+
+    expectComponents(normal, 0, -1, 0, 0);
+  });
+
+  test('overlapping views: out one element ahead of the incoming vector', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 1);
+    vec4.reflect(out, viewAt(buffer, 0), viewAt(buffer, 4));
+
+    expectComponents(out, -699, -838, -977, -1116);
+  });
+
+  test('overlapping views: out one element behind the incoming vector', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 0);
+    vec4.reflect(out, viewAt(buffer, 1), viewAt(buffer, 5));
+
+    expectComponents(out, -1318, -1537, -1756, -1975);
+  });
+
+  test('overlapping views: out one element ahead of the normal', () => {
+    const buffer = sequentialBuffer(9);
+    const out = viewAt(buffer, 5);
+    vec4.reflect(out, viewAt(buffer, 0), viewAt(buffer, 4));
+
+    expectComponents(out, -699, -838, -977, -1116);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(12);
+    vec4.reflect(viewAt(pool, 4), vec4.create(1, -1, 0, 0), vec4.create(0, 1, 0, 0));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 4, 1, 1, 0, 0, 9, 10, 11, 12]);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec4 = vec4.create(1, -1, 0, 0);
+    const normal: ReadonlyVec4 = vec4.create(0, 1, 0, 0);
+
+    expectComponents(vec4.reflect(vec4.create(), a, normal), 1, 1, 0, 0);
+  });
+});
+
+describe('angle', () => {
+  test('is 0 for the same direction and pi for the opposite one', () => {
+    const x = vec4.create(1, 0, 0, 0);
+
+    expect(vec4.angle(x, x)).toBe(0);
+    expect(vec4.angle(x, vec4.create(-1, 0, 0, 0))).toBe(Math.PI);
+  });
+
+  test('every axis counts', () => {
+    const x = vec4.create(1, 0, 0, 0);
+
+    expect(vec4.angle(x, vec4.create(0, 1, 0, 0))).toBe(Math.PI / 2);
+    expect(vec4.angle(x, vec4.create(1, 1, 0, 0))).toBeCloseTo(Math.PI / 4, 12);
+    expect(vec4.angle(x, vec4.create(0, 0, 1, 0))).toBe(Math.PI / 2);
+    expect(vec4.angle(x, vec4.create(1, 0, 1, 0))).toBeCloseTo(Math.PI / 4, 12);
+    expect(vec4.angle(x, vec4.create(0, 0, 0, 1))).toBe(Math.PI / 2);
+    expect(vec4.angle(x, vec4.create(1, 0, 0, 1))).toBeCloseTo(Math.PI / 4, 12);
+  });
+
+  test('the order does not matter', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const b = vec4.create(7, 6, 5, 4);
+
+    expect(vec4.angle(a, b)).toBe(vec4.angle(b, a));
+  });
+
+  test('lengths do not matter', () => {
+    expect(vec4.angle(vec4.create(500, 0, 0, 0), vec4.create(0.01, 0.01, 0, 0))).toBeCloseTo(
+      Math.PI / 4,
+      6
+    );
+    expect(vec4.angle(vec4.create(500, 0, 0, 0), vec4.create(-0.01, 0.01, 0, 0))).toBeCloseTo(
+      (3 * Math.PI) / 4,
+      6
+    );
+  });
+
+  test('a zero vector gives 0', () => {
+    const zero = vec4.create();
+    const x = vec4.create(1, 0, 0, 0);
+
+    expect(vec4.angle(zero, x)).toBe(0);
+    expect(vec4.angle(x, zero)).toBe(0);
+    expect(vec4.angle(zero, zero)).toBe(0);
+  });
+
+  test('very short vectors still give the right angle', () => {
+    const y = vec4.create(0, 1, 0, 0);
+
+    expect(vec4.angle(vec4.create(1e-7, 0, 0, 0), y)).toBe(Math.PI / 2);
+    expect(vec4.angle(vec4.create(1e-7, 0, 0, 0), vec4.create(0, 1e-7, 0, 0))).toBe(Math.PI / 2);
+  });
+
+  test('handles the extremes of float32', () => {
+    expect(vec4.angle(vec4.create(1e-45, 0, 0, 0), vec4.create(0, 1e-45, 0, 0))).toBe(Math.PI / 2);
+    expect(vec4.angle(vec4.create(3e38, 0, 0, 0), vec4.create(0, 3e38, 0, 0))).toBe(Math.PI / 2);
+    expect(vec4.angle(vec4.create(3e38, 0, 0, 0), vec4.create(3e38, 3e38, 0, 0))).toBeCloseTo(
+      Math.PI / 4,
+      12
+    );
+  });
+
+  test('a cosine rounded just above 1 is clamped rather than giving NaN', () => {
+    const a = vec4.create(1, 2, 2, 8);
+    const b = vec4.scale(vec4.create(), a, 0.1);
+
+    expect(vec4.dot(a, b) / Math.sqrt(vec4.magnitudeSq(a) * vec4.magnitudeSq(b))).toBeGreaterThan(
+      1
+    );
+    expect(vec4.angle(a, b)).toBe(0);
+  });
+
+  test('rounding can leave parallel vectors very slightly apart', () => {
+    const a = vec4.create(1, 1, 1, 3);
+    const result = vec4.angle(a, vec4.scale(vec4.create(), a, 0.3));
+
+    expect(result).toBeGreaterThan(0);
+    expect(result).toBeLessThan(1e-7);
+  });
+
+  test('the dot comparison in the docs agrees with the angle', () => {
+    const facing = vec4.create(1, 0, 0, 0);
+    const limit = Math.PI / 4;
+    const inside = vec4.normalize(vec4.create(), vec4.create(2, 1, 0, 0));
+    const outside = vec4.normalize(vec4.create(), vec4.create(1, 2, 0, 0));
+
+    expect(vec4.angle(facing, inside)).toBeLessThan(limit);
+    expect(vec4.dot(facing, inside)).toBeGreaterThan(Math.cos(limit));
+    expect(vec4.angle(facing, outside)).toBeGreaterThan(limit);
+    expect(vec4.dot(facing, outside)).toBeLessThan(Math.cos(limit));
+  });
+
+  test('a NaN or infinite component gives NaN', () => {
+    const y = vec4.create(0, 1, 0, 0);
+
+    expect(vec4.angle(vec4.create(Number.NaN, 1, 0, 0), y)).toBeNaN();
+    expect(vec4.angle(vec4.create(Number.POSITIVE_INFINITY, 1, 0, 0), y)).toBeNaN();
+  });
+
+  test('w counts like any other component', () => {
+    expect(vec4.angle(vec4.create(1, 0, 0, 1), vec4.create(0, 1, 0, 1))).toBeCloseTo(
+      Math.PI / 3,
+      12
+    );
+    expect(vec4.angle(vec4.create(1, 0, 0, 1), vec4.create(1, 0, 0, 0))).toBeCloseTo(
+      Math.PI / 4,
+      12
+    );
+  });
+
+  test('never writes to the inputs', () => {
+    const a = vec4.create(1, 2, 3, 4);
+    const b = vec4.create(5, 6, 7, 8);
+    vec4.angle(a, b);
+
+    expectComponents(a, 1, 2, 3, 4);
+    expectComponents(b, 5, 6, 7, 8);
+  });
+
+  test('reads only its own slots when the inputs are pooled views', () => {
+    const pool = sequentialBuffer(9);
+    const direct = vec4.angle(vec4.create(2, 3, 4, 5), vec4.create(6, 7, 8, 9));
+
+    expect(vec4.angle(viewAt(pool, 1), viewAt(pool, 5))).toBe(direct);
+  });
+
+  test('accepts readonly inputs', () => {
+    const a: ReadonlyVec4 = vec4.create(1, 0, 0, 0);
+    const b: ReadonlyVec4 = vec4.create(0, 1, 0, 0);
+
+    expect(vec4.angle(a, b)).toBe(Math.PI / 2);
+  });
+});
