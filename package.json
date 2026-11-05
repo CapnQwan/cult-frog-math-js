@@ -61,8 +61,8 @@
       "default": "./dist/mat4.js"
     },
     "./quat": {
-      "types": "./dist/quat.d.ts",
-      "default": "./dist/quat.js"
+      "types": "./dist/quaternion/index.d.ts",
+      "default": "./dist/quaternion/index.js"
     },
     "./easing": {
       "types": "./dist/easing/index.d.ts",

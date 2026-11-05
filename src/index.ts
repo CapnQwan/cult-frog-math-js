@@ -85,6 +85,6 @@ export * from './interpolation.js';
 export * from './mat2.js';
 export * from './mat3.js';
 export * from './mat4.js';
-export * from './quat.js';
+export * from './quaternion/index.js';
 export * from './scalars.js';
 export * from './vector/index.js';

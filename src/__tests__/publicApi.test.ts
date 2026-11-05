@@ -5,7 +5,7 @@ import * as root from '../index.js';
 import * as mat2Entry from '../mat2.js';
 import * as mat3Entry from '../mat3.js';
 import * as mat4Entry from '../mat4.js';
-import * as quatEntry from '../quat.js';
+import * as quatEntry from '../quaternion/index.js';
 import * as vec2Entry from '../vector/vec2/index.js';
 import * as vec3Entry from '../vector/vec3/index.js';
 import * as vec4Entry from '../vector/vec4/index.js';
@@ -26,7 +26,7 @@ const entries: [name: string, entry: Record<string, unknown>, file: string][] = 
   ['Mat2', mat2Entry, 'mat2'],
   ['Mat3', mat3Entry, 'mat3'],
   ['Mat4', mat4Entry, 'mat4'],
-  ['Quat', quatEntry, 'quat'],
+  ['Quat', quatEntry, 'quaternion/index'],
 ];
 
 describe('per-type entry points', () => {
