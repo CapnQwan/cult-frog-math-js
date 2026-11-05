@@ -1,6 +1,6 @@
 import type { Brand } from '@cult-frog/types';
-import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
-import type { ReadonlyFixedFloat32Array } from '../../_types/readonlyFixedFloat32Array.js';
+import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { ReadonlyFixedFloat32Array } from '../../../_types/readonlyFixedFloat32Array.js';
 
 /**
  * A 3x3 matrix stored as a `Float32Array` of length 9, in column-major order:

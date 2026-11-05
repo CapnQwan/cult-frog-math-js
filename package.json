@@ -49,16 +49,16 @@
       "default": "./dist/vector/vec4/index.js"
     },
     "./mat2": {
-      "types": "./dist/mat2.d.ts",
-      "default": "./dist/mat2.js"
+      "types": "./dist/matrix/mat2/index.d.ts",
+      "default": "./dist/matrix/mat2/index.js"
     },
     "./mat3": {
-      "types": "./dist/mat3.d.ts",
-      "default": "./dist/mat3.js"
+      "types": "./dist/matrix/mat3/index.d.ts",
+      "default": "./dist/matrix/mat3/index.js"
     },
     "./mat4": {
-      "types": "./dist/mat4.d.ts",
-      "default": "./dist/mat4.js"
+      "types": "./dist/matrix/mat4/index.d.ts",
+      "default": "./dist/matrix/mat4/index.js"
     },
     "./quat": {
       "types": "./dist/quaternion/index.d.ts",

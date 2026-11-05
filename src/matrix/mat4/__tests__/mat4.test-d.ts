@@ -1,11 +1,11 @@
-// src/matrix/__tests__/mat4.test-d.ts
+// src/matrix/mat4/__tests__/mat4.test-d.ts
 import { describe, expectTypeOf, test } from 'vitest';
 
 import * as mat4 from '../mat4.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
-import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
-import type { Mat3 } from '../_types/mat3.js';
+import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Mat3 } from '../../mat3/_types/mat3.js';
 import type { Mat4, ReadonlyMat4 } from '../_types/mat4.js';
 
 declare const live: Mat4;

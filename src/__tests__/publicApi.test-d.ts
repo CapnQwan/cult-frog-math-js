@@ -1,18 +1,18 @@
 import { describe, expectTypeOf, test } from 'vitest';
 
 import { Easing } from '../easing/index.js';
-import { Mat2 } from '../mat2.js';
-import { Mat3 } from '../mat3.js';
-import { Mat4 } from '../mat4.js';
+import { Mat2 } from '../matrix/mat2/index.js';
+import { Mat3 } from '../matrix/mat3/index.js';
+import { Mat4 } from '../matrix/mat4/index.js';
 import { Quat } from '../quaternion/index.js';
 import { Vec2 } from '../vector/vec2/index.js';
 import { Vec3 } from '../vector/vec3/index.js';
 import { Vec4 } from '../vector/vec4/index.js';
 
 import type * as root from '../index.js';
-import type { ReadonlyMat2 } from '../mat2.js';
-import type { ReadonlyMat3 } from '../mat3.js';
-import type { ReadonlyMat4 } from '../mat4.js';
+import type { ReadonlyMat2 } from '../matrix/mat2/index.js';
+import type { ReadonlyMat3 } from '../matrix/mat3/index.js';
+import type { ReadonlyMat4 } from '../matrix/mat4/index.js';
 import type { ReadonlyQuat } from '../quaternion/index.js';
 import type { ReadonlyVec2 } from '../vector/vec2/index.js';
 import type { ReadonlyVec3 } from '../vector/vec3/index.js';

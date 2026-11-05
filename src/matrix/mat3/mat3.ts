@@ -22,8 +22,8 @@
  * @module mat3
  */
 
-import { EPSILON } from '../constants.js';
-import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+import { EPSILON } from '../../constants.js';
+import { isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
 import type { Mat3, ReadonlyMat3 } from './_types/mat3.js';
 

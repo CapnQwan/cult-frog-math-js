@@ -1,12 +1,12 @@
-// src/matrix/__tests__/mat2.test-d.ts
+// src/matrix/mat2/__tests__/mat2.test-d.ts
 import { describe, expectTypeOf, test } from 'vitest';
 
 import * as mat2 from '../mat2.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
-import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
+import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Mat3 } from '../../mat3/_types/mat3.js';
 import type { Mat2, ReadonlyMat2 } from '../_types/mat2.js';
-import type { Mat3 } from '../_types/mat3.js';
 
 declare const live: Mat2;
 declare const frozen: ReadonlyMat2;

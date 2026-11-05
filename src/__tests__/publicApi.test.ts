@@ -2,9 +2,9 @@ import { describe, expect, test } from 'vitest';
 
 import * as easingEntry from '../easing/index.js';
 import * as root from '../index.js';
-import * as mat2Entry from '../mat2.js';
-import * as mat3Entry from '../mat3.js';
-import * as mat4Entry from '../mat4.js';
+import * as mat2Entry from '../matrix/mat2/index.js';
+import * as mat3Entry from '../matrix/mat3/index.js';
+import * as mat4Entry from '../matrix/mat4/index.js';
 import * as quatEntry from '../quaternion/index.js';
 import * as vec2Entry from '../vector/vec2/index.js';
 import * as vec3Entry from '../vector/vec3/index.js';
@@ -23,9 +23,9 @@ const entries: [name: string, entry: Record<string, unknown>, file: string][] = 
   ['Vec2', vec2Entry, 'vector/vec2/index'],
   ['Vec3', vec3Entry, 'vector/vec3/index'],
   ['Vec4', vec4Entry, 'vector/vec4/index'],
-  ['Mat2', mat2Entry, 'mat2'],
-  ['Mat3', mat3Entry, 'mat3'],
-  ['Mat4', mat4Entry, 'mat4'],
+  ['Mat2', mat2Entry, 'matrix/mat2/index'],
+  ['Mat3', mat3Entry, 'matrix/mat3/index'],
+  ['Mat4', mat4Entry, 'matrix/mat4/index'],
   ['Quat', quatEntry, 'quaternion/index'],
 ];
 

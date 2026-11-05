@@ -1,4 +1,4 @@
-// src/matrix/__tests__/mat4.test.ts
+// src/matrix/mat4/__tests__/mat4.test.ts
 import { describe, expect, test } from 'vitest';
 
 import * as mat4 from '../mat4.js';
