@@ -37,16 +37,16 @@
       "default": "./dist/index.js"
     },
     "./vec2": {
-      "types": "./dist/vec2.d.ts",
-      "default": "./dist/vec2.js"
+      "types": "./dist/vector/vec2/index.d.ts",
+      "default": "./dist/vector/vec2/index.js"
     },
     "./vec3": {
-      "types": "./dist/vec3.d.ts",
-      "default": "./dist/vec3.js"
+      "types": "./dist/vector/vec3/index.d.ts",
+      "default": "./dist/vector/vec3/index.js"
     },
     "./vec4": {
-      "types": "./dist/vec4.d.ts",
-      "default": "./dist/vec4.js"
+      "types": "./dist/vector/vec4/index.d.ts",
+      "default": "./dist/vector/vec4/index.js"
     },
     "./mat2": {
       "types": "./dist/mat2.d.ts",

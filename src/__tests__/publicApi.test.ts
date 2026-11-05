@@ -6,26 +6,27 @@ import * as mat2Entry from '../mat2.js';
 import * as mat3Entry from '../mat3.js';
 import * as mat4Entry from '../mat4.js';
 import * as quatEntry from '../quat.js';
-import * as vec2Entry from '../vec2.js';
-import * as vec3Entry from '../vec3.js';
-import * as vec4Entry from '../vec4.js';
+import * as vec2Entry from '../vector/vec2/index.js';
+import * as vec3Entry from '../vector/vec3/index.js';
+import * as vec4Entry from '../vector/vec4/index.js';
 
 import pkg from '../../package.json' with { type: 'json' };
 
 /**
  * Every per-type entry point, keyed by the namespace it exposes. The subpath is
- * the same name in lowercase. These are what consumers import, so the tests go
- * through them rather than the internal function modules the rest of the suite
- * uses.
+ * the same name in lowercase, and `file` is the entry's path under `src/` (and
+ * so under `dist/`) without its extension. These are what consumers import, so
+ * the tests go through them rather than the internal function modules the rest
+ * of the suite uses.
  */
-const entries: [name: string, entry: Record<string, unknown>][] = [
-  ['Vec2', vec2Entry],
-  ['Vec3', vec3Entry],
-  ['Vec4', vec4Entry],
-  ['Mat2', mat2Entry],
-  ['Mat3', mat3Entry],
-  ['Mat4', mat4Entry],
-  ['Quat', quatEntry],
+const entries: [name: string, entry: Record<string, unknown>, file: string][] = [
+  ['Vec2', vec2Entry, 'vector/vec2/index'],
+  ['Vec3', vec3Entry, 'vector/vec3/index'],
+  ['Vec4', vec4Entry, 'vector/vec4/index'],
+  ['Mat2', mat2Entry, 'mat2'],
+  ['Mat3', mat3Entry, 'mat3'],
+  ['Mat4', mat4Entry, 'mat4'],
+  ['Quat', quatEntry, 'quat'],
 ];
 
 describe('per-type entry points', () => {
@@ -76,17 +77,17 @@ describe('package.json exports', () => {
     });
   });
 
-  test.each(entries)('./%s points at its entry file', (name) => {
-    const subpath = name.toLowerCase();
-    expect(exportsMap[`./${subpath}`]).toEqual({
-      types: `./dist/${subpath}.d.ts`,
-      default: `./dist/${subpath}.js`,
+  test.each(entries)('./%s points at its entry file', (name, _entry, file) => {
+    expect(exportsMap[`./${name.toLowerCase()}`]).toEqual({
+      types: `./dist/${file}.d.ts`,
+      default: `./dist/${file}.js`,
     });
   });
 
-  test('has no per-family subpaths', () => {
-    expect(Object.keys(exportsMap)).not.toContain('./vector');
-    expect(Object.keys(exportsMap)).not.toContain('./matrix');
-    expect(Object.keys(exportsMap)).not.toContain('./quaternion');
-  });
+  test.each(['./vector', './vectors', './matrix', './matrices', './quaternion', './quaternions'])(
+    'has no per-family subpath %s',
+    (subpath) => {
+      expect(Object.keys(exportsMap)).not.toContain(subpath);
+    }
+  );
 });

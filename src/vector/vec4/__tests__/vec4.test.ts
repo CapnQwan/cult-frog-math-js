@@ -1,7 +1,7 @@
-// src/vector/__tests__/vec4.test.ts
+// src/vector/vec4/__tests__/vec4.test.ts
 import { describe, expect, test } from 'vitest';
 
-import { clamp } from '../../scalars.js';
+import { clamp } from '../../../scalars.js';
 import * as vec4 from '../vec4.js';
 
 import type { ReadonlyVec4, Vec4 } from '../_types/vec4.js';

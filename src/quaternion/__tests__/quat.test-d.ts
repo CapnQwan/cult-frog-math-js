@@ -5,7 +5,7 @@ import * as quat from '../quat.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
-import type { ReadonlyVec4, Vec4 } from '../../vector/_types/vec4.js';
+import type { ReadonlyVec4, Vec4 } from '../../vector/vec4/_types/vec4.js';
 import type { Quat, ReadonlyQuat } from '../_types/quat.js';
 
 declare const live: Quat;

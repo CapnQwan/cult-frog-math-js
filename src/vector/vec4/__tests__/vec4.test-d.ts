@@ -1,12 +1,12 @@
-// src/vector/__tests__/vec4.test-d.ts
+// src/vector/vec4/__tests__/vec4.test-d.ts
 import { describe, expectTypeOf, test } from 'vitest';
 
 import * as vec4 from '../vec4.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
-import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
-import type { Quat } from '../../quaternion/_types/quat.js';
-import type { Vec3 } from '../_types/vec3.js';
+import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Quat } from '../../../quaternion/_types/quat.js';
+import type { Vec3 } from '../../vec3/_types/vec3.js';
 import type { ReadonlyVec4, Vec4 } from '../_types/vec4.js';
 
 declare const live: Vec4;

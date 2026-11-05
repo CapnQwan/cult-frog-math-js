@@ -1,20 +1,20 @@
 /**
- * Three-component vectors stored as `[x, y, z]`.
+ * Four-component vectors stored as `[x, y, z, w]`.
  *
  * Follows the package conventions: `out` first and returned, inputs are
  * read-only, and `out` may alias any input.
  *
- * @module vec3
+ * @module vec4
  */
 
-import { EPSILON } from '../constants.js';
-import { lerp as lerpScalar } from '../interpolation.js';
-import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+import { EPSILON } from '../../constants.js';
+import { lerp as lerpScalar } from '../../interpolation.js';
+import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
-import type { ReadonlyVec3, Vec3 } from './_types/vec3.js';
+import type { ReadonlyVec4, Vec4 } from './_types/vec4.js';
 
-/** The number of elements in a `Vec3`. */
-export const SIZE = 3;
+/** The number of elements in a `Vec4`. */
+export const SIZE = 4;
 
 /**
  * Allocates a new vector. Omitted components default to `0`.
@@ -25,13 +25,15 @@ export const SIZE = 3;
  * @param x - The x component.
  * @param y - The y component.
  * @param z - The z component.
+ * @param w - The w component.
  * @returns A new vector with its own buffer.
  */
-export function create(x: number = 0, y: number = 0, z: number = 0): Vec3 {
-  const v = new Float32Array(SIZE) as Vec3;
+export function create(x: number = 0, y: number = 0, z: number = 0, w: number = 0): Vec4 {
+  const v = new Float32Array(SIZE) as Vec4;
   v[0] = x;
   v[1] = y;
   v[2] = z;
+  v[3] = w;
   return v;
 }
 
@@ -44,23 +46,25 @@ export function create(x: number = 0, y: number = 0, z: number = 0): Vec3 {
  * @param a - The vector to clone.
  * @returns A new vector with its own buffer.
  */
-export function clone(a: ReadonlyVec3): Vec3 {
-  return create(a[0], a[1], a[2]);
+export function clone(a: ReadonlyVec4): Vec4 {
+  return create(a[0], a[1], a[2], a[3]);
 }
 
 /**
- * Writes `x`, `y` and `z` into `out`. Values are rounded to float32.
+ * Writes `x`, `y`, `z` and `w` into `out`. Values are rounded to float32.
  *
  * @param out - The vector to write to.
  * @param x - The x component.
  * @param y - The y component.
  * @param z - The z component.
+ * @param w - The w component.
  * @returns `out`.
  */
-export function set(out: Vec3, x: number, y: number, z: number): Vec3 {
+export function set(out: Vec4, x: number, y: number, z: number, w: number): Vec4 {
   out[0] = x;
   out[1] = y;
   out[2] = z;
+  out[3] = w;
   return out;
 }
 
@@ -73,12 +77,13 @@ export function set(out: Vec3, x: number, y: number, z: number): Vec3 {
  * @param a - The vector to copy from.
  * @returns `out`.
  */
-export function copy(out: Vec3, a: ReadonlyVec3): Vec3 {
+export function copy(out: Vec4, a: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const x = a[0], y = a[1], z = a[2];
+  const x = a[0], y = a[1], z = a[2], w = a[3];
   out[0] = x;
   out[1] = y;
   out[2] = z;
+  out[3] = w;
   return out;
 }
 
@@ -89,8 +94,8 @@ export function copy(out: Vec3, a: ReadonlyVec3): Vec3 {
  * @param b - The second vector.
  * @returns `true` if every component is equal.
  */
-export function isEqual(a: ReadonlyVec3, b: ReadonlyVec3): boolean {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+export function isEqual(a: ReadonlyVec4, b: ReadonlyVec4): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
 }
 
 /**
@@ -105,29 +110,36 @@ export function isEqual(a: ReadonlyVec3, b: ReadonlyVec3): boolean {
  * @param eps - The base tolerance, before scaling. Defaults to {@link EPSILON}.
  * @returns `true` if every component is within tolerance.
  */
-export function isEqualEpsilon(a: ReadonlyVec3, b: ReadonlyVec3, eps = EPSILON): boolean {
+export function isEqualEpsilon(a: ReadonlyVec4, b: ReadonlyVec4, eps = EPSILON): boolean {
   return (
     isEqualEpsilonScalar(a[0], b[0], eps) &&
     isEqualEpsilonScalar(a[1], b[1], eps) &&
-    isEqualEpsilonScalar(a[2], b[2], eps)
+    isEqualEpsilonScalar(a[2], b[2], eps) &&
+    isEqualEpsilonScalar(a[3], b[3], eps)
   );
 }
 
 /**
- * Returns whether a vector's components equal `x`, `y` and `z`.
+ * Returns whether a vector's components equal `x`, `y`, `z` and `w`.
  *
- * `x`, `y` and `z` are rounded to 32-bit floats first, as {@link set} stores
- * them, so `isEqualXYZ(v, x, y, z)` is `true` immediately after
- * `set(v, x, y, z)`.
+ * `x`, `y`, `z` and `w` are rounded to 32-bit floats first, as {@link set}
+ * stores them, so `isEqualXYZW(v, x, y, z, w)` is `true` immediately after
+ * `set(v, x, y, z, w)`.
  *
  * @param a - The vector.
  * @param x - The x component to compare.
  * @param y - The y component to compare.
  * @param z - The z component to compare.
+ * @param w - The w component to compare.
  * @returns `true` if all components are equal.
  */
-export function isEqualXYZ(a: ReadonlyVec3, x: number, y: number, z: number): boolean {
-  return Math.fround(x) === a[0] && Math.fround(y) === a[1] && Math.fround(z) === a[2];
+export function isEqualXYZW(a: ReadonlyVec4, x: number, y: number, z: number, w: number): boolean {
+  return (
+    Math.fround(x) === a[0] &&
+    Math.fround(y) === a[1] &&
+    Math.fround(z) === a[2] &&
+    Math.fround(w) === a[3]
+  );
 }
 
 /**
@@ -137,19 +149,23 @@ export function isEqualXYZ(a: ReadonlyVec3, x: number, y: number, z: number): bo
  * a large value: adding `1` to a component of `16777216` leaves it unchanged.
  * Keep that in mind when accumulating positions far from the origin.
  *
+ * `w` is added like any other component, so adding two homogeneous points gives
+ * `w = 2`, not a point.
+ *
  * @param out - The vector to write to.
  * @param a - The vector to add to.
  * @param b - The vector to add.
  * @returns `out`.
  */
-export function add(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
+export function add(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   out[0] = ax + bx;
   out[1] = ay + by;
   out[2] = az + bz;
+  out[3] = aw + bw;
   return out;
 }
 
@@ -164,14 +180,15 @@ export function add(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
  * @param b - The vector to subtract.
  * @returns `out`.
  */
-export function sub(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
+export function sub(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   out[0] = ax - bx;
   out[1] = ay - by;
   out[2] = az - bz;
+  out[3] = aw - bw;
   return out;
 }
 
@@ -187,14 +204,15 @@ export function sub(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
  * @param b - The per-component factors.
  * @returns `out`.
  */
-export function mul(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
+export function mul(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   out[0] = ax * bx;
   out[1] = ay * by;
   out[2] = az * bz;
+  out[3] = aw * bw;
   return out;
 }
 
@@ -214,19 +232,23 @@ export function mul(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
  * @param b - The per-component divisors.
  * @returns `out`.
  */
-export function div(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
+export function div(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   out[0] = ax / bx;
   out[1] = ay / by;
   out[2] = az / bz;
+  out[3] = aw / bw;
   return out;
 }
 
 /**
  * Multiplies every component of `a` by `scalar`.
+ *
+ * `w` is scaled too, so scaling a homogeneous point `(x, y, z, 1)` doesn't move it:
+ * the perspective divide cancels the factor back out.
  *
  * For a different factor per component, use {@link mul}.
  *
@@ -235,12 +257,13 @@ export function div(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
  * @param scalar - The factor applied to every component.
  * @returns `out`.
  */
-export function scale(out: Vec3, a: ReadonlyVec3, scalar: number): Vec3 {
+export function scale(out: Vec4, a: ReadonlyVec4, scalar: number): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   out[0] = ax * scalar;
   out[1] = ay * scalar;
   out[2] = az * scalar;
+  out[3] = aw * scalar;
   return out;
 }
 
@@ -263,19 +286,24 @@ export function scale(out: Vec3, a: ReadonlyVec3, scalar: number): Vec3 {
  * @param scalar - The factor applied to `b`, not to `a`.
  * @returns `out`.
  */
-export function scaleAndAdd(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3, scalar: number): Vec3 {
+export function scaleAndAdd(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4, scalar: number): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   out[0] = ax + bx * scalar;
   out[1] = ay + by * scalar;
   out[2] = az + bz * scalar;
+  out[3] = aw + bw * scalar;
   return out;
 }
 
 /**
  * Writes `a` with the sign of every component flipped into `out`.
+ *
+ * `w` is flipped too, so negating a homogeneous point `(x, y, z, 1)` doesn't move
+ * it: the perspective divide cancels the sign back out. To flip a position, use a
+ * `Vec3` or set `w` back afterwards.
  *
  * A `0` component becomes `-0`. `isEqual` and arithmetic treat the two as the same,
  * but `Object.is` doesn't, and neither does a `toEqual` in tests.
@@ -284,12 +312,13 @@ export function scaleAndAdd(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3, scalar:
  * @param a - The vector to negate.
  * @returns `out`.
  */
-export function negate(out: Vec3, a: ReadonlyVec3): Vec3 {
+export function negate(out: Vec4, a: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   out[0] = -ax;
   out[1] = -ay;
   out[2] = -az;
+  out[3] = -aw;
   return out;
 }
 
@@ -302,12 +331,13 @@ export function negate(out: Vec3, a: ReadonlyVec3): Vec3 {
  * @param a - The input vector.
  * @returns `out`.
  */
-export function abs(out: Vec3, a: ReadonlyVec3): Vec3 {
+export function abs(out: Vec4, a: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   out[0] = Math.abs(ax);
   out[1] = Math.abs(ay);
   out[2] = Math.abs(az);
+  out[3] = Math.abs(aw);
   return out;
 }
 
@@ -323,14 +353,15 @@ export function abs(out: Vec3, a: ReadonlyVec3): Vec3 {
  * @param b - The second vector.
  * @returns `out`.
  */
-export function min(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
+export function min(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   out[0] = Math.min(ax, bx);
   out[1] = Math.min(ay, by);
   out[2] = Math.min(az, bz);
+  out[3] = Math.min(aw, bw);
   return out;
 }
 
@@ -346,14 +377,15 @@ export function min(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
  * @param b - The second vector.
  * @returns `out`.
  */
-export function max(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
+export function max(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   out[0] = Math.max(ax, bx);
   out[1] = Math.max(ay, by);
   out[2] = Math.max(az, bz);
+  out[3] = Math.max(aw, bw);
   return out;
 }
 
@@ -367,12 +399,13 @@ export function max(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
  * @param a - The input vector.
  * @returns `out`.
  */
-export function floor(out: Vec3, a: ReadonlyVec3): Vec3 {
+export function floor(out: Vec4, a: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   out[0] = Math.floor(ax);
   out[1] = Math.floor(ay);
   out[2] = Math.floor(az);
+  out[3] = Math.floor(aw);
   return out;
 }
 
@@ -387,12 +420,13 @@ export function floor(out: Vec3, a: ReadonlyVec3): Vec3 {
  * @param a - The input vector.
  * @returns `out`.
  */
-export function ceil(out: Vec3, a: ReadonlyVec3): Vec3 {
+export function ceil(out: Vec4, a: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   out[0] = Math.ceil(ax);
   out[1] = Math.ceil(ay);
   out[2] = Math.ceil(az);
+  out[3] = Math.ceil(aw);
   return out;
 }
 
@@ -409,12 +443,13 @@ export function ceil(out: Vec3, a: ReadonlyVec3): Vec3 {
  * @param a - The input vector.
  * @returns `out`.
  */
-export function round(out: Vec3, a: ReadonlyVec3): Vec3 {
+export function round(out: Vec4, a: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   out[0] = Math.round(ax);
   out[1] = Math.round(ay);
   out[2] = Math.round(az);
+  out[3] = Math.round(aw);
   return out;
 }
 
@@ -428,27 +463,33 @@ export function round(out: Vec3, a: ReadonlyVec3): Vec3 {
  * Calculated in float64 from the stored float32 components, so it can't overflow
  * or underflow, even at the extremes of the float32 range.
  *
+ * `w` counts like any other component, so this is the true 4D result. That's
+ * rarely what you want for a homogeneous point or direction stored in a `Vec4`.
+ *
  * @param a - The vector to measure.
  * @returns The squared length.
  */
-export function magnitudeSq(a: ReadonlyVec3): number {
+export function magnitudeSq(a: ReadonlyVec4): number {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
-  return ax * ax + ay * ay + az * az;
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
+  return ax * ax + ay * ay + az * az + aw * aw;
 }
 
 /**
  * Returns the length of `a`.
  *
  * Named `magnitude` because `a.length` is already taken: it's the component count,
- * always `3`, as on any typed array.
+ * always `4`, as on any typed array.
  *
  * Use {@link magnitudeSq} instead if you're only comparing lengths.
+ *
+ * `w` counts like any other component, so this is the true 4D result. That's
+ * rarely what you want for a homogeneous point or direction stored in a `Vec4`.
  *
  * @param a - The vector to measure.
  * @returns The length.
  */
-export function magnitude(a: ReadonlyVec3): number {
+export function magnitude(a: ReadonlyVec4): number {
   return Math.sqrt(magnitudeSq(a));
 }
 
@@ -463,19 +504,23 @@ export function magnitude(a: ReadonlyVec3): number {
  * difference between `1e7` and `0.1` keeps its precision, and values at opposite
  * ends of the float32 range don't overflow.
  *
+ * `w` counts like any other component, so this is the true 4D result. That's
+ * rarely what you want for a homogeneous point or direction stored in a `Vec4`.
+ *
  * @param a - The first point.
  * @param b - The second point.
  * @returns The squared distance.
  */
-export function distanceSq(a: ReadonlyVec3, b: ReadonlyVec3): number {
+export function distanceSq(a: ReadonlyVec4, b: ReadonlyVec4): number {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
   const dx = ax - bx;
   const dy = ay - by;
   const dz = az - bz;
-  return dx * dx + dy * dy + dz * dz;
+  const dw = aw - bw;
+  return dx * dx + dy * dy + dz * dz + dw * dw;
 }
 
 /**
@@ -483,11 +528,14 @@ export function distanceSq(a: ReadonlyVec3, b: ReadonlyVec3): number {
  *
  * Use {@link distanceSq} instead if you're only comparing distances.
  *
+ * `w` counts like any other component, so this is the true 4D result. That's
+ * rarely what you want for a homogeneous point or direction stored in a `Vec4`.
+ *
  * @param a - The first point.
  * @param b - The second point.
  * @returns The distance.
  */
-export function distance(a: ReadonlyVec3, b: ReadonlyVec3): number {
+export function distance(a: ReadonlyVec4, b: ReadonlyVec4): number {
   return Math.sqrt(distanceSq(a, b));
 }
 
@@ -500,17 +548,21 @@ export function distance(a: ReadonlyVec3, b: ReadonlyVec3): number {
  * To ignore tiny noise, check `magnitudeSq(a) < EPSILON_SQUARED` first.
  *
  * The result is rounded to float32, so its length is close to `1` but rarely
- * exact: normalizing `(3, 4, 0)` gives a magnitude of `1.0000000238`. Compare it
+ * exact: normalizing `(3, 4, 0, 0)` gives a magnitude of `1.0000000238`. Compare it
  * using `isEqualEpsilon`.
  *
  * Bad input stays visible: a `NaN` component makes the whole result `NaN`, and an
  * infinite component gives `NaN` in that slot and `0` in the finite ones.
  *
+ * `w` counts like any other component, so `(2, 0, 0, 1)` normalizes to about
+ * `(0.894, 0, 0, 0.447)`. To normalize a direction stored in a `Vec4`, make sure
+ * its `w` is `0`.
+ *
  * @param out - The vector to write to.
  * @param a - The vector to normalize.
  * @returns `out`.
  */
-export function normalize(out: Vec3, a: ReadonlyVec3): Vec3 {
+export function normalize(out: Vec4, a: ReadonlyVec4): Vec4 {
   const mag = magnitude(a);
   return scale(out, a, mag === 0 ? 0 : 1 / mag);
 }
@@ -526,9 +578,14 @@ export function normalize(out: Vec3, a: ReadonlyVec3): Vec3 {
  * have a length of `1`: `1` is the same direction and `-1` is the opposite one.
  *
  * Clamp the result before passing it to `Math.acos`. A normalized vector's length
- * is close to `1` but rarely exact, so normalizing `(1, 2, 3)` and dotting it with
- * itself gives `1.0000000103`, and `Math.acos` of anything above `1` is `NaN`.
+ * is close to `1` but rarely exact, so normalizing `(2, 3, 4, 5)` and dotting it with
+ * itself gives `1.0000000728`, and `Math.acos` of anything above `1` is `NaN`.
  * Use `Math.acos(clamp(dot(a, b), -1, 1))`.
+ *
+ * `w` counts like any other component, so `(1, 0, 0, 1)` dotted with itself is `2`.
+ * Use `Vec3` to compare 3D directions. That same `w` term is what makes plane tests
+ * work: with a plane stored as `(nx, ny, nz, d)` and a point whose `w` is `1`, the
+ * result is the point's signed distance from the plane.
  *
  * The result isn't rounded to float32 or limited to its range. Bad input stays
  * visible: a `NaN` component gives `NaN`, and so does an infinite component
@@ -538,50 +595,12 @@ export function normalize(out: Vec3, a: ReadonlyVec3): Vec3 {
  * @param b - The second vector.
  * @returns The dot product.
  */
-export function dot(a: ReadonlyVec3, b: ReadonlyVec3): number {
+export function dot(a: ReadonlyVec4, b: ReadonlyVec4): number {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
-  return ax * bx + ay * by + az * bz;
-}
-
-/**
- * Writes the cross product of `a` and `b` into `out`: a vector perpendicular to
- * both, used for surface normals and for building a set of axes. `out` may be `a`,
- * `b` or a view overlapping either.
- *
- * The order matters, because `cross(out, b, a)` gives the opposite vector. The
- * direction follows the right-hand rule, matching this package's right-handed,
- * y-up axes: `RIGHT × UP` is `BACK`, `UP × BACK` is `RIGHT` and `BACK × RIGHT` is
- * `UP`. Forward is negative z, so `cross(out, FORWARD, UP)` gives `RIGHT`.
- *
- * The result's length is `|a| |b| sin(angle)`, so two unit vectors only give a unit
- * vector when they're perpendicular. Normalize the result if you need a direction.
- * Parallel or opposite vectors and zero inputs give a zero vector, which
- * {@link normalize} leaves as zero. Watch for this when deriving axes from a facing
- * direction: a camera looking straight up gets nothing from `cross(out, forward, UP)`.
- *
- * Calculated in float64 and rounded to float32 when stored, so nearly parallel
- * inputs keep their precision through the subtraction, but a component too large
- * for float32 becomes `Infinity`. An infinite input gives `NaN` wherever it's
- * multiplied by `0`.
- *
- * @param out - The vector to write to.
- * @param a - The first vector.
- * @param b - The second vector.
- * @returns `out`.
- */
-export function cross(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
-  // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
-  // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
-
-  out[0] = ay * bz - az * by;
-  out[1] = az * bx - ax * bz;
-  out[2] = ax * by - ay * bx;
-  return out;
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
+  return ax * bx + ay * by + az * bz + aw * bw;
 }
 
 /**
@@ -600,6 +619,9 @@ export function cross(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
  * `(0, 1)` has a length of about `0.707`, and halfway between opposite directions is
  * zero. Normalize the result if you need a direction, and check for zero first.
  *
+ * `w` is interpolated like any other component. A `Quat` won't type-check here,
+ * because blending rotations this way doesn't keep them valid.
+ *
  * Uses `a + (b - a) * t`, which gives exactly `a` at `t = 0`. It only misses `b` at
  * `t = 1` when the two differ enormously in scale: going from `1e8` to `0.1` lands on
  * `0.09999999`. An infinite component in `a` gives `NaN` from `t = 0` upwards, and one
@@ -611,15 +633,16 @@ export function cross(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3): Vec3 {
  * @param t - How far to go from `a` to `b`.
  * @returns `out`.
  */
-export function lerp(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3, t: number): Vec3 {
+export function lerp(out: Vec4, a: ReadonlyVec4, b: ReadonlyVec4, t: number): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const bx = b[0], by = b[1], bz = b[2];
+  const bx = b[0], by = b[1], bz = b[2], bw = b[3];
 
   out[0] = lerpScalar(ax, bx, t);
   out[1] = lerpScalar(ay, by, t);
   out[2] = lerpScalar(az, bz, t);
+  out[3] = lerpScalar(aw, bw, t);
   return out;
 }
 
@@ -630,33 +653,39 @@ export function lerp(out: Vec3, a: ReadonlyVec3, b: ReadonlyVec3, t: number): Ve
  *
  * `normal` must have a length of `1`, and nothing checks this, so that a known unit
  * normal doesn't pay for a square root on every bounce. Any other length changes the
- * direction as well as the size: `(1, -1, 0)` off `(0, 2, 0)` gives `(1, 7, 0)` rather
- * than `(1, 1, 0)`. Which side of the surface the normal points to doesn't matter.
+ * direction as well as the size: `(1, -1, 0, 0)` off `(0, 2, 0, 0)` gives
+ * `(1, 7, 0, 0)` rather than `(1, 1, 0, 0)`. Which side of the surface the normal
+ * points to doesn't matter.
  *
- * It doesn't check which way `a` is heading: `(1, 1, 0)` moving away from a floor with
- * a normal of `(0, 1, 0)` still flips to `(1, -1, 0)`. For bounces, check
+ * It doesn't check which way `a` is heading: `(1, 1, 0, 0)` moving away from a floor
+ * with a normal of `(0, 1, 0, 0)` still flips to `(1, -1, 0, 0)`. For bounces, check
  * `dot(velocity, normal) < 0` first, or an object can get stuck flipping back and
  * forth inside a surface.
  *
+ * `w` counts like any other component. A normal whose `w` is `0` leaves `w` alone, so
+ * `(1, -1, 0, 1)` off `(0, 1, 0, 0)` stays a point at `(1, 1, 0, 1)`. Any other `w` in
+ * the normal mixes it into the result, so use `0` for a 3D surface.
+ *
  * Bad input stays visible: a `NaN` component makes the whole result `NaN`, and so does
- * an infinite one that meets `0` in the dot product, as with `(Infinity, -1, 0)` off
- * `(0, 1, 0)`.
+ * an infinite one that meets `0` in the dot product, as with `(Infinity, -1, 0, 0)`
+ * off `(0, 1, 0, 0)`.
  *
  * @param out - The vector to write to.
  * @param a - The incoming vector.
  * @param normal - The surface's normal, with a length of `1`.
  * @returns `out`.
  */
-export function reflect(out: Vec3, a: ReadonlyVec3, normal: ReadonlyVec3): Vec3 {
+export function reflect(out: Vec4, a: ReadonlyVec4, normal: ReadonlyVec4): Vec4 {
   // biome-ignore format: packed component reads
-  const ax = a[0], ay = a[1], az = a[2];
+  const ax = a[0], ay = a[1], az = a[2], aw = a[3];
   // biome-ignore format: packed component reads
-  const nx = normal[0], ny = normal[1], nz = normal[2];
+  const nx = normal[0], ny = normal[1], nz = normal[2], nw = normal[3];
   const k = 2 * dot(a, normal);
 
   out[0] = ax - k * nx;
   out[1] = ay - k * ny;
   out[2] = az - k * nz;
+  out[3] = aw - k * nw;
 
   return out;
 }
@@ -678,13 +707,16 @@ export function reflect(out: Vec3, a: ReadonlyVec3, normal: ReadonlyVec3): Vec3 
  * To compare against a limit, as in a view cone, you can skip the `Math.acos`: with
  * unit vectors, `dot(a, b) > Math.cos(limit)` gives the same answer.
  *
+ * `w` counts like any other component, so `(1, 0, 0, 1)` and `(0, 1, 0, 1)` are 60
+ * degrees apart even though their xyz parts are at 90. Use `Vec3` for 3D directions.
+ *
  * A `NaN` or infinite component gives `NaN`.
  *
  * @param a - The first vector.
  * @param b - The second vector.
  * @returns The angle in radians, from `0` to `π`.
  */
-export function angle(a: ReadonlyVec3, b: ReadonlyVec3): number {
+export function angle(a: ReadonlyVec4, b: ReadonlyVec4): number {
   const magSqA = magnitudeSq(a);
   const magSqB = magnitudeSq(b);
 
@@ -710,72 +742,30 @@ export function angle(a: ReadonlyVec3, b: ReadonlyVec3): number {
  * @param index - The row to read, not an element offset.
  * @returns `out`.
  */
-export function fromPacked(out: Vec3, packed: ArrayLike<number>, index: number): Vec3 {
+export function fromPacked(out: Vec4, packed: ArrayLike<number>, index: number): Vec4 {
   const from = index * SIZE;
   // biome-ignore format: packed component reads
   // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
-  const x = packed[from]!, y = packed[from + 1]!, z = packed[from + 2]!;
+  const x = packed[from]!, y = packed[from + 1]!, z = packed[from + 2]!, w = packed[from + 3]!;
   out[0] = x;
   out[1] = y;
   out[2] = z;
+  out[3] = w;
   return out;
 }
 
 /**
- * `(0, 0, 0)`.
+ * `(0, 0, 0, 0)`.
  *
- * Shared instance, readonly at the type level only. Never cast it to `Vec3`
+ * Shared instance, readonly at the type level only. Never cast it to `Vec4`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const ZERO = create(0, 0, 0) as ReadonlyVec3;
+export const ZERO = create(0, 0, 0, 0) as ReadonlyVec4;
+
 /**
- * `(1, 1, 1)`.
+ * `(1, 1, 1, 1)`.
  *
- * Shared instance, readonly at the type level only. Never cast it to `Vec3`
+ * Shared instance, readonly at the type level only. Never cast it to `Vec4`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const ONE = create(1, 1, 1) as ReadonlyVec3;
-/**
- * `(0, 1, 0)`: up in this package's y-up convention.
- *
- * Shared instance, readonly at the type level only. Never cast it to `Vec3`
- * or write to it; `clone` it if you need a mutable copy.
- */
-export const UP = create(0, 1, 0) as ReadonlyVec3;
-/**
- * `(0, -1, 0)`: down in this package's y-up convention.
- *
- * Shared instance, readonly at the type level only. Never cast it to `Vec3`
- * or write to it; `clone` it if you need a mutable copy.
- */
-export const DOWN = create(0, -1, 0) as ReadonlyVec3;
-/**
- * `(-1, 0, 0)`: negative x.
- *
- * Shared instance, readonly at the type level only. Never cast it to `Vec3`
- * or write to it; `clone` it if you need a mutable copy.
- */
-export const LEFT = create(-1, 0, 0) as ReadonlyVec3;
-/**
- * `(1, 0, 0)`: positive x.
- *
- * Shared instance, readonly at the type level only. Never cast it to `Vec3`
- * or write to it; `clone` it if you need a mutable copy.
- */
-export const RIGHT = create(1, 0, 0) as ReadonlyVec3;
-/**
- * `(0, 0, -1)`: forward in this package's right-handed, y-up convention, along
- * negative z.
- *
- * Shared instance, readonly at the type level only. Never cast it to `Vec3`
- * or write to it; `clone` it if you need a mutable copy.
- */
-export const FORWARD = create(0, 0, -1) as ReadonlyVec3;
-/**
- * `(0, 0, 1)`: back in this package's right-handed, y-up convention, along
- * positive z.
- *
- * Shared instance, readonly at the type level only. Never cast it to `Vec3`
- * or write to it; `clone` it if you need a mutable copy.
- */
-export const BACK = create(0, 0, 1) as ReadonlyVec3;
+export const ONE = create(1, 1, 1, 1) as ReadonlyVec4;

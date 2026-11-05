@@ -1,7 +1,7 @@
 // src/quaternion/__tests__/quat.test.ts
 import { describe, expect, test } from 'vitest';
 
-import * as vec4 from '../../vector/vec4.js';
+import * as vec4 from '../../vector/vec4/vec4.js';
 import * as quat from '../quat.js';
 
 import type { Quat, ReadonlyQuat } from '../_types/quat.js';

@@ -5,18 +5,18 @@ import { Mat2 } from '../mat2.js';
 import { Mat3 } from '../mat3.js';
 import { Mat4 } from '../mat4.js';
 import { Quat } from '../quat.js';
-import { Vec2 } from '../vec2.js';
-import { Vec3 } from '../vec3.js';
-import { Vec4 } from '../vec4.js';
+import { Vec2 } from '../vector/vec2/index.js';
+import { Vec3 } from '../vector/vec3/index.js';
+import { Vec4 } from '../vector/vec4/index.js';
 
 import type * as root from '../index.js';
 import type { ReadonlyMat2 } from '../mat2.js';
 import type { ReadonlyMat3 } from '../mat3.js';
 import type { ReadonlyMat4 } from '../mat4.js';
 import type { ReadonlyQuat } from '../quat.js';
-import type { ReadonlyVec2 } from '../vec2.js';
-import type { ReadonlyVec3 } from '../vec3.js';
-import type { ReadonlyVec4 } from '../vec4.js';
+import type { ReadonlyVec2 } from '../vector/vec2/index.js';
+import type { ReadonlyVec3 } from '../vector/vec3/index.js';
+import type { ReadonlyVec4 } from '../vector/vec4/index.js';
 
 describe('entry points export each namespace with its types', () => {
   test('vectors', () => {

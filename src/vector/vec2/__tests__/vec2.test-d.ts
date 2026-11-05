@@ -1,12 +1,12 @@
-// src/vector/__tests__/vec2.test-d.ts
+// src/vector/vec2/__tests__/vec2.test-d.ts
 import { describe, expectTypeOf, test } from 'vitest';
 
 import * as vec2 from '../vec2.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
-import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
+import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Vec3 } from '../../vec3/_types/vec3.js';
 import type { ReadonlyVec2, Vec2 } from '../_types/vec2.js';
-import type { Vec3 } from '../_types/vec3.js';
 
 declare const live: Vec2;
 declare const frozen: ReadonlyVec2;
