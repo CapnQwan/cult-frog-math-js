@@ -1,5 +1,7 @@
 import { describe, expectTypeOf, test } from 'vitest';
 
+import { Color } from '../colors/color/index.js';
+import { Color32 } from '../colors/color32/index.js';
 import { Easing } from '../easing/index.js';
 import { Mat2 } from '../matrix/mat2/index.js';
 import { Mat3 } from '../matrix/mat3/index.js';
@@ -9,6 +11,7 @@ import { Vec2 } from '../vector/vec2/index.js';
 import { Vec3 } from '../vector/vec3/index.js';
 import { Vec4 } from '../vector/vec4/index.js';
 
+import type { ReadonlyColor } from '../colors/color/index.js';
 import type * as root from '../index.js';
 import type { ReadonlyMat2 } from '../matrix/mat2/index.js';
 import type { ReadonlyMat3 } from '../matrix/mat3/index.js';
@@ -42,6 +45,12 @@ describe('entry points export each namespace with its types', () => {
     expectTypeOf(Quat.clone).parameter(0).toEqualTypeOf<ReadonlyQuat>();
   });
 
+  test('colours', () => {
+    expectTypeOf(Color.create).returns.toEqualTypeOf<Color>();
+    expectTypeOf(Color.clone).parameter(0).toEqualTypeOf<ReadonlyColor>();
+    expectTypeOf(Color32.create).returns.toEqualTypeOf<Color32>();
+  });
+
   test('every easing curve takes t and returns a number', () => {
     type Curve = (t: number) => number;
     expectTypeOf(Easing.Quad.easeIn).toEqualTypeOf<Curve>();
@@ -71,6 +80,9 @@ describe('the root exports the same names', () => {
     expectTypeOf<root.ReadonlyMat4>().toEqualTypeOf<ReadonlyMat4>();
     expectTypeOf<root.Quat>().toEqualTypeOf<Quat>();
     expectTypeOf<root.ReadonlyQuat>().toEqualTypeOf<ReadonlyQuat>();
+    expectTypeOf<root.Color>().toEqualTypeOf<Color>();
+    expectTypeOf<root.ReadonlyColor>().toEqualTypeOf<ReadonlyColor>();
+    expectTypeOf<root.Color32>().toEqualTypeOf<Color32>();
   });
 
   test('namespaces', () => {
@@ -81,6 +93,8 @@ describe('the root exports the same names', () => {
     expectTypeOf<typeof root.Mat3>().toEqualTypeOf<typeof Mat3>();
     expectTypeOf<typeof root.Mat4>().toEqualTypeOf<typeof Mat4>();
     expectTypeOf<typeof root.Quat>().toEqualTypeOf<typeof Quat>();
+    expectTypeOf<typeof root.Color>().toEqualTypeOf<typeof Color>();
+    expectTypeOf<typeof root.Color32>().toEqualTypeOf<typeof Color32>();
     expectTypeOf<typeof root.Easing>().toEqualTypeOf<typeof Easing>();
   });
 

@@ -15,6 +15,11 @@ describe('create', () => {
     expect(color32.create(0x12, 0x34, 0x56, 0x78)).toBe(0x12345678);
   });
 
+  test('defaults alpha to opaque', () => {
+    expect(color32.create(255, 128, 0)).toBe(0xff8000ff);
+    expect(color32.create(0, 0, 0)).toBe(color32.BLACK);
+  });
+
   test('packs the extremes', () => {
     expect(color32.create(0, 0, 0, 0)).toBe(0);
     expect(color32.create(255, 255, 255, 255)).toBe(0xffffffff);

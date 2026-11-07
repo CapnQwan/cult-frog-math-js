@@ -70,13 +70,17 @@ function fromChannel(value: number, shift: number): number {
  * which means `255.5` rounds to `256` and wraps to `0`. `NaN` and the
  * infinities become `0`. Clamp first if you want saturation.
  *
+ * Alpha defaults to `255`, so `create(255, 128, 0)` is opaque orange,
+ * matching six-digit CSS hex, which has no alpha and is always opaque.
+ *
  * @param r - The red channel, `0` to `255`.
  * @param g - The green channel, `0` to `255`.
  * @param b - The blue channel, `0` to `255`.
- * @param a - The alpha channel, `0` to `255`, where `255` is opaque.
+ * @param a - The alpha channel, `0` to `255`, where `255` is opaque. Defaults
+ * to `255`.
  * @returns The packed colour, always in the range `0` to `0xffffffff`.
  */
-export function create(r: number, g: number, b: number, a: number): Color32 {
+export function create(r: number, g: number, b: number, a: number = 255): Color32 {
   const rc = fromChannel(r, R_SHIFT);
   const gc = fromChannel(g, G_SHIFT);
   const bc = fromChannel(b, B_SHIFT);

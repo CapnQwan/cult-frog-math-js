@@ -24,6 +24,9 @@ describe('Color32 brand', () => {
 describe('color32 signatures', () => {
   test('create returns a Color32', () => {
     expectTypeOf(color32.create).returns.toEqualTypeOf<Color32>();
+    expectTypeOf(color32.create).parameters.toEqualTypeOf<
+      [number, number, number, (number | undefined)?]
+    >();
   });
 
   test('getters take a Color32 and return a number', () => {

@@ -49,8 +49,38 @@ describe('Color / ReadonlyColor relationship', () => {
 });
 
 describe('color signatures', () => {
-  test('create returns an owned, mutable Color', () => {
+  test('allocators return owned, mutable colours', () => {
     expectTypeOf(color.create).returns.toEqualTypeOf<Color>();
+    expectTypeOf(color.clone).returns.toEqualTypeOf<Color>();
+  });
+
+  test('out is mutable, inputs are readonly', () => {
+    expectTypeOf(color.clone).parameter(0).toEqualTypeOf<ReadonlyColor>();
+    expectTypeOf(color.set).parameter(0).toEqualTypeOf<Color>();
+    expectTypeOf(color.copy).parameters.toEqualTypeOf<[Color, ReadonlyColor]>();
+    expectTypeOf(color.set).returns.toEqualTypeOf<Color>();
+    expectTypeOf(color.copy).returns.toEqualTypeOf<Color>();
+  });
+
+  test('comparisons take readonly colours and return a boolean', () => {
+    expectTypeOf(color.isEqual).parameters.toEqualTypeOf<[ReadonlyColor, ReadonlyColor]>();
+    expectTypeOf(color.isEqualEpsilon).parameters.toEqualTypeOf<
+      [ReadonlyColor, ReadonlyColor, (number | undefined)?]
+    >();
+    expectTypeOf(color.isEqualRGB).parameters.toEqualTypeOf<
+      [ReadonlyColor, number, number, number]
+    >();
+    expectTypeOf(color.isEqualRGBA).parameters.toEqualTypeOf<
+      [ReadonlyColor, number, number, number, number]
+    >();
+    for (const compare of [
+      color.isEqual,
+      color.isEqualEpsilon,
+      color.isEqualRGB,
+      color.isEqualRGBA,
+    ]) {
+      expectTypeOf(compare).returns.toEqualTypeOf<boolean>();
+    }
   });
 
   test('lerp writes a mutable out from readonly inputs', () => {
@@ -68,8 +98,18 @@ describe('color signatures', () => {
   test('call sites', () => {
     color.lerp(live, frozen, color.WHITE, 0.5);
     color.lerp(live, live, live, 0.5);
+    color.copy(live, color.WHITE);
+    color.clone(color.WHITE)[0] = 0;
+    color.isEqual(frozen, live);
     // @ts-expect-error a shared constant can never be an out parameter
     color.lerp(color.WHITE, frozen, frozen, 0.5);
+    // @ts-expect-error a shared constant can never be copied into
+    color.copy(color.WHITE, live);
+    // @ts-expect-error a shared constant can never be set
+    color.set(color.WHITE, 0, 0, 0, 1);
+    color.create(1, 0, 0);
+    // @ts-expect-error set requires alpha, unlike create
+    color.set(live, 1, 0, 0);
     // @ts-expect-error a Vec4 is not a colour, despite the same layout
     color.lerp(live, vector, frozen, 0.5);
     // @ts-expect-error a packed Color32 is not a Color

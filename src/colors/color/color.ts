@@ -26,7 +26,9 @@
  * @module color
  */
 
+import { EPSILON } from '../../constants.js';
 import * as Interpolation from '../../interpolation.js';
+import * as Scalar from '../../scalars.js';
 
 import type { Color, ReadonlyColor } from './_types/color.js';
 
@@ -34,9 +36,9 @@ import type { Color, ReadonlyColor } from './_types/color.js';
 export const SIZE = 4;
 
 /**
- * Allocates a new colour. Omitted channels default to `0`, alpha included,
- * so `create()` is `TRANSPARENT` and `create(1, 0, 0)` is a transparent red.
- * Pass alpha explicitly for an opaque colour.
+ * Allocates a new colour. Omitted colour channels default to `0` and alpha
+ * defaults to `1`, so `create()` is `BLACK` and `create(1, 0, 0)` is opaque
+ * red. Pass `0` for alpha to get a transparent colour.
  *
  * Values are stored as float32, so they may be rounded
  * (`create(0.1)[0]` reads back as `0.10000000149011612`), and nothing is
@@ -45,16 +47,157 @@ export const SIZE = 4;
  * @param r - The red channel, usually `0` to `1`.
  * @param g - The green channel, usually `0` to `1`.
  * @param b - The blue channel, usually `0` to `1`.
- * @param a - The alpha channel, usually `0` to `1`, where `1` is opaque.
+ * @param alpha - The alpha channel, usually `0` to `1`, where `1` is opaque.
+ * Defaults to `1`.
  * @returns A new colour with its own buffer.
  */
-export function create(r: number = 0, g: number = 0, b: number = 0, a: number = 0): Color {
+export function create(r: number = 0, g: number = 0, b: number = 0, alpha: number = 1): Color {
   const color = new Float32Array(SIZE) as Color;
   color[0] = r;
   color[1] = g;
   color[2] = b;
-  color[3] = a;
+  color[3] = alpha;
   return color;
+}
+
+/**
+ * Allocates a new colour with the same channels as `a`.
+ *
+ * Use this to take a mutable copy of a shared constant, or a standalone
+ * snapshot of a pooled view: the result has its own buffer and won't change
+ * when the original memory is written to.
+ *
+ * @param a - The colour to clone.
+ * @returns A new colour with its own buffer.
+ */
+export function clone(a: ReadonlyColor): Color {
+  return create(a[0], a[1], a[2], a[3]);
+}
+
+/**
+ * Writes `r`, `g`, `b` and `alpha` into `out`. Values are rounded to float32
+ * and not clamped.
+ *
+ * Unlike `create`, alpha has no default. `set` overwrites a colour that
+ * already exists, so a default of `1` would quietly make a translucent colour
+ * opaque whenever only its colour channels were meant to change.
+ *
+ * @param out - The colour to write to.
+ * @param r - The red channel, usually `0` to `1`.
+ * @param g - The green channel, usually `0` to `1`.
+ * @param b - The blue channel, usually `0` to `1`.
+ * @param alpha - The alpha channel, usually `0` to `1`, where `1` is opaque.
+ * @returns `out`.
+ */
+export function set(out: Color, r: number, g: number, b: number, alpha: number): Color {
+  out[0] = r;
+  out[1] = g;
+  out[2] = b;
+  out[3] = alpha;
+  return out;
+}
+
+/**
+ * Copies the channels of `a` into `out`.
+ *
+ * `out` and `a` may be the same colour or overlapping views of the same
+ * memory.
+ *
+ * @param out - The colour to write to.
+ * @param a - The colour to copy from.
+ * @returns `out`.
+ */
+export function copy(out: Color, a: ReadonlyColor): Color {
+  // biome-ignore format: packed component reads
+  const r = a[0], g = a[1], b = a[2], alpha = a[3];
+  out[0] = r;
+  out[1] = g;
+  out[2] = b;
+  out[3] = alpha;
+  return out;
+}
+
+/**
+ * Returns whether two colours have exactly equal channels, alpha included.
+ *
+ * `-0` and `0` are equal, and a `NaN` channel is never equal to anything.
+ *
+ * @param a - The first colour.
+ * @param b - The second colour.
+ * @returns `true` if every channel is equal.
+ */
+export function isEqual(a: ReadonlyColor, b: ReadonlyColor): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2] && a[3] === b[3];
+}
+
+/**
+ * Returns whether two colours are equal within a tolerance, compared channel
+ * by channel, alpha included.
+ *
+ * Each channel goes through the scalar `isEqualEpsilon`, so the tolerance is
+ * `eps` for channels in the usual `0` to `1` range and widens for HDR values
+ * above `1`. The default is far finer than any visible difference; pass a
+ * larger `eps` (`1 / 255` is one 8-bit step) to ask whether two colours look
+ * the same. Infinite and `NaN` channels are never equal.
+ *
+ * @param a - The first colour.
+ * @param b - The second colour.
+ * @param eps - The base tolerance, before scaling. Defaults to {@link EPSILON}.
+ * @returns `true` if every channel is within tolerance.
+ */
+export function isEqualEpsilon(a: ReadonlyColor, b: ReadonlyColor, eps = EPSILON): boolean {
+  return (
+    Scalar.isEqualEpsilon(a[0], b[0], eps) &&
+    Scalar.isEqualEpsilon(a[1], b[1], eps) &&
+    Scalar.isEqualEpsilon(a[2], b[2], eps) &&
+    Scalar.isEqualEpsilon(a[3], b[3], eps)
+  );
+}
+
+/**
+ * Returns whether a colour's red, green and blue channels equal `r`, `g` and
+ * `b`, ignoring alpha.
+ *
+ * `r`, `g` and `b` are rounded to 32-bit floats first, as {@link set} stores
+ * them, so the comparison holds immediately after setting those values.
+ *
+ * @param a - The colour.
+ * @param r - The red channel to compare.
+ * @param g - The green channel to compare.
+ * @param b - The blue channel to compare.
+ * @returns `true` if all three colour channels are equal.
+ */
+export function isEqualRGB(a: ReadonlyColor, r: number, g: number, b: number): boolean {
+  return Math.fround(r) === a[0] && Math.fround(g) === a[1] && Math.fround(b) === a[2];
+}
+
+/**
+ * Returns whether a colour's channels equal `r`, `g`, `b` and `alpha`.
+ *
+ * The values are rounded to 32-bit floats first, as {@link set} stores them,
+ * so `isEqualRGBA(c, r, g, b, alpha)` is `true` immediately after
+ * `set(c, r, g, b, alpha)`.
+ *
+ * @param a - The colour.
+ * @param r - The red channel to compare.
+ * @param g - The green channel to compare.
+ * @param b - The blue channel to compare.
+ * @param alpha - The alpha channel to compare.
+ * @returns `true` if all four channels are equal.
+ */
+export function isEqualRGBA(
+  a: ReadonlyColor,
+  r: number,
+  g: number,
+  b: number,
+  alpha: number
+): boolean {
+  return (
+    Math.fround(r) === a[0] &&
+    Math.fround(g) === a[1] &&
+    Math.fround(b) === a[2] &&
+    Math.fround(alpha) === a[3]
+  );
 }
 
 /**
@@ -81,13 +224,13 @@ export function create(r: number = 0, g: number = 0, b: number = 0, a: number = 
  */
 export function lerp(out: Color, a: ReadonlyColor, b: ReadonlyColor, t: number): Color {
   // biome-ignore format: packed component reads
-  const aR = a[0], aG = a[1], aB = a[2], aA = a[3];
+  const aR = a[0], aG = a[1], aB = a[2], aAlpha = a[3];
   // biome-ignore format: packed component reads
-  const bR = b[0], bG = b[1], bB = b[2], bA = b[3];
+  const bR = b[0], bG = b[1], bB = b[2], bAlpha = b[3];
   out[0] = Interpolation.lerp(aR, bR, t);
   out[1] = Interpolation.lerp(aG, bG, t);
   out[2] = Interpolation.lerp(aB, bB, t);
-  out[3] = Interpolation.lerp(aA, bA, t);
+  out[3] = Interpolation.lerp(aAlpha, bAlpha, t);
   return out;
 }
 
@@ -99,15 +242,16 @@ export function lerp(out: Color, a: ReadonlyColor, b: ReadonlyColor, t: number):
  * Opaque white, `(1, 1, 1, 1)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it; copy it into a colour you own if you need a mutable one.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const WHITE = create(1, 1, 1, 1) as ReadonlyColor;
 
 /**
- * Opaque black, `(0, 0, 0, 1)`.
+ * Opaque black, `(0, 0, 0, 1)`. Also what `create()` gives with no
+ * arguments.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const BLACK = create(0, 0, 0, 1) as ReadonlyColor;
 
@@ -115,7 +259,7 @@ export const BLACK = create(0, 0, 0, 1) as ReadonlyColor;
  * Opaque red, `(1, 0, 0, 1)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const RED = create(1, 0, 0, 1) as ReadonlyColor;
 
@@ -124,7 +268,7 @@ export const RED = create(1, 0, 0, 1) as ReadonlyColor;
  * which is `#008000`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const GREEN = create(0, 1, 0, 1) as ReadonlyColor;
 
@@ -132,7 +276,7 @@ export const GREEN = create(0, 1, 0, 1) as ReadonlyColor;
  * Opaque blue, `(0, 0, 1, 1)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const BLUE = create(0, 0, 1, 1) as ReadonlyColor;
 
@@ -140,7 +284,7 @@ export const BLUE = create(0, 0, 1, 1) as ReadonlyColor;
  * Opaque yellow, `(1, 1, 0, 1)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const YELLOW = create(1, 1, 0, 1) as ReadonlyColor;
 
@@ -148,7 +292,7 @@ export const YELLOW = create(1, 1, 0, 1) as ReadonlyColor;
  * Opaque cyan, `(0, 1, 1, 1)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const CYAN = create(0, 1, 1, 1) as ReadonlyColor;
 
@@ -156,15 +300,14 @@ export const CYAN = create(0, 1, 1, 1) as ReadonlyColor;
  * Opaque magenta, `(1, 0, 1, 1)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const MAGENTA = create(1, 0, 1, 1) as ReadonlyColor;
 
 /**
- * Transparent black, `(0, 0, 0, 0)`. Also what `create()` gives with no
- * arguments.
+ * Transparent black, `(0, 0, 0, 0)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Color`
- * or write to it.
+ * or write to it; `clone` it if you need a mutable copy.
  */
 export const TRANSPARENT = create(0, 0, 0, 0) as ReadonlyColor;
