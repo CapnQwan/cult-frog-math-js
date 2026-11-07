@@ -3,13 +3,18 @@ import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
 import type { ReadonlyFixedFloat32Array } from '../../../_types/readonlyFixedFloat32Array.js';
 
 /**
- * An RGBA colour stored as a `Float32Array` of length 4: `[r, g, b, a]`, with
- * `0` as none and `1` as full intensity, matching a GLSL/WGSL `vec4`.
+ * A linear RGBA colour stored as a `Float32Array` of length 4: `[r, g, b, a]`,
+ * with `0` as none and `1` as full intensity, matching a GLSL/WGSL `vec4`.
+ *
+ * Linear means each channel is proportional to emitted light, which is what
+ * blending and lighting maths assume and what a linear shader pipeline
+ * expects in a uniform. sRGB-encoded values (colour pickers, CSS hex,
+ * `Color32`) must be decoded before they're stored here; dividing by `255`
+ * alone renders lighter and washed out. Alpha is never encoded.
  *
  * Channels are float32, so values are rounded on write
  * (`0.1` reads back as `0.10000000149011612`), and nothing clamps them:
- * values above `1` are valid HDR channels. The colour space isn't recorded;
- * keep it consistent with whatever reads the colour.
+ * values above `1` are valid HDR channels.
  *
  * Branded: a plain `Float32Array` won't type-check, and neither will a `Vec4`,
  * even though the layout is identical. Make one with `Color.create`, or cast

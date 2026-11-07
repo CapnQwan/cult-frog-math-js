@@ -1,8 +1,13 @@
 import type { Brand } from '@cult-frog/types';
 
 /**
- * An RGBA colour packed into one unsigned 32-bit integer as `0xRRGGBBAA`,
- * with 8 bits per channel.
+ * An sRGB-encoded RGBA colour packed into one unsigned 32-bit integer as
+ * `0xRRGGBBAA`, with 8 bits per channel.
+ *
+ * The colour channels are sRGB-encoded, the same space as CSS hex and colour
+ * pickers, so their values can be stored as they are. Alpha is never
+ * encoded. Decode to a linear `Color` before doing lighting or blending
+ * maths; dividing by `255` alone is not a decode.
  *
  * Always an integer from `0` to `0xffffffff`, which is what makes `===`
  * against a hex literal work. Bitwise operators return signed 32-bit results,

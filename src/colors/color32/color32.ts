@@ -1,6 +1,17 @@
 /**
- * RGBA colours packed into one unsigned 32-bit integer as `0xRRGGBBAA`, with
- * 8 bits per channel.
+ * sRGB-encoded RGBA colours packed into one unsigned 32-bit integer as
+ * `0xRRGGBBAA`, with 8 bits per channel.
+ *
+ * The colour channels are sRGB-encoded, not linear: the transfer function
+ * spends more of the 256 levels on dark tones, where eyes notice differences
+ * most, which is what keeps 8 bits per channel free of visible banding. That
+ * is the space CSS hex, colour pickers, PNGs and `ImageData` use, so values
+ * from any of them can be stored as they are. Alpha is coverage, not light,
+ * and is never encoded.
+ *
+ * Because the channels are encoded, arithmetic on them is not arithmetic on
+ * light. Decode to a linear `Color` for lighting or physically correct
+ * blending; dividing by `255` alone is not a decode.
  *
  * The packing follows CSS hex notation, so a `Color32` can be compared directly
  * against a literal (`Color32.create(255, 128, 0, 255) === 0xff8000ff`). It is
@@ -128,9 +139,11 @@ function lerpChannel(from: number, to: number, t: number): number {
  * `lerp(BLACK, WHITE, 2)` is `WHITE`, while a channel going from `100` to
  * `200` reaches `250` at `t = 1.5`. `NaN` for `t` gives `TRANSPARENT`.
  *
- * The blend works on the stored values directly. Those are usually
- * sRGB-encoded, so it is not a blend of light: the midpoint of `BLACK` and
- * `WHITE` is `128`, which displays darker than a physically half-way grey.
+ * The blend works on the sRGB-encoded values directly, so it is not a blend
+ * of light: the midpoint of `BLACK` and `WHITE` is `128`, which emits about a
+ * fifth of white's light rather than half, and red to green passes through a
+ * dark, muddy yellow. That's fine for UI tints and fades; use a linear
+ * `Color` for lighting or physically correct gradients.
  * Alpha is interpolated like the other channels and colours are not
  * premultiplied, so a fade from `RED` to `TRANSPARENT` passes through
  * half-transparent dark red (`128, 0, 0, 128`) rather than half-transparent

@@ -1,16 +1,24 @@
 /**
- * RGBA colours stored as a `Float32Array` of length 4: `[r, g, b, a]`, with
- * each channel a float where `0` is none and `1` is full intensity.
+ * Linear RGBA colours stored as a `Float32Array` of length 4: `[r, g, b, a]`,
+ * with each channel a float where `0` is none and `1` is full intensity.
+ *
+ * Channels are linear: proportional to emitted light, so `0.5` is half the
+ * light of `1`. That makes arithmetic on them physically meaningful, so
+ * `lerp`, averaging and lighting maths give the results light actually
+ * would. It is also what a linear shader pipeline expects in a uniform; the
+ * GPU decodes sRGB textures and encodes sRGB render targets, but never
+ * converts uniform values.
+ *
+ * Values from colour pickers, CSS hex and `Color32` are sRGB-encoded, not
+ * linear. Decode them with the sRGB transfer function before storing them
+ * here; dividing by `255` alone gives a colour that renders lighter and
+ * washed out. Alpha is coverage, not light, so it is never encoded and needs
+ * no conversion.
  *
  * This is the layout a shader reads: a `Color` uploads as a `vec4<f32>`
  * uniform or a `float32x4` vertex attribute with no conversion. Nothing
  * clamps, so channels above `1` are valid HDR values and survive every
- * function here.
- *
- * A `Color` doesn't record its colour space. Store whichever the consumer
- * expects, but `lerp` and any other arithmetic blend the values as stored, so
- * they are only physically meaningful on linear values. Colours are not
- * premultiplied.
+ * function here. Colours are not premultiplied.
  *
  * Follows the package conventions: `out` first and returned, inputs are
  * read-only, and `out` may alias any input.
@@ -57,12 +65,13 @@ export function create(r: number = 0, g: number = 0, b: number = 0, a: number = 
  * channel extrapolates, so `lerp(out, BLACK, WHITE, 2)` gives `2` in each
  * colour channel. Uses `a + (b - a) * t`, which gives exactly `a` at `t = 0`.
  *
- * The blend works on the stored values. On linear values it's a blend of
- * light; on sRGB-encoded values the midpoint of `BLACK` and `WHITE` displays
- * darker than a physically half-way grey. Alpha is interpolated like the
- * other channels and colours are not premultiplied, so a fade from `RED` to
- * `TRANSPARENT` passes through half-transparent dark red (`0.5, 0, 0, 0.5`)
- * rather than half-transparent red.
+ * Because channels are linear, this is a blend of light: the midpoint of
+ * `BLACK` and `WHITE` emits half of white's light, and red to green passes
+ * through a yellow rather than the darker, muddy one an sRGB blend gives.
+ * Alpha is interpolated like the other channels and colours are not
+ * premultiplied, so a fade from `RED` to `TRANSPARENT` passes through
+ * half-transparent dark red (`0.5, 0, 0, 0.5`) rather than half-transparent
+ * red.
  *
  * @param out - The colour to write to.
  * @param a - The colour at `t = 0`.
@@ -82,8 +91,9 @@ export function lerp(out: Color, a: ReadonlyColor, b: ReadonlyColor, t: number):
   return out;
 }
 
-// Every constant below uses only 0 and 1 in each channel, which encode to the
-// same values in linear and sRGB, so they're correct in either colour space.
+// Every constant below uses only 0 and 1 in each channel. Those are fixed
+// points of the sRGB transfer function, so each constant has the same values
+// as its `Color32` counterpart scaled to 0–1, with no decoding needed.
 
 /**
  * Opaque white, `(1, 1, 1, 1)`.
