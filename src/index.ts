@@ -1,11 +1,11 @@
 /**
  * Vector and matrix math for Cult Frog Studios.
  *
- * Every type in this package is a `Float32Array` with a fixed length. Functions
- * are free functions grouped into one PascalCase namespace per type (`Vec3`,
- * `Mat4`, `Quat`, ...), and each namespace shares its name with its type. Each
- * type has its own lowercase subpath exporting that name plus the readonly
- * variant, and the package root exports all of them under the same names:
+ * Functions are free functions grouped into one PascalCase namespace per type
+ * (`Vec3`, `Mat4`, `Quat`, ...), and each namespace shares its name with its
+ * type. Each type has its own lowercase subpath exporting that name plus its
+ * readonly variant where it has one, and the package root exports all of them
+ * under the same names:
  *
  * ```ts
  * import { Vec3 } from '@cult-frog/math/vec3';
@@ -16,7 +16,8 @@
  *
  * ## Conventions
  *
- * **Everything is a `Float32Array`.** Values can be uploaded to the GPU as-is,
+ * **Vectors, matrices and quaternions are `Float32Array`s** with a fixed
+ * length. Values can be uploaded to the GPU as-is,
  * and can be views into larger pooled buffers (e.g. component storage) instead
  * of individual allocations. Any backing buffer works, `ArrayBuffer` or
  * `SharedArrayBuffer`, so that storage can be shared with workers. The cost is
@@ -79,6 +80,7 @@
  * @packageDocumentation
  */
 
+export * from './colors/index.js';
 export * from './constants.js';
 export * from './easing/index.js';
 export * from './interpolation.js';
