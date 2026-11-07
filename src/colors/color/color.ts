@@ -207,6 +207,9 @@ export function isEqualRGBA(
  * `t` is not clamped and neither is the result: outside `[0, 1]` every
  * channel extrapolates, so `lerp(out, BLACK, WHITE, 2)` gives `2` in each
  * colour channel. Uses `a + (b - a) * t`, which gives exactly `a` at `t = 0`.
+ * Like every function here, it follows float rules rather than guarding:
+ * `NaN` for `t` gives `NaN` in every channel, and an infinite `t` gives `NaN`
+ * in any channel with the same value at both ends (`0 * Infinity`).
  *
  * Because channels are linear, this is a blend of light: the midpoint of
  * `BLACK` and `WHITE` emits half of white's light, and red to green passes

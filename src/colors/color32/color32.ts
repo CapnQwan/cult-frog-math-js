@@ -76,15 +76,15 @@ function fromChannel(value: number, shift: number): number {
  * @param r - The red channel, `0` to `255`.
  * @param g - The green channel, `0` to `255`.
  * @param b - The blue channel, `0` to `255`.
- * @param a - The alpha channel, `0` to `255`, where `255` is opaque. Defaults
- * to `255`.
+ * @param alpha - The alpha channel, `0` to `255`, where `255` is opaque.
+ * Defaults to `255`.
  * @returns The packed colour, always in the range `0` to `0xffffffff`.
  */
-export function create(r: number, g: number, b: number, a: number = 255): Color32 {
+export function create(r: number, g: number, b: number, alpha: number = 255): Color32 {
   const rc = fromChannel(r, R_SHIFT);
   const gc = fromChannel(g, G_SHIFT);
   const bc = fromChannel(b, B_SHIFT);
-  const ac = fromChannel(a, A_SHIFT);
+  const ac = fromChannel(alpha, A_SHIFT);
   return ((rc | gc | bc | ac) >>> 0) as Color32;
 }
 
@@ -143,6 +143,13 @@ function lerpChannel(from: number, to: number, t: number): number {
  * `lerp(BLACK, WHITE, 2)` is `WHITE`, while a channel going from `100` to
  * `200` reaches `250` at `t = 1.5`. `NaN` for `t` gives `TRANSPARENT`.
  *
+ * `t` must also be finite. An infinite `t` saturates channels that differ,
+ * but a channel with the same value at both ends computes `0 * Infinity`,
+ * which is `NaN` and packs as `0`: `lerp(BLACK, WHITE, Infinity)` is
+ * transparent white (`0xffffff00`), not `WHITE`. Clamp `t` first if it can
+ * come from an unbounded source, such as a division by a duration that can be
+ * `0`.
+ *
  * The blend works on the sRGB-encoded values directly, so it is not a blend
  * of light: the midpoint of `BLACK` and `WHITE` is `128`, which emits about a
  * fifth of white's light rather than half, and red to green passes through a
@@ -192,7 +199,8 @@ export const CYAN = create(0, 255, 255, 255);
 export const MAGENTA = create(255, 0, 255, 255);
 
 /**
- * Transparent black, `0x00000000`. Also what `create` produces from all-zero
- * channels and what `lerp` produces for a `NaN` factor.
+ * Transparent black, `0x00000000`. Also what `create(0, 0, 0, 0)` produces
+ * (leaving alpha out gives `BLACK` instead), and what `lerp` produces for a
+ * `NaN` factor.
  */
 export const TRANSPARENT = create(0, 0, 0, 0);

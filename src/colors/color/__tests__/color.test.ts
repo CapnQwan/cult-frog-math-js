@@ -300,6 +300,22 @@ describe('lerp', () => {
     expectChannels(color.lerp(color.create(), color.RED, color.TRANSPARENT, 0.5), 0.5, 0, 0, 0.5);
   });
 
+  test('follows float rules for a NaN or infinite t rather than guarding', () => {
+    expect(Array.from(color.lerp(color.create(), from, to, Number.NaN))).toEqual([
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+      Number.NaN,
+    ]);
+    // Alpha is 1 at both ends, so it computes 0 * Infinity.
+    expect(Array.from(color.lerp(color.create(), color.BLACK, color.WHITE, Infinity))).toEqual([
+      Infinity,
+      Infinity,
+      Infinity,
+      Number.NaN,
+    ]);
+  });
+
   test('out may be the same object as an input', () => {
     const a = color.create(0, 1, 0.2, 1);
     color.lerp(a, a, to, 0.25);

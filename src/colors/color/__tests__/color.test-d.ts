@@ -50,6 +50,9 @@ describe('Color / ReadonlyColor relationship', () => {
 
 describe('color signatures', () => {
   test('allocators return owned, mutable colours', () => {
+    expectTypeOf(color.create).parameters.toEqualTypeOf<
+      [(number | undefined)?, (number | undefined)?, (number | undefined)?, (number | undefined)?]
+    >();
     expectTypeOf(color.create).returns.toEqualTypeOf<Color>();
     expectTypeOf(color.clone).returns.toEqualTypeOf<Color>();
   });

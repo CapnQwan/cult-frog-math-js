@@ -117,6 +117,12 @@ describe('lerp', () => {
   test('gives TRANSPARENT for a NaN factor', () => {
     expect(color32.lerp(from, to, Number.NaN)).toBe(color32.TRANSPARENT);
   });
+
+  test('an infinite factor saturates differing channels and zeroes equal ones', () => {
+    // Alpha is 255 at both ends, so it computes 0 * Infinity, which is NaN and packs as 0.
+    expect(color32.lerp(color32.BLACK, color32.WHITE, Infinity)).toBe(0xffffff00);
+    expect(color32.lerp(color32.BLACK, color32.WHITE, -Infinity)).toBe(0x00000000);
+  });
 });
 
 describe('constants', () => {
@@ -132,5 +138,10 @@ describe('constants', () => {
     ['TRANSPARENT', color32.TRANSPARENT, 0x00000000],
   ])('%s packs as its hex literal', (_name, value, hex) => {
     expect(value).toBe(hex);
+  });
+
+  test('TRANSPARENT needs an explicit zero alpha, since create defaults to opaque', () => {
+    expect(color32.create(0, 0, 0, 0)).toBe(color32.TRANSPARENT);
+    expect(color32.create(0, 0, 0)).not.toBe(color32.TRANSPARENT);
   });
 });

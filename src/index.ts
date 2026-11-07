@@ -1,5 +1,5 @@
 /**
- * Vector and matrix math for Cult Frog Studios.
+ * Vector, matrix, quaternion and colour math for Cult Frog Studios.
  *
  * Functions are free functions grouped into one PascalCase namespace per type
  * (`Vec3`, `Mat4`, `Quat`, ...), and each namespace shares its name with its
@@ -16,13 +16,25 @@
  *
  * ## Conventions
  *
- * **Vectors, matrices and quaternions are `Float32Array`s** with a fixed
- * length. Values can be uploaded to the GPU as-is,
+ * **Vectors, matrices, quaternions and `Color` are `Float32Array`s** with a
+ * fixed length. Values can be uploaded to the GPU as-is,
  * and can be views into larger pooled buffers (e.g. component storage) instead
  * of individual allocations. Any backing buffer works, `ArrayBuffer` or
  * `SharedArrayBuffer`, so that storage can be shared with workers. The cost is
  * precision: about 7 significant digits, so values are rounded on write and
  * large world coordinates lose accuracy.
+ *
+ * **`Color32` is the exception.** It packs an 8-bit RGBA colour into one
+ * plain number as `0xRRGGBBAA`, so it is immutable, compares with `===`, and
+ * its functions return a new value instead of writing to `out`. Nothing in
+ * `Color32` allocates. Its packing follows CSS hex, not a GPU byte layout.
+ *
+ * **`Color` is linear; `Color32` is sRGB-encoded.** `Color` channels are
+ * proportional to light, so blending and lighting maths on them are
+ * physically meaningful, and they are what a linear shader expects in a
+ * uniform. `Color32` holds values as CSS hex, colour pickers and PNGs store
+ * them. Moving between the two needs the sRGB transfer function, not just a
+ * division by `255`. Neither is premultiplied.
  *
  * **Shared memory is not synchronised.** Views over a `SharedArrayBuffer`
  * type-check and behave like any other, but no function here is atomic: a
@@ -60,9 +72,9 @@
  * Use `create` for new values, or cast when wrapping existing memory such as a
  * pooled view.
  *
- * **Output first.** Any function that produces a vector or matrix writes the
- * result into its first parameter, `out`, and returns `out`. This lets calls be
- * nested without allocating.
+ * **Output first.** Any function that produces an array value (a vector,
+ * matrix, quaternion or `Color`) writes the result into its first parameter,
+ * `out`, and returns `out`. This lets calls be nested without allocating.
  *
  * **Inputs are read-only.** Every other vector or matrix parameter uses the
  * `Readonly*` type and is never written to. Mutable values can be passed
