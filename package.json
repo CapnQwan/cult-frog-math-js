@@ -72,6 +72,10 @@
       "types": "./dist/geometry/index.d.ts",
       "default": "./dist/geometry/index.js"
     },
+    "./color32": {
+      "types": "./dist/colors/color32/index.d.ts",
+      "default": "./dist/colors/color32/index.js"
+    },
     "./package.json": "./package.json"
   },
   "engines": {
