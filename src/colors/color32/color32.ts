@@ -181,8 +181,9 @@ export function lerp(from: Color32, to: Color32, t: number): Color32 {
  * Encodes a linear `Color` as a packed sRGB colour.
  *
  * Every channel is first saturated to `0`–`1`, since 8 bits can't hold
- * anything outside it and {@link create} would otherwise wrap: negative and
- * `NaN` channels become `0`, and channels above `1` become `255`. Colour
+ * anything outside it and {@link create} would otherwise wrap: negative
+ * channels become `0`, and channels above `1` become `255`. Saturating passes
+ * `NaN` through, and `create` then packs it as `0`. Colour
  * channels are then encoded with the sRGB transfer function, so linear `0.5`
  * becomes `188`, not `128`. Alpha is coverage, not light, so it is only
  * scaled. Each channel is rounded to the nearest 8-bit value.

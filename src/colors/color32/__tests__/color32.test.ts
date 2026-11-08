@@ -149,7 +149,7 @@ describe('fromColor', () => {
     expect(color32.fromColor(linear)).toBe(packed);
   });
 
-  test('saturates out-of-range and NaN channels instead of wrapping', () => {
+  test('saturates out-of-range channels instead of wrapping, and packs NaN as 0', () => {
     expect(color32.fromColor(color.create(4, -1, Number.NaN, 1.2))).toBe(0xff0000ff);
     expect(color32.alpha(color32.fromColor(color.create(1, 1, 1, -0.1)))).toBe(0);
   });
