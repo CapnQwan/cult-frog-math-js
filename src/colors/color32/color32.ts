@@ -10,8 +10,9 @@
  * and is never encoded.
  *
  * Because the channels are encoded, arithmetic on them is not arithmetic on
- * light. Decode to a linear `Color` for lighting or physically correct
- * blending; dividing by `255` alone is not a decode.
+ * light. Decode to a linear `Color` with `Color.fromColor32` for lighting or
+ * physically correct blending, and encode back with `fromColor`; dividing by
+ * `255` alone is not a decode.
  *
  * The packing follows CSS hex notation, so a `Color32` can be compared directly
  * against a literal (`Color32.create(255, 128, 0, 255) === 0xff8000ff`). It is
@@ -28,7 +29,9 @@
 
 import * as Interpolation from '../../interpolation.js';
 import * as Scalar from '../../scalars.js';
+import { linearToSrgb } from '../srgb.js';
 
+import type { ReadonlyColor } from '../color/index.js';
 import type { Color32 } from './_types/color32.js';
 
 const R_SHIFT = 24;
@@ -171,6 +174,39 @@ export function lerp(from: Color32, to: Color32, t: number): Color32 {
     lerpChannel(green(from), green(to), t),
     lerpChannel(blue(from), blue(to), t),
     lerpChannel(alpha(from), alpha(to), t)
+  );
+}
+
+/**
+ * Encodes a linear `Color` as a packed sRGB colour.
+ *
+ * Every channel is first saturated to `0`–`1`, since 8 bits can't hold
+ * anything outside it and {@link create} would otherwise wrap: negative and
+ * `NaN` channels become `0`, and channels above `1` become `255`. Colour
+ * channels are then encoded with the sRGB transfer function, so linear `0.5`
+ * becomes `188`, not `128`. Alpha is coverage, not light, so it is only
+ * scaled. Each channel is rounded to the nearest 8-bit value.
+ *
+ * Saturating clips HDR values rather than tone mapping them: `(4, 2, 1)` and
+ * `(1, 1, 1)` both encode as `WHITE`, so a bright highlight loses its hue.
+ * Tone map HDR colours first if that matters.
+ *
+ * Encoding quantises, so `Color.fromColor32(out, fromColor(c))` only
+ * approximates `c`. In linear terms the steps are finest near black and
+ * coarsest near white. The other direction is exact: every `Color32`
+ * survives a round trip through `Color.fromColor32` and back.
+ *
+ * @param color - The linear colour to encode.
+ * @returns The packed colour.
+ */
+export function fromColor(color: ReadonlyColor): Color32 {
+  // biome-ignore format: packed component reads
+  const r = color[0], g = color[1], b = color[2], alpha = color[3];
+  return create(
+    linearToSrgb(Scalar.saturate(r)) * CHANNEL_MAX,
+    linearToSrgb(Scalar.saturate(g)) * CHANNEL_MAX,
+    linearToSrgb(Scalar.saturate(b)) * CHANNEL_MAX,
+    Scalar.saturate(alpha) * CHANNEL_MAX
   );
 }
 

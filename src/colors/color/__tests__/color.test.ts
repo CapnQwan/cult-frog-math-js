@@ -1,6 +1,7 @@
 // src/colors/color/__tests__/color.test.ts
 import { describe, expect, test } from 'vitest';
 
+import * as color32 from '../../color32/color32.js';
 import * as color from '../color.js';
 
 import type { Color, ReadonlyColor } from '../_types/color.js';
@@ -360,6 +361,62 @@ describe('lerp', () => {
     expect(Array.from(new Float32Array(pool))).toEqual([
       1, 2, 3, 4, 0.5, 0.5, 0.5, 1, 9, 10, 11, 12,
     ]);
+  });
+});
+
+/** Each named constant in both namespaces. */
+const NAMED_COLORS = [
+  ['WHITE', color.WHITE, color32.WHITE],
+  ['BLACK', color.BLACK, color32.BLACK],
+  ['RED', color.RED, color32.RED],
+  ['GREEN', color.GREEN, color32.GREEN],
+  ['BLUE', color.BLUE, color32.BLUE],
+  ['YELLOW', color.YELLOW, color32.YELLOW],
+  ['CYAN', color.CYAN, color32.CYAN],
+  ['MAGENTA', color.MAGENTA, color32.MAGENTA],
+  ['TRANSPARENT', color.TRANSPARENT, color32.TRANSPARENT],
+] as const;
+
+describe('fromColor32', () => {
+  test('writes into out and returns it', () => {
+    const out = color.create();
+    expect(color.fromColor32(out, color32.WHITE)).toBe(out);
+  });
+
+  test('decodes colour channels with the sRGB curve, not a division by 255', () => {
+    const c = color.fromColor32(color.create(), color32.create(128, 64, 255, 255));
+
+    expect(c[0]).toBeCloseTo(0.21586, 5);
+    expect(c[0]).not.toBeCloseTo(128 / 255, 2);
+    expect(c[1]).toBeCloseTo(0.05127, 5);
+    expect(c[2]).toBe(1);
+  });
+
+  test('only scales alpha', () => {
+    const c = color.fromColor32(color.create(), color32.create(0, 0, 0, 128));
+    expect(c[3]).toBe(Math.fround(128 / 255));
+  });
+
+  test.each(NAMED_COLORS)(
+    'decodes Color32.%s to its Color counterpart exactly',
+    (_name, linear, packed) => {
+      expect(Array.from(color.fromColor32(color.create(), packed))).toEqual(Array.from(linear));
+    }
+  );
+
+  test('every Color32 survives a round trip through Color', () => {
+    const out = color.create();
+    for (let v = 0; v <= 255; v++) {
+      const c = color32.create(v, 255 - v, v, 255 - v);
+      expect(color32.fromColor(color.fromColor32(out, c))).toBe(c);
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(12);
+    color.fromColor32(viewAt(pool, 4), color32.WHITE);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 4, 1, 1, 1, 1, 9, 10, 11, 12]);
   });
 });
 

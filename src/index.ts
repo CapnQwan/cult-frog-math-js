@@ -34,7 +34,8 @@
  * physically meaningful, and they are what a linear shader expects in a
  * uniform. `Color32` holds values as CSS hex, colour pickers and PNGs store
  * them. Moving between the two needs the sRGB transfer function, not just a
- * division by `255`. Neither is premultiplied.
+ * division by `255`: `Color.fromColor32` decodes and `Color32.fromColor`
+ * encodes. Neither is premultiplied.
  *
  * **Shared memory is not synchronised.** Views over a `SharedArrayBuffer`
  * type-check and behave like any other, but no function here is atomic: a

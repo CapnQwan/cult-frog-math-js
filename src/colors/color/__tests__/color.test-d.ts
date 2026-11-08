@@ -93,6 +93,11 @@ describe('color signatures', () => {
     expectTypeOf(color.lerp).returns.toEqualTypeOf<Color>();
   });
 
+  test('fromColor32 decodes a packed colour into a mutable out', () => {
+    expectTypeOf(color.fromColor32).parameters.toEqualTypeOf<[Color, Color32]>();
+    expectTypeOf(color.fromColor32).returns.toEqualTypeOf<Color>();
+  });
+
   test('constants are readonly', () => {
     expectTypeOf(color.WHITE).toEqualTypeOf<ReadonlyColor>();
     expectTypeOf(color.TRANSPARENT).toEqualTypeOf<ReadonlyColor>();
@@ -117,6 +122,11 @@ describe('color signatures', () => {
     color.lerp(live, vector, frozen, 0.5);
     // @ts-expect-error a packed Color32 is not a Color
     color.lerp(live, packed, frozen, 0.5);
+    color.fromColor32(live, packed);
+    // @ts-expect-error a shared constant can never be decoded into
+    color.fromColor32(color.WHITE, packed);
+    // @ts-expect-error an unbranded number is not a Color32
+    color.fromColor32(live, 0xff0000ff);
   });
 });
 

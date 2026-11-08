@@ -9,8 +9,9 @@ import type { ReadonlyFixedFloat32Array } from '../../../_types/readonlyFixedFlo
  * Linear means each channel is proportional to emitted light, which is what
  * blending and lighting maths assume and what a linear shader pipeline
  * expects in a uniform. sRGB-encoded values (colour pickers, CSS hex,
- * `Color32`) must be decoded before they're stored here; dividing by `255`
- * alone renders lighter and washed out. Alpha is never encoded.
+ * `Color32`) must be decoded before they're stored here, with
+ * `Color.fromColor32` for a `Color32`; dividing by `255` alone renders
+ * lighter and washed out. Alpha is never encoded.
  *
  * Channels are float32, so values are rounded on write
  * (`0.1` reads back as `0.10000000149011612`), and nothing clamps them:

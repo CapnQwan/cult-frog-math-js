@@ -1,6 +1,7 @@
 // src/colors/color32/__tests__/color32.test.ts
 import { describe, expect, test } from 'vitest';
 
+import * as color from '../../color/color.js';
 import * as color32 from '../color32.js';
 
 import type { Color32 } from '../_types/color32.js';
@@ -122,6 +123,45 @@ describe('lerp', () => {
     // Alpha is 255 at both ends, so it computes 0 * Infinity, which is NaN and packs as 0.
     expect(color32.lerp(color32.BLACK, color32.WHITE, Infinity)).toBe(0xffffff00);
     expect(color32.lerp(color32.BLACK, color32.WHITE, -Infinity)).toBe(0x00000000);
+  });
+});
+
+describe('fromColor', () => {
+  test('encodes colour channels with the sRGB curve, not a multiplication by 255', () => {
+    expect(color32.fromColor(color.create(0.5, 0.5, 0.5, 1))).toBe(0xbcbcbcff);
+  });
+
+  test('only scales alpha', () => {
+    expect(color32.alpha(color32.fromColor(color.create(0, 0, 0, 0.5)))).toBe(128);
+  });
+
+  test.each([
+    ['WHITE', color.WHITE, color32.WHITE],
+    ['BLACK', color.BLACK, color32.BLACK],
+    ['RED', color.RED, color32.RED],
+    ['GREEN', color.GREEN, color32.GREEN],
+    ['BLUE', color.BLUE, color32.BLUE],
+    ['YELLOW', color.YELLOW, color32.YELLOW],
+    ['CYAN', color.CYAN, color32.CYAN],
+    ['MAGENTA', color.MAGENTA, color32.MAGENTA],
+    ['TRANSPARENT', color.TRANSPARENT, color32.TRANSPARENT],
+  ] as const)('encodes Color.%s to its Color32 counterpart exactly', (_name, linear, packed) => {
+    expect(color32.fromColor(linear)).toBe(packed);
+  });
+
+  test('saturates out-of-range and NaN channels instead of wrapping', () => {
+    expect(color32.fromColor(color.create(4, -1, Number.NaN, 1.2))).toBe(0xff0000ff);
+    expect(color32.alpha(color32.fromColor(color.create(1, 1, 1, -0.1)))).toBe(0);
+  });
+
+  test('clips HDR colours, so bright highlights lose their hue', () => {
+    expect(color32.fromColor(color.create(4, 2, 1, 1))).toBe(color32.WHITE);
+  });
+
+  test('rounds each channel to the nearest 8-bit value', () => {
+    const c = color.fromColor32(color.create(), 0x80402010 as Color32);
+    c[0] += 1e-4;
+    expect(color32.fromColor(c)).toBe(0x80402010);
   });
 });
 

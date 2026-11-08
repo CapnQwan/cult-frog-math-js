@@ -6,8 +6,8 @@ import type { Brand } from '@cult-frog/types';
  *
  * The colour channels are sRGB-encoded, the same space as CSS hex and colour
  * pickers, so their values can be stored as they are. Alpha is never
- * encoded. Decode to a linear `Color` before doing lighting or blending
- * maths; dividing by `255` alone is not a decode.
+ * encoded. Decode to a linear `Color` with `Color.fromColor32` before doing
+ * lighting or blending maths; dividing by `255` alone is not a decode.
  *
  * Always an integer from `0` to `0xffffffff`, which is what makes `===`
  * against a hex literal work. Bitwise operators return signed 32-bit results,

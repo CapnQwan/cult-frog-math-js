@@ -10,10 +10,10 @@
  * converts uniform values.
  *
  * Values from colour pickers, CSS hex and `Color32` are sRGB-encoded, not
- * linear. Decode them with the sRGB transfer function before storing them
- * here; dividing by `255` alone gives a colour that renders lighter and
- * washed out. Alpha is coverage, not light, so it is never encoded and needs
- * no conversion.
+ * linear. Decode them before storing them here: `fromColor32` applies the
+ * sRGB transfer function, and `Color32.fromColor` encodes back. Dividing by
+ * `255` alone gives a colour that renders lighter and washed out. Alpha is
+ * coverage, not light, so it is never encoded and is only ever scaled.
  *
  * This is the layout a shader reads: a `Color` uploads as a `vec4<f32>`
  * uniform or a `float32x4` vertex attribute with no conversion. Nothing
@@ -29,6 +29,8 @@
 import { EPSILON } from '../../constants.js';
 import * as Interpolation from '../../interpolation.js';
 import * as Scalar from '../../scalars.js';
+import { Color32 } from '../color32/index.js';
+import { srgbToLinear } from '../srgb.js';
 
 import type { Color, ReadonlyColor } from './_types/color.js';
 
@@ -235,6 +237,35 @@ export function lerp(out: Color, a: ReadonlyColor, b: ReadonlyColor, t: number):
   out[2] = Interpolation.lerp(aB, bB, t);
   out[3] = Interpolation.lerp(aAlpha, bAlpha, t);
   return out;
+}
+
+/** Reciprocal of `255`, the largest 8-bit channel value; maps a byte to `0`–`1`. */
+const INV_CHANNEL_MAX = 1 / 255;
+
+/**
+ * Decodes a packed sRGB `Color32` into a linear colour and writes it into
+ * `out`.
+ *
+ * Each colour channel is scaled from `0`–`255` to `0`–`1` and then decoded
+ * with the sRGB transfer function, so byte `128` becomes about `0.216`, not
+ * `0.5`. Alpha is coverage, not light, so it is only scaled. Use this for
+ * colours from pickers, CSS hex or `ImageData` before lighting or blending
+ * with them.
+ *
+ * Results are rounded to float32 as {@link set} stores them, and every
+ * colour survives a round trip: `Color32.fromColor(fromColor32(out, c))` is
+ * `c` for any `c`. The named constants match exactly in both namespaces.
+ *
+ * @param out - The colour to write to.
+ * @param color32 - The packed colour to decode.
+ * @returns `out`.
+ */
+export function fromColor32(out: Color, color32: Color32): Color {
+  const r = srgbToLinear(Color32.red(color32) * INV_CHANNEL_MAX);
+  const g = srgbToLinear(Color32.green(color32) * INV_CHANNEL_MAX);
+  const b = srgbToLinear(Color32.blue(color32) * INV_CHANNEL_MAX);
+  const alpha = Color32.alpha(color32) * INV_CHANNEL_MAX;
+  return set(out, r, g, b, alpha);
 }
 
 // Every constant below uses only 0 and 1 in each channel. Those are fixed

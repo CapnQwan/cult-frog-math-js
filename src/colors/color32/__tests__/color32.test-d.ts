@@ -4,11 +4,15 @@ import { describe, expectTypeOf, test } from 'vitest';
 import * as color32 from '../color32.js';
 import { Color32 as Color32Namespace } from '../index.js';
 
+import type { Color, ReadonlyColor } from '../../color/_types/color.js';
 import type { Color32 } from '../_types/color32.js';
 import type { Color32 as ExportedColor32 } from '../index.js';
 
 declare const c: Color32;
 declare const raw: number;
+declare const live: Color;
+declare const frozen: ReadonlyColor;
+declare const floats: Float32Array<ArrayBuffer>;
 
 describe('Color32 brand', () => {
   test('a Color32 is usable as a number, but a number is not a Color32', () => {
@@ -41,6 +45,11 @@ describe('color32 signatures', () => {
     expectTypeOf(color32.lerp).returns.toEqualTypeOf<Color32>();
   });
 
+  test('fromColor encodes a readonly Color into a Color32', () => {
+    expectTypeOf(color32.fromColor).parameters.toEqualTypeOf<[ReadonlyColor]>();
+    expectTypeOf(color32.fromColor).returns.toEqualTypeOf<Color32>();
+  });
+
   test('constants are Color32s', () => {
     expectTypeOf(color32.WHITE).toEqualTypeOf<Color32>();
     expectTypeOf(color32.TRANSPARENT).toEqualTypeOf<Color32>();
@@ -52,6 +61,10 @@ describe('color32 signatures', () => {
     color32.red(raw);
     // @ts-expect-error an unbranded literal is rejected
     color32.alpha(0xff0000ff);
+    color32.fromColor(live);
+    color32.fromColor(frozen);
+    // @ts-expect-error an unbranded Float32Array is not a Color
+    color32.fromColor(floats);
   });
 });
 
