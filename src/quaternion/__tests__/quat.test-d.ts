@@ -146,3 +146,22 @@ describe('equality', () => {
     quat.isEqualXYZW(live, 0, 0, 0);
   });
 });
+
+describe('multiply', () => {
+  test('writes a mutable out from readonly inputs', () => {
+    expectTypeOf(quat.multiply).parameters.toEqualTypeOf<[Quat, ReadonlyQuat, ReadonlyQuat]>();
+    expectTypeOf(quat.multiply).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.multiply(live, frozen, quat.IDENTITY);
+    quat.multiply(live, live, live);
+    quat.multiply(shared, shared, frozen);
+    // @ts-expect-error the shared constant must never be written through
+    quat.multiply(quat.IDENTITY, live, live);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.multiply(live, vector, frozen);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.multiply(live, frozen, raw);
+  });
+});

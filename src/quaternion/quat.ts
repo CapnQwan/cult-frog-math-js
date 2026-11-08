@@ -9,9 +9,13 @@
  * a shader's `vec4<f32>`, so it uploads to the GPU untouched. The two types are
  * branded separately even so — they mean different things.
  *
- * As everywhere else in the package, `create` defaults its components to zero,
- * so `create()` is the zero quaternion — which is not a rotation at all and
- * cannot be normalised. For a usable starting rotation use `clone(IDENTITY)`.
+ * `create` defaults the vector part to zero and the scalar to `1`, so
+ * `create()` is the identity rotation. A zero `w` default would give the zero
+ * quaternion, which is not a rotation at all and cannot be normalised.
+ *
+ * Rotations compose with `multiply`, which follows the column-vector
+ * convention used by the matrices: `multiply(out, a, b)` applies `b` first,
+ * then `a`.
  *
  * Follows the package conventions: `out` first and returned, inputs are
  * read-only, and `out` may alias any input.
@@ -25,10 +29,10 @@ import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
 import type { Quat, ReadonlyQuat } from './_types/quat.js';
 
 /**
- * Allocates a new quaternion. Omitted components default to `0`, so `create()`
- * is the **zero** quaternion, not the identity rotation. A zero quaternion has
- * no rotation to represent and cannot be normalised; for a fresh identity
- * rotation use `clone(IDENTITY)`.
+ * Allocates a new quaternion. Omitted vector components default to `0` and the
+ * scalar `w` defaults to `1`, so `create()` is the identity rotation. Pass
+ * `w = 0` explicitly for the zero quaternion, which is not a rotation and
+ * cannot be normalised.
  *
  * The components are taken raw and are not normalised; passing an arbitrary
  * `x, y, z, w` gives you exactly those values, unit length or not.
@@ -36,10 +40,10 @@ import type { Quat, ReadonlyQuat } from './_types/quat.js';
  * @param x - The x component of the vector part.
  * @param y - The y component of the vector part.
  * @param z - The z component of the vector part.
- * @param w - The scalar component.
+ * @param w - The scalar component. Defaults to `1`.
  * @returns A new quaternion with its own buffer.
  */
-export function create(x: number = 0, y: number = 0, z: number = 0, w: number = 0): Quat {
+export function create(x: number = 0, y: number = 0, z: number = 0, w: number = 1): Quat {
   const quat = new Float32Array(4) as Quat;
   quat[0] = x;
   quat[1] = y;
@@ -110,7 +114,7 @@ export function copy(out: Quat, a: ReadonlyQuat): Quat {
  * previous contents.
  *
  * This is the in-place reset; it allocates nothing. To get a *new* identity
- * quaternion, use `clone(IDENTITY)`.
+ * quaternion, use `create()`.
  *
  * @param out - The quaternion to write to.
  * @returns `out`.
@@ -185,5 +189,43 @@ export function isEqualXYZW(a: ReadonlyQuat, x: number, y: number, z: number, w:
     Math.fround(y) === a[1] &&
     Math.fround(z) === a[2] &&
     Math.fround(w) === a[3]
+  );
+}
+
+/**
+ * Multiplies two quaternions (the Hamilton product `a * b`) and writes the
+ * result into `out`.
+ *
+ * For unit quaternions this composes rotations. The result applies `b`
+ * first, then `a`, the same order as multiplying column-vector rotation
+ * matrices. Order matters: `multiply(out, a, b)` and `multiply(out, b, a)`
+ * are generally different rotations. In practice, `multiply(out, q, delta)`
+ * applies `delta` in `q`'s local frame, while `multiply(out, delta, q)`
+ * applies it in the world frame.
+ *
+ * `IDENTITY` leaves the other input unchanged on either side. The product of
+ * two unit quaternions is a unit quaternion in exact arithmetic, but nothing
+ * here renormalises, so float32 rounding drifts the length over long chains
+ * of multiplications. Renormalise periodically.
+ *
+ * `out` may be the same quaternion as `a` or `b`, or a view overlapping
+ * either.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The left operand, applied second.
+ * @param b - The right operand, applied first.
+ * @returns `out`.
+ */
+export function multiply(out: Quat, a: ReadonlyQuat, b: ReadonlyQuat): Quat {
+  // biome-ignore format: packed component reads
+  const aX = a[0], aY = a[1], aZ = a[2], aW = a[3];
+  // biome-ignore format: packed component reads
+  const bX = b[0], bY = b[1], bZ = b[2], bW = b[3];
+  return set(
+    out,
+    aW * bX + aX * bW + aY * bZ - aZ * bY,
+    aW * bY - aX * bZ + aY * bW + aZ * bX,
+    aW * bZ + aX * bY - aY * bX + aZ * bW,
+    aW * bW - aX * bX - aY * bY - aZ * bZ
   );
 }

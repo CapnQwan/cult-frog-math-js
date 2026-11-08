@@ -35,10 +35,13 @@ function sequentialBuffer(count: number): ArrayBuffer {
 }
 
 describe('create', () => {
-  test('defaults every component to zero, like the rest of the package', () => {
-    // A zero quaternion is not a rotation and cannot be normalised, so
-    // `clone(IDENTITY)` is the way to get a usable starting value.
-    expectComponents(quat.create(), 0, 0, 0, 0);
+  test('defaults to the identity rotation', () => {
+    expectComponents(quat.create(), 0, 0, 0, 1);
+    expect(quat.isEqual(quat.create(), quat.IDENTITY)).toBe(true);
+  });
+
+  test('gives the zero quaternion only when w is passed as 0', () => {
+    expectComponents(quat.create(0, 0, 0, 0), 0, 0, 0, 0);
   });
 
   test('stores provided components in x, y, z, w order with the scalar last', () => {
@@ -46,7 +49,7 @@ describe('create', () => {
   });
 
   test('defaults only the omitted components', () => {
-    expectComponents(quat.create(1, 2), 1, 2, 0, 0);
+    expectComponents(quat.create(1, 2), 1, 2, 0, 1);
   });
 
   test('takes components raw, without normalising', () => {
@@ -382,5 +385,122 @@ describe('isEqualXYZW', () => {
 
   test('NaN is never equal', () => {
     expect(quat.isEqualXYZW(quat.create(0, 0, 0, Number.NaN), 0, 0, 0, Number.NaN)).toBe(false);
+  });
+});
+
+describe('multiply', () => {
+  const S = Math.SQRT1_2;
+  /** A quarter turn about +X. */
+  const X90 = quat.create(S, 0, 0, S);
+  /** A quarter turn about +Z. */
+  const Z90 = quat.create(0, 0, S, S);
+
+  /** Element-wise closeness, for results that pick up float32 rounding. */
+  function expectComponentsClose(q: ReadonlyQuat, x: number, y: number, z: number, w: number) {
+    expect(q[0]).toBeCloseTo(x, 6);
+    expect(q[1]).toBeCloseTo(y, 6);
+    expect(q[2]).toBeCloseTo(z, 6);
+    expect(q[3]).toBeCloseTo(w, 6);
+  }
+
+  /**
+   * Rotates `v` by the unit quaternion `q` as `q * (v, 0) * conjugate(q)`, so
+   * composition order can be checked against where a vector actually ends up.
+   */
+  function rotate(q: ReadonlyQuat, v: [number, number, number]): [number, number, number] {
+    const conjugate = quat.create(-q[0], -q[1], -q[2], q[3]);
+    const p = quat.create(v[0], v[1], v[2], 0);
+    const r = quat.multiply(quat.create(), quat.multiply(quat.create(), q, p), conjugate);
+    return [r[0], r[1], r[2]];
+  }
+
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.multiply(out, X90, Z90)).toBe(out);
+  });
+
+  test('follows the Hamilton rules for the basis units, with the scalar last', () => {
+    const i = quat.create(1, 0, 0, 0);
+    const j = quat.create(0, 1, 0, 0);
+    const k = quat.create(0, 0, 1, 0);
+
+    expectComponents(quat.multiply(quat.create(), i, j), 0, 0, 1, 0);
+    expectComponents(quat.multiply(quat.create(), j, k), 1, 0, 0, 0);
+    expectComponents(quat.multiply(quat.create(), k, i), 0, 1, 0, 0);
+    expectComponents(quat.multiply(quat.create(), j, i), 0, 0, -1, 0);
+    expectComponents(quat.multiply(quat.create(), i, i), 0, 0, 0, -1);
+  });
+
+  test('IDENTITY leaves the other input unchanged on either side', () => {
+    const q = quat.create(0.1, 0.2, 0.3, 0.4);
+    expect(Array.from(quat.multiply(quat.create(), quat.IDENTITY, q))).toEqual(Array.from(q));
+    expect(Array.from(quat.multiply(quat.create(), q, quat.IDENTITY))).toEqual(Array.from(q));
+  });
+
+  test('composes rotations: two quarter turns make a half turn', () => {
+    expectComponentsClose(quat.multiply(quat.create(), Z90, Z90), 0, 0, 1, 0);
+  });
+
+  test('applies b first, then a', () => {
+    // X90 first takes +Y to +Z, which Z90 then leaves alone. The other order
+    // would send +Y to -X with Z90 and leave it there.
+    const [x, y, z] = rotate(quat.multiply(quat.create(), Z90, X90), [0, 1, 0]);
+    expect(x).toBeCloseTo(0, 6);
+    expect(y).toBeCloseTo(0, 6);
+    expect(z).toBeCloseTo(1, 6);
+  });
+
+  test('is not commutative', () => {
+    const ab = quat.multiply(quat.create(), Z90, X90);
+    const ba = quat.multiply(quat.create(), X90, Z90);
+    expect(quat.isEqualEpsilon(ab, ba)).toBe(false);
+  });
+
+  test('the product of unit quaternions is a unit quaternion', () => {
+    const q = quat.multiply(quat.create(), Z90, X90);
+    expect(q[0] ** 2 + q[1] ** 2 + q[2] ** 2 + q[3] ** 2).toBeCloseTo(1, 6);
+  });
+
+  test('out may be the same object as either input, or both', () => {
+    const expected = quat.multiply(quat.create(), Z90, X90);
+
+    const a = quat.clone(Z90);
+    quat.multiply(a, a, X90);
+    expect(Array.from(a)).toEqual(Array.from(expected));
+
+    const b = quat.clone(X90);
+    quat.multiply(b, Z90, b);
+    expect(Array.from(b)).toEqual(Array.from(expected));
+
+    const both = quat.clone(Z90);
+    quat.multiply(both, both, both);
+    expect(Array.from(both)).toEqual(Array.from(quat.multiply(quat.create(), Z90, Z90)));
+  });
+
+  test('overlapping views: out one element ahead of a', () => {
+    // Buffer [1, 2, 3, 4, 5]; a covers [0..3], out covers [1..4].
+    const buffer = sequentialBuffer(5);
+    const a = viewAt(buffer, 0);
+    const expected = quat.multiply(quat.create(), quat.clone(a), X90);
+    quat.multiply(viewAt(buffer, 1), a, X90);
+
+    expect(Array.from(viewAt(buffer, 1))).toEqual(Array.from(expected));
+  });
+
+  test('overlapping views: out one element behind b', () => {
+    // Buffer [1, 2, 3, 4, 5]; b covers [1..4], out covers [0..3].
+    const buffer = sequentialBuffer(5);
+    const b = viewAt(buffer, 1);
+    const expected = quat.multiply(quat.create(), Z90, quat.clone(b));
+    quat.multiply(viewAt(buffer, 0), Z90, b);
+
+    expect(Array.from(viewAt(buffer, 0))).toEqual(Array.from(expected));
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.multiply(viewAt(pool, 2), quat.IDENTITY, quat.IDENTITY);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
   });
 });
