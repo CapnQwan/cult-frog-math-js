@@ -1,10 +1,13 @@
 // src/quaternion/__tests__/quat.test-d.ts
 import { describe, expectTypeOf, test } from 'vitest';
 
+import * as vec3 from '../../vector/vec3/vec3.js';
 import * as quat from '../quat.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
+import type { Vec2 } from '../../vector/vec2/_types/vec2.js';
+import type { ReadonlyVec3, Vec3 } from '../../vector/vec3/_types/vec3.js';
 import type { ReadonlyVec4, Vec4 } from '../../vector/vec4/_types/vec4.js';
 import type { Quat, ReadonlyQuat } from '../_types/quat.js';
 
@@ -12,6 +15,9 @@ declare const live: Quat;
 declare const frozen: ReadonlyQuat;
 declare const vector: Vec4;
 declare const raw: Float32Array<ArrayBuffer>;
+declare const axis: Vec3;
+declare const frozenAxis: ReadonlyVec3;
+declare const flat: Vec2;
 
 /** A `Quat` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedQuat = Brand<FixedFloat32Array<4, SharedArrayBuffer>, BrandOf<Quat>>;
@@ -163,5 +169,74 @@ describe('multiply', () => {
     quat.multiply(live, vector, frozen);
     // @ts-expect-error unbranded arrays are rejected
     quat.multiply(live, frozen, raw);
+  });
+});
+
+describe('SIZE', () => {
+  test('is the literal 4', () => {
+    expectTypeOf<typeof quat.SIZE>().toEqualTypeOf<4>();
+  });
+});
+
+describe('magnitudeSq and magnitude', () => {
+  test('read a readonly quaternion and return a number', () => {
+    expectTypeOf(quat.magnitudeSq).parameters.toEqualTypeOf<[ReadonlyQuat]>();
+    expectTypeOf(quat.magnitude).parameters.toEqualTypeOf<[ReadonlyQuat]>();
+    expectTypeOf(quat.magnitudeSq).returns.toEqualTypeOf<number>();
+    expectTypeOf(quat.magnitude).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    quat.magnitudeSq(quat.IDENTITY);
+    quat.magnitude(live);
+    quat.magnitude(shared);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.magnitudeSq(vector);
+  });
+});
+
+describe('normalize and conjugate', () => {
+  test('write a mutable out from a readonly input', () => {
+    expectTypeOf(quat.normalize).parameters.toEqualTypeOf<[Quat, ReadonlyQuat]>();
+    expectTypeOf(quat.conjugate).parameters.toEqualTypeOf<[Quat, ReadonlyQuat]>();
+    expectTypeOf(quat.normalize).returns.toEqualTypeOf<Quat>();
+    expectTypeOf(quat.conjugate).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.normalize(live, frozen);
+    quat.normalize(live, live);
+    quat.conjugate(shared, quat.IDENTITY);
+    // @ts-expect-error there is no one-argument in-place form: pass the quaternion twice
+    quat.normalize(live);
+    // @ts-expect-error the shared constant must never be written through
+    quat.normalize(quat.IDENTITY, live);
+    // @ts-expect-error the shared constant must never be written through
+    quat.conjugate(quat.IDENTITY, live);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.conjugate(live, vector);
+  });
+});
+
+describe('fromAxisAngle', () => {
+  test('takes a readonly Vec3 axis and writes a mutable out', () => {
+    expectTypeOf(quat.fromAxisAngle).parameters.toEqualTypeOf<[Quat, ReadonlyVec3, number]>();
+    expectTypeOf(quat.fromAxisAngle).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.fromAxisAngle(live, vec3.UP, 1);
+    quat.fromAxisAngle(live, axis, 1);
+    quat.fromAxisAngle(shared, frozenAxis, 1);
+    // @ts-expect-error the shared constant must never be written through
+    quat.fromAxisAngle(quat.IDENTITY, vec3.UP, 1);
+    // @ts-expect-error the axis is a Vec3, not a Vec2
+    quat.fromAxisAngle(live, flat, 1);
+    // @ts-expect-error a quaternion is not an axis
+    quat.fromAxisAngle(live, frozen, 1);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.fromAxisAngle(live, raw, 1);
+    // @ts-expect-error the angle is required
+    quat.fromAxisAngle(live, vec3.UP);
   });
 });

@@ -1,9 +1,11 @@
 // src/quaternion/__tests__/quat.test.ts
 import { describe, expect, test } from 'vitest';
 
+import * as vec3 from '../../vector/vec3/vec3.js';
 import * as vec4 from '../../vector/vec4/vec4.js';
 import * as quat from '../quat.js';
 
+import type { Vec3 } from '../../vector/vec3/_types/vec3.js';
 import type { Quat, ReadonlyQuat } from '../_types/quat.js';
 
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
@@ -500,6 +502,375 @@ describe('multiply', () => {
   test('writes only its own slots when out is a pooled view', () => {
     const pool = sequentialBuffer(8);
     quat.multiply(viewAt(pool, 2), quat.IDENTITY, quat.IDENTITY);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
+  });
+});
+
+/** Element-wise closeness, for results that pick up float32 or trigonometric rounding. */
+function expectClose(q: ReadonlyQuat, x: number, y: number, z: number, w: number): void {
+  expect(q[0]).toBeCloseTo(x, 6);
+  expect(q[1]).toBeCloseTo(y, 6);
+  expect(q[2]).toBeCloseTo(z, 6);
+  expect(q[3]).toBeCloseTo(w, 6);
+}
+
+/**
+ * Rotates `v` by the unit quaternion `q` as `q * (v, 0) * conjugate(q)`, so a
+ * rotation can be checked against where a vector actually ends up.
+ */
+function rotate(q: ReadonlyQuat, v: readonly [number, number, number]): [number, number, number] {
+  const p = quat.create(v[0], v[1], v[2], 0);
+  const qp = quat.multiply(quat.create(), q, p);
+  const r = quat.multiply(quat.create(), qp, quat.conjugate(quat.create(), q));
+  return [r[0], r[1], r[2]];
+}
+
+/** Test-only cast site: a Vec3 view over element `index` of a shared buffer. */
+function vec3ViewAt(buffer: ArrayBuffer, index: number): Vec3 {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 3) as Vec3;
+}
+
+describe('SIZE', () => {
+  test('is the element count of a quaternion', () => {
+    expect(quat.SIZE).toBe(4);
+    expect(quat.create().length).toBe(quat.SIZE);
+  });
+});
+
+describe('magnitudeSq', () => {
+  test('is 1 for the identity', () => {
+    expect(quat.magnitudeSq(quat.IDENTITY)).toBe(1);
+  });
+
+  test('sums the squares of all four components', () => {
+    expect(quat.magnitudeSq(quat.create(1, 2, 3, 4))).toBe(30);
+  });
+
+  test('is 0 for the zero quaternion', () => {
+    expect(quat.magnitudeSq(quat.create(0, 0, 0, 0))).toBe(0);
+  });
+
+  test('is calculated in float64, so it cannot overflow at the float32 extremes', () => {
+    const big = Math.fround(3e38);
+    const result = quat.magnitudeSq(quat.create(big, big, big, big));
+    expect(Number.isFinite(result)).toBe(true);
+    expect(result).toBe(4 * big * big);
+  });
+
+  test('never writes to the input', () => {
+    const source = quat.create(1, 2, 3, 4);
+    quat.magnitudeSq(source);
+    expectComponents(source, 1, 2, 3, 4);
+  });
+});
+
+describe('magnitude', () => {
+  test('is 1 for the identity', () => {
+    expect(quat.magnitude(quat.IDENTITY)).toBe(1);
+  });
+
+  test('is the square root of magnitudeSq', () => {
+    expect(quat.magnitude(quat.create(1, 2, 3, 4))).toBe(Math.sqrt(30));
+    expect(quat.magnitude(quat.create(0, 0, 0, 2))).toBe(2);
+  });
+
+  test('is 0 for the zero quaternion', () => {
+    expect(quat.magnitude(quat.create(0, 0, 0, 0))).toBe(0);
+  });
+});
+
+describe('normalize', () => {
+  const S = Math.SQRT1_2;
+
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.normalize(out, quat.create(1, 2, 3, 4))).toBe(out);
+  });
+
+  test('scales to unit length', () => {
+    const inv = 1 / Math.sqrt(30);
+    const q = quat.normalize(quat.create(), quat.create(1, 2, 3, 4));
+    expectClose(q, inv, 2 * inv, 3 * inv, 4 * inv);
+    expect(quat.magnitude(q)).toBeCloseTo(1, 6);
+  });
+
+  test('a scaled identity normalizes exactly to the identity', () => {
+    expectComponents(quat.normalize(quat.create(), quat.create(0, 0, 0, 2)), 0, 0, 0, 1);
+  });
+
+  test('keeps the rotation of a quaternion that has drifted', () => {
+    // A quarter turn about +X, scaled to length 3.
+    const drifted = quat.create(3 * S, 0, 0, 3 * S);
+    expectClose(quat.normalize(quat.create(), drifted), S, 0, 0, S);
+  });
+
+  test('leaves an already-unit quaternion unchanged', () => {
+    const q = quat.create(0, 0, 0, 1);
+    expectComponents(quat.normalize(quat.create(), q), 0, 0, 0, 1);
+  });
+
+  test('the zero quaternion gives the identity, overwriting whatever out held', () => {
+    const out = quat.create(7, 7, 7, 7);
+    quat.normalize(out, quat.create(0, 0, 0, 0));
+    expectComponents(out, 0, 0, 0, 1);
+  });
+
+  test('only an exact zero falls back: very short quaternions still normalize', () => {
+    expectClose(quat.normalize(quat.create(), quat.create(1e-30, 0, 0, 1e-30)), S, 0, 0, S);
+  });
+
+  test('a NaN component makes the whole result NaN', () => {
+    const q = quat.normalize(quat.create(), quat.create(1, 0, 0, Number.NaN));
+    expect(Array.from(q).every(Number.isNaN)).toBe(true);
+  });
+
+  test('an infinite component gives NaN in that slot and 0 in the finite ones', () => {
+    const q = quat.normalize(quat.create(), quat.create(Infinity, 1, 2, 3));
+    expect(q[0]).toBeNaN();
+    expect([q[1], q[2], q[3]]).toEqual([0, 0, 0]);
+  });
+
+  test('never writes to the input', () => {
+    const source = quat.create(1, 2, 3, 4);
+    quat.normalize(quat.create(), source);
+    expectComponents(source, 1, 2, 3, 4);
+  });
+
+  test('out may be the same object as the input', () => {
+    const expected = quat.normalize(quat.create(), quat.create(1, 2, 3, 4));
+    const q = quat.create(1, 2, 3, 4);
+    quat.normalize(q, q);
+    expect(Array.from(q)).toEqual(Array.from(expected));
+  });
+
+  test('every overlap of two distinct views is exact', () => {
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const buffer = sequentialBuffer(8);
+        const input = viewAt(buffer, inputOffset);
+        const expected = quat.normalize(quat.create(), quat.clone(input));
+
+        quat.normalize(viewAt(buffer, outOffset), input);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.normalize(viewAt(pool, 2), quat.create(0, 0, 0, 2));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
+  });
+});
+
+describe('conjugate', () => {
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.conjugate(out, quat.IDENTITY)).toBe(out);
+  });
+
+  test('negates the vector part and keeps the scalar w, which is stored last', () => {
+    expectComponents(quat.conjugate(quat.create(), quat.create(1, 2, 3, 4)), -1, -2, -3, 4);
+  });
+
+  test('the identity is its own conjugate', () => {
+    expect(quat.isEqual(quat.conjugate(quat.create(), quat.IDENTITY), quat.IDENTITY)).toBe(true);
+  });
+
+  test('conjugating twice gives back the original', () => {
+    const q = quat.create(0.1, -0.7, 0.3, 0.9);
+    const twice = quat.conjugate(quat.create(), quat.conjugate(quat.create(), q));
+    expect(Array.from(twice)).toEqual(Array.from(q));
+  });
+
+  test('inverts a unit quaternion on either side', () => {
+    const axis = vec3.normalize(vec3.create(), vec3.create(1, 2, 3));
+    const q = quat.fromAxisAngle(quat.create(), axis, 1.2);
+    const inverse = quat.conjugate(quat.create(), q);
+
+    expectClose(quat.multiply(quat.create(), q, inverse), 0, 0, 0, 1);
+    expectClose(quat.multiply(quat.create(), inverse, q), 0, 0, 0, 1);
+  });
+
+  test('undoes a rotation applied to a vector', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.UP, Math.PI / 3);
+    const inverse = quat.conjugate(quat.create(), q);
+    const [x, y, z] = rotate(inverse, rotate(q, [1, 2, 3]));
+
+    expect(x).toBeCloseTo(1, 5);
+    expect(y).toBeCloseTo(2, 5);
+    expect(z).toBeCloseTo(3, 5);
+  });
+
+  test('only inverts unit quaternions: otherwise the product has the squared length on w', () => {
+    const q = quat.create(1, 2, 3, 4);
+    const product = quat.multiply(quat.create(), q, quat.conjugate(quat.create(), q));
+    expectComponents(product, 0, 0, 0, 30);
+  });
+
+  test('never writes to the input', () => {
+    const source = quat.create(1, 2, 3, 4);
+    quat.conjugate(quat.create(), source);
+    expectComponents(source, 1, 2, 3, 4);
+  });
+
+  test('out may be the same object as the input', () => {
+    const q = quat.create(1, 2, 3, 4);
+    quat.conjugate(q, q);
+    expectComponents(q, -1, -2, -3, 4);
+  });
+
+  test('every overlap of two distinct views is exact', () => {
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const buffer = sequentialBuffer(8);
+        const input = viewAt(buffer, inputOffset);
+        const expected = quat.conjugate(quat.create(), quat.clone(input));
+
+        quat.conjugate(viewAt(buffer, outOffset), input);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.conjugate(viewAt(pool, 2), quat.create(1, 2, 3, 4));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, -1, -2, -3, 4, 7, 8]);
+  });
+});
+
+describe('fromAxisAngle', () => {
+  const S = Math.SQRT1_2;
+
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.fromAxisAngle(out, vec3.UP, 1)).toBe(out);
+  });
+
+  test('a zero angle gives the identity, whatever the axis', () => {
+    expect(quat.isEqual(quat.fromAxisAngle(quat.create(), vec3.UP, 0), quat.IDENTITY)).toBe(true);
+    expect(quat.isEqual(quat.fromAxisAngle(quat.create(), vec3.RIGHT, 0), quat.IDENTITY)).toBe(
+      true
+    );
+  });
+
+  test('stores the scalar cos(angle/2) last, after the vector part', () => {
+    // A quarter turn about +Y.
+    expectClose(quat.fromAxisAngle(quat.create(), vec3.UP, Math.PI / 2), 0, S, 0, S);
+  });
+
+  test('encodes xyz = axis * sin(angle/2), w = cos(angle/2)', () => {
+    const axis = vec3.normalize(vec3.create(), vec3.create(1, 2, 3));
+    const angle = 1.2;
+    const sin = Math.sin(angle / 2);
+    const q = quat.fromAxisAngle(quat.create(), axis, angle);
+
+    expectClose(q, axis[0] * sin, axis[1] * sin, axis[2] * sin, Math.cos(angle / 2));
+  });
+
+  test('a unit axis gives a unit quaternion', () => {
+    const axis = vec3.normalize(vec3.create(), vec3.create(-4, 1, 7));
+    expect(quat.magnitude(quat.fromAxisAngle(quat.create(), axis, 2.5))).toBeCloseTo(1, 6);
+  });
+
+  test('follows the right-hand rule: a positive turn about UP takes FORWARD to LEFT', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.UP, Math.PI / 2);
+    const [x, y, z] = rotate(q, [vec3.FORWARD[0], vec3.FORWARD[1], vec3.FORWARD[2]]);
+
+    expect(x).toBeCloseTo(vec3.LEFT[0], 6);
+    expect(y).toBeCloseTo(vec3.LEFT[1], 6);
+    expect(z).toBeCloseTo(vec3.LEFT[2], 6);
+  });
+
+  test('a positive turn about +Z takes +X to +Y', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.create(0, 0, 1), Math.PI / 2);
+    const [x, y, z] = rotate(q, [1, 0, 0]);
+
+    expect(x).toBeCloseTo(0, 6);
+    expect(y).toBeCloseTo(1, 6);
+    expect(z).toBeCloseTo(0, 6);
+  });
+
+  test('a negative angle gives the conjugate', () => {
+    const forward = quat.fromAxisAngle(quat.create(), vec3.UP, 0.8);
+    const backward = quat.fromAxisAngle(quat.create(), vec3.UP, -0.8);
+    const conjugate = quat.conjugate(quat.create(), forward);
+
+    expectClose(backward, conjugate[0], conjugate[1], conjugate[2], conjugate[3]);
+  });
+
+  test('composes with multiply: two eighth turns make a quarter turn', () => {
+    const eighth = quat.fromAxisAngle(quat.create(), vec3.UP, Math.PI / 4);
+    const quarter = quat.fromAxisAngle(quat.create(), vec3.UP, Math.PI / 2);
+    const composed = quat.multiply(quat.create(), eighth, eighth);
+
+    expectClose(composed, quarter[0], quarter[1], quarter[2], quarter[3]);
+  });
+
+  test('angles a full turn apart give opposite quaternions for the same rotation', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.UP, 0.8);
+    const turned = quat.fromAxisAngle(quat.create(), vec3.UP, 0.8 + 2 * Math.PI);
+
+    expectClose(turned, -q[0], -q[1], -q[2], -q[3]);
+    expect(quat.isEqualEpsilon(q, turned)).toBe(false);
+
+    const [ax, ay, az] = rotate(q, [1, 2, 3]);
+    const [bx, by, bz] = rotate(turned, [1, 2, 3]);
+    expect(bx).toBeCloseTo(ax, 5);
+    expect(by).toBeCloseTo(ay, 5);
+    expect(bz).toBeCloseTo(az, 5);
+  });
+
+  test('does not normalise the axis: a longer axis gives a longer quaternion', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.create(0, 2, 0), Math.PI);
+    expectClose(q, 0, 2, 0, 0);
+    expect(quat.magnitude(q)).toBeCloseTo(2, 6);
+  });
+
+  test('a zero axis gives (0, 0, 0, cos(angle/2)), which is not a rotation', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.ZERO, Math.PI / 2);
+    expectClose(q, 0, 0, 0, S);
+  });
+
+  test('never writes to the axis', () => {
+    const axis = vec3.create(0, 1, 0);
+    quat.fromAxisAngle(quat.create(), axis, 1);
+    expect(Array.from(axis)).toEqual([0, 1, 0]);
+  });
+
+  test('overwrites every component of out', () => {
+    const out = quat.create(7, 7, 7, 7);
+    quat.fromAxisAngle(out, vec3.UP, 0);
+    expect(quat.isEqual(out, quat.IDENTITY)).toBe(true);
+  });
+
+  test('the axis may be a view overlapping out', () => {
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let axisOffset = 0; axisOffset < 5; axisOffset++) {
+        const buffer = sequentialBuffer(8);
+        const axis = vec3ViewAt(buffer, axisOffset);
+        const expected = quat.fromAxisAngle(quat.create(), vec3.clone(axis), 0.7);
+
+        quat.fromAxisAngle(viewAt(buffer, outOffset), axis, 0.7);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.fromAxisAngle(viewAt(pool, 2), vec3.UP, 0);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
   });

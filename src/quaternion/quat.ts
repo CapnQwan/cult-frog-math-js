@@ -26,7 +26,11 @@
 import { EPSILON } from '../constants.js';
 import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
 
+import type { ReadonlyVec3 } from '../vector/index.js';
 import type { Quat, ReadonlyQuat } from './_types/quat.js';
+
+/** The number of elements in a `Quat`. */
+export const SIZE = 4;
 
 /**
  * Allocates a new quaternion. Omitted vector components default to `0` and the
@@ -44,7 +48,7 @@ import type { Quat, ReadonlyQuat } from './_types/quat.js';
  * @returns A new quaternion with its own buffer.
  */
 export function create(x: number = 0, y: number = 0, z: number = 0, w: number = 1): Quat {
-  const quat = new Float32Array(4) as Quat;
+  const quat = new Float32Array(SIZE) as Quat;
   quat[0] = x;
   quat[1] = y;
   quat[2] = z;
@@ -228,4 +232,154 @@ export function multiply(out: Quat, a: ReadonlyQuat, b: ReadonlyQuat): Quat {
     aW * bZ + aX * bY - aY * bX + aZ * bW,
     aW * bW - aX * bX - aY * bY - aZ * bZ
   );
+}
+
+/**
+ * Returns the squared length of `a`, treating all four components as one
+ * 4D vector.
+ *
+ * A unit quaternion, which is the only kind that represents a rotation, has a
+ * squared length of `1`. That makes this the cheap way to check for drift
+ * after a chain of `multiply` calls: compare it against `1` with
+ * `isEqualEpsilon` rather than taking the square root.
+ *
+ * Calculated in float64 from the stored float32 components, so it can't
+ * overflow or underflow, even at the extremes of the float32 range.
+ *
+ * @param a - The quaternion to measure.
+ * @returns The squared length.
+ */
+export function magnitudeSq(a: ReadonlyQuat): number {
+  // biome-ignore format: packed component reads
+  const x = a[0], y = a[1], z = a[2], w = a[3];
+  return x * x + y * y + z * z + w * w;
+}
+
+/**
+ * Returns the length of `a`, treating all four components as one 4D vector.
+ *
+ * This is `1` for every rotation. Prefer {@link magnitudeSq} when you only need
+ * to compare against `1`, since it skips the square root.
+ *
+ * @param a - The quaternion to measure.
+ * @returns The length.
+ */
+export function magnitude(a: ReadonlyQuat): number {
+  return Math.sqrt(magnitudeSq(a));
+}
+
+/**
+ * Writes `a` scaled to a length of `1` into `out`, turning it back into a
+ * valid rotation.
+ *
+ * Use it to correct drift: rounding to float32 pulls the result of each
+ * `multiply` slightly away from unit length, and the error builds up over long
+ * chains. Scaling doesn't change which rotation a quaternion represents, so a
+ * drifted quaternion keeps its rotation and loses only the error.
+ *
+ * The zero quaternion gives the **identity**, unlike `Vec3.normalize`, which
+ * turns a zero vector into a zero vector. A zero vector is a meaningful value
+ * (no movement), but the zero quaternion is not a rotation at all, and every
+ * caller of this function wants a rotation back. Of the rotations, the identity
+ * is the safe default because it changes nothing. Only an exact zero is
+ * treated this way, so very short quaternions still normalize correctly.
+ *
+ * The result is rounded to float32, so its length is close to `1` but rarely
+ * exact. Compare it using `isEqualEpsilon`.
+ *
+ * Bad input stays visible: a `NaN` component makes the whole result `NaN`, and
+ * an infinite component gives `NaN` in that slot and `0` in the finite ones.
+ *
+ * `out` may be the same quaternion as `a`, which is the usual way to normalise
+ * in place: `normalize(q, q)`.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The quaternion to normalize.
+ * @returns `out`.
+ */
+export function normalize(out: Quat, a: ReadonlyQuat): Quat {
+  const magSq = magnitudeSq(a);
+  if (magSq === 0) return identity(out);
+
+  // biome-ignore format: packed component reads
+  const x = a[0], y = a[1], z = a[2], w = a[3];
+  const invMag = 1 / Math.sqrt(magSq);
+
+  out[0] = x * invMag;
+  out[1] = y * invMag;
+  out[2] = z * invMag;
+  out[3] = w * invMag;
+
+  return out;
+}
+
+/**
+ * Writes the conjugate of `a` into `out`: the vector part negated, the scalar
+ * `w` unchanged.
+ *
+ * For a unit quaternion, the conjugate is its inverse, the rotation that
+ * undoes it: `multiply(out, q, conjugate(tmp, q))` gives the identity. It's
+ * the same rotation angle about the reversed axis, which comes to the same
+ * thing as the reversed angle about the same axis.
+ *
+ * It only inverts unit quaternions. For anything else, the product with the
+ * original comes out as the squared length on `w` instead of `1`, so
+ * normalise first if `a` might have drifted.
+ *
+ * `out` may be the same quaternion as `a`, or a view overlapping it.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The quaternion to conjugate.
+ * @returns `out`.
+ */
+export function conjugate(out: Quat, a: ReadonlyQuat): Quat {
+  // biome-ignore format: packed component reads
+  const x = a[0], y = a[1], z = a[2], w = a[3];
+  out[0] = -x;
+  out[1] = -y;
+  out[2] = -z;
+  out[3] = w;
+  return out;
+}
+
+/**
+ * Writes the rotation of `angle` radians about `axis` into `out`.
+ *
+ * The rotation follows the right-hand rule: with your right thumb along
+ * `axis`, a positive angle turns the way your fingers curl. Combined with the
+ * package's y-up, right-handed axes, that means a positive angle about
+ * `Vec3.UP` turns `Vec3.FORWARD` (negative z) towards `Vec3.LEFT`, which is
+ * counter-clockwise when viewed from above.
+ *
+ * `axis` **must be unit length**, and isn't normalised here: the result is
+ * only a unit quaternion if the axis is. A longer or shorter axis gives a
+ * quaternion of the wrong length, and a zero axis gives `(0, 0, 0, cos(angle/2))`,
+ * which isn't a rotation for any angle except multiples of a full turn.
+ * Normalise the axis first if it was computed rather than written as a
+ * constant.
+ *
+ * Angles a full turn apart give opposite quaternions, `q` and `-q`, that
+ * describe the same rotation, because the components use the half angle. They
+ * rotate vectors identically, but `isEqual` treats them as different.
+ *
+ * Every component of `out` is overwritten, and `axis` is read into locals
+ * first, so `axis` may be a view overlapping `out`.
+ *
+ * @param out - The quaternion to write to.
+ * @param axis - The unit axis to rotate about.
+ * @param angle - The rotation angle in radians.
+ * @returns `out`.
+ */
+export function fromAxisAngle(out: Quat, axis: ReadonlyVec3, angle: number): Quat {
+  // biome-ignore format: packed component reads
+  const x = axis[0], y = axis[1], z = axis[2];
+  const half = angle * 0.5;
+  const sin = Math.sin(half);
+
+  out[0] = x * sin;
+  out[1] = y * sin;
+  out[2] = z * sin;
+  out[3] = Math.cos(half);
+
+  return out;
 }
