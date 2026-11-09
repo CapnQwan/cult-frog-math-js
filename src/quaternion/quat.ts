@@ -11,7 +11,8 @@
  *
  * `create` defaults the vector part to zero and the scalar to `1`, so
  * `create()` is the identity rotation. A zero `w` default would give the zero
- * quaternion, which is not a rotation at all and cannot be normalised.
+ * quaternion, which is not a rotation at all and has no direction to normalise
+ * towards (`normalize` falls back to the identity for it).
  *
  * Rotations compose with `multiply`, which follows the column-vector
  * convention used by the matrices: `multiply(out, a, b)` applies `b` first,
@@ -124,7 +125,11 @@ export function copy(out: Quat, a: ReadonlyQuat): Quat {
  * @returns `out`.
  */
 export function identity(out: Quat): Quat {
-  return set(out, 0, 0, 0, 1);
+  out[0] = 0;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 1;
+  return out;
 }
 
 /**
@@ -225,13 +230,12 @@ export function multiply(out: Quat, a: ReadonlyQuat, b: ReadonlyQuat): Quat {
   const aX = a[0], aY = a[1], aZ = a[2], aW = a[3];
   // biome-ignore format: packed component reads
   const bX = b[0], bY = b[1], bZ = b[2], bW = b[3];
-  return set(
-    out,
-    aW * bX + aX * bW + aY * bZ - aZ * bY,
-    aW * bY - aX * bZ + aY * bW + aZ * bX,
-    aW * bZ + aX * bY - aY * bX + aZ * bW,
-    aW * bW - aX * bX - aY * bY - aZ * bZ
-  );
+
+  out[0] = aW * bX + aX * bW + aY * bZ - aZ * bY;
+  out[1] = aW * bY - aX * bZ + aY * bW + aZ * bX;
+  out[2] = aW * bZ + aX * bY - aY * bX + aZ * bW;
+  out[3] = aW * bW - aX * bX - aY * bY - aZ * bZ;
+  return out;
 }
 
 /**

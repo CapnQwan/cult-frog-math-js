@@ -86,6 +86,9 @@
  * different view that overlaps the same memory. `Vec3.cross(a, a, b)` is valid
  * and gives the same result as writing to a separate vector. Functions read all
  * inputs into locals before writing anything, and new functions must do the same.
+ * Results are then stored with direct index writes rather than through `set`.
+ * The exception is the matrix `identity` functions, where `set`'s row-major
+ * arguments keep the matrix readable in source.
  *
  * **Only `create` and `clone` allocate.** Everything else works on memory the
  * caller already owns. Use `clone` to take a standalone copy of a view.

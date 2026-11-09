@@ -252,8 +252,8 @@ const INV_CHANNEL_MAX = 1 / 255;
  * colours from pickers, CSS hex or `ImageData` before lighting or blending
  * with them.
  *
- * Results are rounded to float32 as {@link set} stores them, and every
- * colour survives a round trip: `Color32.fromColor(fromColor32(out, c))` is
+ * Results are rounded to float32 as they are stored, and every colour
+ * survives a round trip: `Color32.fromColor(fromColor32(out, c))` is
  * `c` for any `c`. The named constants match exactly in both namespaces.
  *
  * @param out - The colour to write to.
@@ -261,11 +261,11 @@ const INV_CHANNEL_MAX = 1 / 255;
  * @returns `out`.
  */
 export function fromColor32(out: Color, color32: Color32): Color {
-  const r = srgbToLinear(Color32.red(color32) * INV_CHANNEL_MAX);
-  const g = srgbToLinear(Color32.green(color32) * INV_CHANNEL_MAX);
-  const b = srgbToLinear(Color32.blue(color32) * INV_CHANNEL_MAX);
-  const alpha = Color32.alpha(color32) * INV_CHANNEL_MAX;
-  return set(out, r, g, b, alpha);
+  out[0] = srgbToLinear(Color32.red(color32) * INV_CHANNEL_MAX);
+  out[1] = srgbToLinear(Color32.green(color32) * INV_CHANNEL_MAX);
+  out[2] = srgbToLinear(Color32.blue(color32) * INV_CHANNEL_MAX);
+  out[3] = Color32.alpha(color32) * INV_CHANNEL_MAX;
+  return out;
 }
 
 // Every constant below uses only 0 and 1 in each channel. Those are fixed
