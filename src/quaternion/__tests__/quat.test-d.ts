@@ -240,3 +240,37 @@ describe('fromAxisAngle', () => {
     quat.fromAxisAngle(live, vec3.UP);
   });
 });
+
+describe('dot', () => {
+  test('reads two readonly quaternions and returns a number', () => {
+    expectTypeOf(quat.dot).parameters.toEqualTypeOf<[ReadonlyQuat, ReadonlyQuat]>();
+    expectTypeOf(quat.dot).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    quat.dot(quat.IDENTITY, frozen);
+    quat.dot(live, shared);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.dot(live, vector);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.dot(raw, live);
+  });
+});
+
+describe('fromEuler', () => {
+  test('takes three angles and writes a mutable out', () => {
+    expectTypeOf(quat.fromEuler).parameters.toEqualTypeOf<[Quat, number, number, number]>();
+    expectTypeOf(quat.fromEuler).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.fromEuler(live, 0, 1, 0);
+    quat.fromEuler(shared, 0.1, 0.2, 0.3);
+    // @ts-expect-error the shared constant must never be written through
+    quat.fromEuler(quat.IDENTITY, 0, 0, 0);
+    // @ts-expect-error all three angles are required
+    quat.fromEuler(live, 0, 1);
+    // @ts-expect-error the angles are loose numbers, not a vector
+    quat.fromEuler(live, axis);
+  });
+});

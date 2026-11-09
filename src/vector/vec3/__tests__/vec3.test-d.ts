@@ -5,13 +5,18 @@ import * as vec3 from '../vec3.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
 import type { Vec2 } from '../../vec2/_types/vec2.js';
+import type { Vec4 } from '../../vec4/_types/vec4.js';
 import type { ReadonlyVec3, Vec3 } from '../_types/vec3.js';
 
 declare const live: Vec3;
 declare const frozen: ReadonlyVec3;
 declare const other: Vec2;
 declare const raw: Float32Array<ArrayBuffer>;
+declare const rotation: Quat;
+declare const frozenRotation: ReadonlyQuat;
+declare const four: Vec4;
 
 /** A `Vec3` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedVec3 = Brand<FixedFloat32Array<3, SharedArrayBuffer>, BrandOf<Vec3>>;
@@ -345,5 +350,28 @@ describe('fromPacked', () => {
     vec3.fromPacked(live, ['1', '2', '3'], 0);
     // @ts-expect-error the row index is required
     vec3.fromPacked(live, raw);
+  });
+});
+
+describe('transformQuat', () => {
+  test('rotates a readonly vector by a readonly quaternion into a mutable out', () => {
+    expectTypeOf(vec3.transformQuat).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3, ReadonlyQuat]>();
+    expectTypeOf(vec3.transformQuat).returns.toEqualTypeOf<Vec3>();
+  });
+
+  test('call sites', () => {
+    vec3.transformQuat(live, frozen, rotation);
+    vec3.transformQuat(live, live, frozenRotation);
+    vec3.transformQuat(shared, vec3.FORWARD, rotation);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.transformQuat(frozen, live, rotation);
+    // @ts-expect-error the vector comes before the quaternion
+    vec3.transformQuat(live, rotation, live);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    vec3.transformQuat(live, live, four);
+    // @ts-expect-error wrong-dimension vector
+    vec3.transformQuat(live, other, rotation);
+    // @ts-expect-error unbranded arrays are rejected
+    vec3.transformQuat(live, live, raw);
   });
 });

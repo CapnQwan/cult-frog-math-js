@@ -1,9 +1,11 @@
 // src/vector/vec3/__tests__/vec3.test.ts
 import { describe, expect, test } from 'vitest';
 
+import * as quat from '../../../quaternion/quat.js';
 import { clamp } from '../../../scalars.js';
 import * as vec3 from '../vec3.js';
 
+import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
 import type { ReadonlyVec3, Vec3 } from '../_types/vec3.js';
 
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
@@ -2698,5 +2700,186 @@ describe('fromPacked', () => {
     expect(out[0]).toBe(4);
     expect(out[1]).toBe(5);
     expect(out[2]).toBeNaN();
+  });
+});
+
+describe('transformQuat', () => {
+  const S = Math.SQRT1_2;
+  const about = (axis: ReadonlyVec3, angle: number): Quat =>
+    quat.fromAxisAngle(quat.create(), axis, angle);
+
+  /** Reference rotation: the full sandwich product `q * (v, 0) * conjugate(q)`. */
+  function sandwich(q: ReadonlyQuat, v: ReadonlyVec3): [number, number, number] {
+    const p = quat.create(v[0], v[1], v[2], 0);
+    const qp = quat.multiply(quat.create(), q, p);
+    const r = quat.multiply(quat.create(), qp, quat.conjugate(quat.create(), q));
+    return [r[0], r[1], r[2]];
+  }
+
+  function expectClose(v: ReadonlyVec3, x: number, y: number, z: number, digits = 6): void {
+    expect(v[0]).toBeCloseTo(x, digits);
+    expect(v[1]).toBeCloseTo(y, digits);
+    expect(v[2]).toBeCloseTo(z, digits);
+  }
+
+  /** Test-only cast site: a Quat view over element `index` of a shared buffer. */
+  function quatViewAt(buffer: ArrayBufferLike, index: number): Quat {
+    return new Float32Array(buffer, index * FLOAT_BYTES, 4) as Quat;
+  }
+
+  test('writes into out and returns it', () => {
+    const out = vec3.create();
+    expect(vec3.transformQuat(out, vec3.UP, quat.IDENTITY)).toBe(out);
+  });
+
+  test('the identity leaves the vector exactly unchanged', () => {
+    const v = vec3.create(1.5, -2, 3);
+    expectComponents(vec3.transformQuat(vec3.create(), v, quat.IDENTITY), 1.5, -2, 3);
+  });
+
+  test('matches the sandwich product for arbitrary unit quaternions', () => {
+    const rotations = [
+      quat.fromEuler(quat.create(), 0.3, -1.1, 0.7),
+      quat.fromEuler(quat.create(), -2.4, 0.5, 3),
+      about(vec3.normalize(vec3.create(), vec3.create(1, 2, 3)), 1.2),
+    ];
+    const vectors = [vec3.create(1, 0, 0), vec3.create(-3, 4, 0.5), vec3.create(7, -2, -9)];
+
+    for (const q of rotations) {
+      for (const v of vectors) {
+        const [x, y, z] = sandwich(q, v);
+        expectClose(vec3.transformQuat(vec3.create(), v, q), x, y, z, 5);
+      }
+    }
+  });
+
+  test('follows the right-hand rule: a positive turn about UP takes FORWARD to LEFT', () => {
+    const q = about(vec3.UP, Math.PI / 2);
+    expectClose(vec3.transformQuat(vec3.create(), vec3.FORWARD, q), -1, 0, 0);
+  });
+
+  test('a positive turn about +Z takes +X to +Y', () => {
+    const q = about(vec3.create(0, 0, 1), Math.PI / 2);
+    expectClose(vec3.transformQuat(vec3.create(), vec3.create(1, 0, 0), q), 0, 1, 0);
+  });
+
+  test('rotating FORWARD gives the facing direction', () => {
+    // An eighth turn to the left: facing halfway between FORWARD and LEFT.
+    const q = about(vec3.UP, Math.PI / 4);
+    expectClose(vec3.transformQuat(vec3.create(), vec3.FORWARD, q), -S, 0, -S);
+  });
+
+  test('a half turn about UP takes FORWARD to BACK', () => {
+    const q = about(vec3.UP, Math.PI);
+    expectClose(vec3.transformQuat(vec3.create(), vec3.FORWARD, q), 0, 0, 1);
+  });
+
+  test('keeps the length of the vector', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const v = vec3.create(3, -4, 12);
+    expect(vec3.magnitude(vec3.transformQuat(vec3.create(), v, q))).toBeCloseTo(13, 5);
+  });
+
+  test('q and -q rotate a vector identically', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const negated = quat.create(-q[0], -q[1], -q[2], -q[3]);
+    const v = vec3.create(1, 2, 3);
+    const a = vec3.transformQuat(vec3.create(), v, q);
+    expectClose(vec3.transformQuat(vec3.create(), v, negated), a[0], a[1], a[2]);
+  });
+
+  test('rotating by multiply(a, b) is rotating by b, then by a', () => {
+    const a = about(vec3.create(1, 0, 0), Math.PI / 2);
+    const b = about(vec3.create(0, 0, 1), Math.PI / 2);
+    const v = vec3.create(1, 2, 3);
+
+    const combined = vec3.transformQuat(vec3.create(), v, quat.multiply(quat.create(), a, b));
+    const stepwise = vec3.transformQuat(vec3.create(), vec3.transformQuat(vec3.create(), v, b), a);
+
+    expectClose(combined, stepwise[0], stepwise[1], stepwise[2]);
+  });
+
+  test('rotating by the conjugate undoes the rotation', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const inverse = quat.conjugate(quat.create(), q);
+    const there = vec3.transformQuat(vec3.create(), vec3.create(1, 2, 3), q);
+    expectClose(vec3.transformQuat(vec3.create(), there, inverse), 1, 2, 3, 5);
+  });
+
+  test('a zero vector stays zero', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    expectComponents(vec3.transformQuat(vec3.create(), vec3.ZERO, q), 0, 0, 0);
+  });
+
+  test('a non-unit quaternion is not a scaled rotation: a doubled identity leaves v unchanged', () => {
+    const v = vec3.create(1, 2, 3);
+    expectComponents(vec3.transformQuat(vec3.create(), v, quat.create(0, 0, 0, 2)), 1, 2, 3);
+    // The sandwich product would have scaled it by the squared length instead.
+    expect(sandwich(quat.create(0, 0, 0, 2), v)).toEqual([4, 8, 12]);
+  });
+
+  test('a NaN component in either input makes the result NaN', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const fromVector = vec3.transformQuat(vec3.create(), vec3.create(Number.NaN, 2, 3), q);
+    const nanQuat = quat.create(0, 0, 0, Number.NaN);
+    const fromQuat = vec3.transformQuat(vec3.create(), vec3.create(1, 2, 3), nanQuat);
+    expect(Array.from(fromVector).every(Number.isNaN)).toBe(true);
+    expect(Array.from(fromQuat).every(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to either input', () => {
+    const v = vec3.create(1, 2, 3);
+    const q = quat.create(0, S, 0, S);
+    vec3.transformQuat(vec3.create(), v, q);
+    expectComponents(v, 1, 2, 3);
+    expect(Array.from(q)).toEqual([Math.fround(0), Math.fround(S), 0, Math.fround(S)]);
+  });
+
+  test('out may be the same object as v', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const expected = vec3.transformQuat(vec3.create(), vec3.create(1, 2, 3), q);
+    const v = vec3.create(1, 2, 3);
+    vec3.transformQuat(v, v, q);
+    expect(Array.from(v)).toEqual(Array.from(expected));
+  });
+
+  test('out may overlap v', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    for (let outOffset = 0; outOffset < 3; outOffset++) {
+      for (let vOffset = 0; vOffset < 3; vOffset++) {
+        if (outOffset === vOffset) continue;
+
+        const buffer = sequentialBuffer(6);
+        const v = viewAt(buffer, vOffset);
+        const expected = vec3.transformQuat(vec3.create(), vec3.clone(v), q);
+
+        vec3.transformQuat(viewAt(buffer, outOffset), v, q);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('out may overlap q, as in a pooled position-and-rotation record', () => {
+    for (let outOffset = 0; outOffset < 5; outOffset++) {
+      for (let qOffset = 0; qOffset < 4; qOffset++) {
+        const buffer = sequentialBuffer(8);
+        const q = quatViewAt(buffer, qOffset);
+        quat.normalize(q, q);
+        const v = vec3.create(1, -2, 0.5);
+        const expected = vec3.transformQuat(vec3.create(), v, quat.clone(q));
+
+        vec3.transformQuat(viewAt(buffer, outOffset), v, q);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(5);
+    vec3.transformQuat(viewAt(pool, 1), vec3.create(7, 8, 9), quat.IDENTITY);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 7, 8, 9, 5]);
   });
 });

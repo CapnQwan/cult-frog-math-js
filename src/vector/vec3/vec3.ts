@@ -11,6 +11,7 @@ import { EPSILON } from '../../constants.js';
 import { lerp as lerpScalar } from '../../interpolation.js';
 import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
+import type { ReadonlyQuat } from '../../quaternion/index.js';
 import type { ReadonlyVec3, Vec3 } from './_types/vec3.js';
 
 /** The number of elements in a `Vec3`. */
@@ -718,6 +719,57 @@ export function fromPacked(out: Vec3, packed: ArrayLike<number>, index: number):
   out[0] = x;
   out[1] = y;
   out[2] = z;
+  return out;
+}
+
+/**
+ * Rotates `v` by the unit quaternion `q` and writes the result into `out`.
+ *
+ * This is how a quaternion is applied to anything: a direction, a velocity,
+ * an offset from a parent. A quaternion has no direction of its own, so to
+ * find which way an object faces, rotate the forward axis:
+ * `transformQuat(out, Vec3.FORWARD, q)`.
+ *
+ * Rotations combine the same way as `Quat.multiply`, so rotating by
+ * `multiply(tmp, a, b)` gives the same result as rotating by `b` and then by
+ * `a`. Rotating by `Quat.conjugate` of a unit `q` undoes it.
+ *
+ * The result is the sandwich product `q * v * conjugate(q)`, worked out as
+ * `t = 2 * cross(q.xyz, v)`, then `v + w * t + cross(q.xyz, t)`, which costs
+ * about half of two `multiply` calls.
+ *
+ * `q` **must be unit length**. That simplification relies on it, so a
+ * non-unit `q` gives neither a rotation nor a scaled one: a doubled identity
+ * leaves `v` unchanged rather than scaling it by `4`. Normalise `q` first if
+ * it has drifted. A unit `q` preserves the length of `v`, up to float32
+ * rounding.
+ *
+ * Bad input stays visible: a `NaN` component in either input makes the result
+ * `NaN`.
+ *
+ * Both inputs are read into locals first, so `out` may be `v`, or a view
+ * overlapping either `v` or `q`.
+ *
+ * @param out - The vector to write to.
+ * @param v - The vector to rotate.
+ * @param q - The unit quaternion to rotate by.
+ * @returns `out`.
+ */
+export function transformQuat(out: Vec3, v: ReadonlyVec3, q: ReadonlyQuat): Vec3 {
+  // biome-ignore format: packed component reads
+  const vx = v[0], vy = v[1], vz = v[2];
+  // biome-ignore format: packed component reads
+  const qx = q[0], qy = q[1], qz = q[2], qw = q[3];
+
+  // t = 2 * (q.xyz × v)
+  const tx = 2 * (qy * vz - qz * vy);
+  const ty = 2 * (qz * vx - qx * vz);
+  const tz = 2 * (qx * vy - qy * vx);
+
+  // v' = v + w * t + q.xyz × t
+  out[0] = vx + qw * tx + (qy * tz - qz * ty);
+  out[1] = vy + qw * ty + (qz * tx - qx * tz);
+  out[2] = vz + qw * tz + (qx * ty - qy * tx);
   return out;
 }
 

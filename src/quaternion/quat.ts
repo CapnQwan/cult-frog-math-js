@@ -347,6 +347,39 @@ export function conjugate(out: Quat, a: ReadonlyQuat): Quat {
 }
 
 /**
+ * Returns the dot product of `a` and `b`, treating each as one 4D vector. The
+ * order doesn't matter.
+ *
+ * For unit quaternions it measures how far apart two rotations are: the
+ * absolute value is `cos(θ/2)`, where `θ` is the angle of the rotation that
+ * takes one to the other. `1` means the same rotation and `0` means half a
+ * turn apart. Recover the angle with `2 * Math.acos(Math.min(Math.abs(d), 1))`;
+ * the `min` matters because unit quaternions are rarely exactly unit, and
+ * `Math.acos` of anything above `1` is `NaN`.
+ *
+ * Use the absolute value when comparing rotations. `q` and `-q` describe the
+ * same rotation but have a dot product of `-1`. The sign is still meaningful:
+ * a negative dot product means `b` is on the far side of `a`, and
+ * interpolating between them takes the long way round unless one of them is
+ * negated first.
+ *
+ * The result isn't rounded to float32 or limited to its range. Bad input stays
+ * visible: a `NaN` component gives `NaN`, and so does an infinite component
+ * multiplied by `0`.
+ *
+ * @param a - The first quaternion.
+ * @param b - The second quaternion.
+ * @returns The dot product.
+ */
+export function dot(a: ReadonlyQuat, b: ReadonlyQuat): number {
+  // biome-ignore format: packed component reads
+  const aX = a[0], aY = a[1], aZ = a[2], aW = a[3];
+  // biome-ignore format: packed component reads
+  const bX = b[0], bY = b[1], bZ = b[2], bW = b[3];
+  return aX * bX + aY * bY + aZ * bZ + aW * bW;
+}
+
+/**
  * Writes the rotation of `angle` radians about `axis` into `out`.
  *
  * The rotation follows the right-hand rule: with your right thumb along
@@ -385,5 +418,54 @@ export function fromAxisAngle(out: Quat, axis: ReadonlyVec3, angle: number): Qua
   out[2] = z * sin;
   out[3] = Math.cos(half);
 
+  return out;
+}
+
+/**
+ * Writes the rotation described by Euler angles into `out`: `x` is pitch, `y`
+ * is yaw and `z` is roll, all in radians.
+ *
+ * Euler angles only mean something with a fixed order, and this one is
+ * **Y-X-Z**: the result is `qy * qx * qz`. Read as rotations about the world
+ * axes, roll is applied first, then pitch, then yaw. Read as rotations about
+ * the object's own axes, that is yaw, then pitch about the turned right axis,
+ * then roll about the resulting forward axis, which is how a y-up camera or
+ * character is usually steered.
+ *
+ * Each angle follows the right-hand rule about its axis, so with the
+ * package's y-up, right-handed axes:
+ *
+ * - a positive `y` (yaw) turns `Vec3.FORWARD` towards `Vec3.LEFT`;
+ * - a positive `x` (pitch) tilts `Vec3.FORWARD` towards `Vec3.UP`;
+ * - a positive `z` (roll) tips `Vec3.UP` towards `Vec3.LEFT`.
+ *
+ * At a pitch of exactly ±90°, yaw and roll turn about the same axis, so only
+ * their difference (or sum) matters and many angle triples give the same
+ * rotation. This is gimbal lock, and it belongs to Euler angles themselves,
+ * not to this function. Store orientations as quaternions and use Euler
+ * angles only for input and authoring.
+ *
+ * The result is a unit quaternion, up to float32 rounding. As with
+ * {@link fromAxisAngle}, angles a full turn apart give `q` and `-q`, the same
+ * rotation with opposite signs.
+ *
+ * Every component of `out` is overwritten.
+ *
+ * @param out - The quaternion to write to.
+ * @param x - The pitch, about the x axis, in radians.
+ * @param y - The yaw, about the y axis, in radians.
+ * @param z - The roll, about the z axis, in radians.
+ * @returns `out`.
+ */
+export function fromEuler(out: Quat, x: number, y: number, z: number): Quat {
+  // biome-ignore format: packed component reads
+  const cx = Math.cos(x * 0.5), cy = Math.cos(y * 0.5), cz = Math.cos(z * 0.5);
+  // biome-ignore format: packed component reads
+  const sx = Math.sin(x * 0.5), sy = Math.sin(y * 0.5), sz = Math.sin(z * 0.5);
+
+  out[0] = sx * cy * cz + cx * sy * sz;
+  out[1] = cx * sy * cz - sx * cy * sz;
+  out[2] = cx * cy * sz - sx * sy * cz;
+  out[3] = cx * cy * cz + sx * sy * sz;
   return out;
 }

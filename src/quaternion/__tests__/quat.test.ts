@@ -875,3 +875,202 @@ describe('fromAxisAngle', () => {
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
   });
 });
+
+describe('dot', () => {
+  test('sums the products of all four components', () => {
+    expect(quat.dot(quat.create(1, 2, 3, 4), quat.create(5, 6, 7, 8))).toBe(70);
+  });
+
+  test('does not depend on the order', () => {
+    const a = quat.create(0.1, -0.7, 0.3, 0.9);
+    const b = quat.create(-0.4, 0.2, 0.8, 0.5);
+    expect(quat.dot(a, b)).toBe(quat.dot(b, a));
+  });
+
+  test('a unit quaternion with itself is 1', () => {
+    expect(quat.dot(quat.IDENTITY, quat.IDENTITY)).toBe(1);
+    const q = quat.fromAxisAngle(quat.create(), vec3.UP, 1.3);
+    expect(quat.dot(q, q)).toBeCloseTo(1, 6);
+  });
+
+  test('is cos(θ/2) of the angle between two rotations', () => {
+    for (const angle of [0.2, 1, Math.PI / 2, 2.5]) {
+      const q = quat.fromAxisAngle(quat.create(), vec3.RIGHT, angle);
+      expect(quat.dot(quat.IDENTITY, q)).toBeCloseTo(Math.cos(angle / 2), 6);
+    }
+  });
+
+  test('the documented angle recovery gives the angle between rotations', () => {
+    const a = quat.fromAxisAngle(quat.create(), vec3.UP, 0.3);
+    const b = quat.fromAxisAngle(quat.create(), vec3.UP, 1.5);
+    const d = quat.dot(a, b);
+    expect(2 * Math.acos(Math.min(Math.abs(d), 1))).toBeCloseTo(1.2, 5);
+  });
+
+  test('is 0 for rotations half a turn apart', () => {
+    const half = quat.fromAxisAngle(quat.create(), vec3.UP, Math.PI);
+    expect(quat.dot(quat.IDENTITY, half)).toBeCloseTo(0, 6);
+  });
+
+  test('q and -q are the same rotation but have a dot product of -1', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.UP, 0.8);
+    const negated = quat.create(-q[0], -q[1], -q[2], -q[3]);
+    expect(quat.dot(q, negated)).toBeCloseTo(-1, 6);
+    expect(Math.abs(quat.dot(q, negated))).toBeCloseTo(1, 6);
+  });
+
+  test('a NaN component gives NaN', () => {
+    expect(quat.dot(quat.create(Number.NaN, 0, 0, 1), quat.IDENTITY)).toBeNaN();
+  });
+
+  test('an infinite component multiplied by 0 gives NaN', () => {
+    expect(quat.dot(quat.create(Infinity, 0, 0, 1), quat.IDENTITY)).toBeNaN();
+  });
+
+  test('is not rounded to float32', () => {
+    const a = quat.create(0.1, 0, 0, 0);
+    expect(quat.dot(a, a)).toBe(a[0] * a[0]);
+    expect(quat.dot(a, a)).not.toBe(Math.fround(a[0] * a[0]));
+  });
+
+  test('never writes to either input', () => {
+    const a = quat.create(1, 2, 3, 4);
+    const b = quat.create(5, 6, 7, 8);
+    quat.dot(a, b);
+    expectComponents(a, 1, 2, 3, 4);
+    expectComponents(b, 5, 6, 7, 8);
+  });
+});
+
+describe('fromEuler', () => {
+  const X = vec3.create(1, 0, 0);
+  const Y = vec3.create(0, 1, 0);
+  const Z = vec3.create(0, 0, 1);
+  const about = (axis: Vec3, angle: number): Quat => quat.fromAxisAngle(quat.create(), axis, angle);
+
+  /** The documented order, built from single-axis rotations: `qy * qx * qz`. */
+  function reference(x: number, y: number, z: number): Quat {
+    const yx = quat.multiply(quat.create(), about(Y, y), about(X, x));
+    return quat.multiply(quat.create(), yx, about(Z, z));
+  }
+
+  function expectQuatClose(actual: ReadonlyQuat, expected: ReadonlyQuat): void {
+    expectClose(actual, expected[0], expected[1], expected[2], expected[3]);
+  }
+
+  function expectVecClose(actual: readonly number[], expected: ArrayLike<number>): void {
+    expect(actual[0]).toBeCloseTo(expected[0] as number, 6);
+    expect(actual[1]).toBeCloseTo(expected[1] as number, 6);
+    expect(actual[2]).toBeCloseTo(expected[2] as number, 6);
+  }
+
+  const asTuple = (v: ArrayLike<number>): [number, number, number] => [
+    v[0] as number,
+    v[1] as number,
+    v[2] as number,
+  ];
+
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.fromEuler(out, 0.1, 0.2, 0.3)).toBe(out);
+  });
+
+  test('zero angles give exactly the identity', () => {
+    expect(quat.isEqual(quat.fromEuler(quat.create(), 0, 0, 0), quat.IDENTITY)).toBe(true);
+  });
+
+  test('each angle alone is a rotation about its own axis', () => {
+    expectQuatClose(quat.fromEuler(quat.create(), 0.9, 0, 0), about(X, 0.9));
+    expectQuatClose(quat.fromEuler(quat.create(), 0, 0.9, 0), about(Y, 0.9));
+    expectQuatClose(quat.fromEuler(quat.create(), 0, 0, 0.9), about(Z, 0.9));
+  });
+
+  test('is qy * qx * qz for mixed angles', () => {
+    const cases: [number, number, number][] = [
+      [0.3, -1.1, 0.7],
+      [-2.4, 0.5, 3],
+      [1.2, 2.8, -0.6],
+      [Math.PI / 2, 0.4, -0.9],
+    ];
+    for (const [x, y, z] of cases) {
+      expectQuatClose(quat.fromEuler(quat.create(), x, y, z), reference(x, y, z));
+    }
+  });
+
+  test('applies roll before yaw, about the world axes', () => {
+    // Roll takes UP to LEFT, then yaw takes LEFT to BACK. Yawing first would
+    // leave UP alone and end at LEFT.
+    const q = quat.fromEuler(quat.create(), 0, Math.PI / 2, Math.PI / 2);
+    expectVecClose(rotate(q, asTuple(vec3.UP)), vec3.BACK);
+  });
+
+  test('pitches about the yawed right axis', () => {
+    // Yaw a quarter turn to face LEFT, then pitch up an eighth turn: up and to the left.
+    const S = Math.SQRT1_2;
+    const q = quat.fromEuler(quat.create(), Math.PI / 4, Math.PI / 2, 0);
+    expectVecClose(rotate(q, asTuple(vec3.FORWARD)), [-S, S, 0]);
+  });
+
+  test('a positive yaw turns FORWARD towards LEFT', () => {
+    const q = quat.fromEuler(quat.create(), 0, Math.PI / 2, 0);
+    expectVecClose(rotate(q, asTuple(vec3.FORWARD)), vec3.LEFT);
+  });
+
+  test('a positive pitch tilts FORWARD towards UP', () => {
+    const q = quat.fromEuler(quat.create(), Math.PI / 2, 0, 0);
+    expectVecClose(rotate(q, asTuple(vec3.FORWARD)), vec3.UP);
+  });
+
+  test('a positive roll tips UP towards LEFT', () => {
+    const q = quat.fromEuler(quat.create(), 0, 0, Math.PI / 2);
+    expectVecClose(rotate(q, asTuple(vec3.UP)), vec3.LEFT);
+  });
+
+  test('gives a unit quaternion', () => {
+    expect(quat.magnitude(quat.fromEuler(quat.create(), 0.3, -1.1, 0.7))).toBeCloseTo(1, 6);
+    expect(quat.magnitude(quat.fromEuler(quat.create(), -2.4, 5, 3))).toBeCloseTo(1, 6);
+  });
+
+  test('at +90° pitch only yaw minus roll matters (gimbal lock)', () => {
+    const a = quat.fromEuler(quat.create(), Math.PI / 2, 0.5, 0.2);
+    const b = quat.fromEuler(quat.create(), Math.PI / 2, 0.3, 0);
+    expectQuatClose(a, b);
+  });
+
+  test('at -90° pitch only yaw plus roll matters (gimbal lock)', () => {
+    const a = quat.fromEuler(quat.create(), -Math.PI / 2, 0.5, 0.2);
+    const b = quat.fromEuler(quat.create(), -Math.PI / 2, 0.7, 0);
+    expectQuatClose(a, b);
+  });
+
+  test('angles a full turn apart give opposite quaternions for the same rotation', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const turned = quat.fromEuler(quat.create(), 0.3, -1.1 + 2 * Math.PI, 0.7);
+
+    expectClose(turned, -q[0], -q[1], -q[2], -q[3]);
+
+    const [ax, ay, az] = rotate(q, [1, 2, 3]);
+    const [bx, by, bz] = rotate(turned, [1, 2, 3]);
+    expect(bx).toBeCloseTo(ax, 5);
+    expect(by).toBeCloseTo(ay, 5);
+    expect(bz).toBeCloseTo(az, 5);
+  });
+
+  test('a NaN angle gives NaN', () => {
+    const q = quat.fromEuler(quat.create(), 0, Number.NaN, 0);
+    expect(Array.from(q).every(Number.isNaN)).toBe(true);
+  });
+
+  test('overwrites every component of out', () => {
+    const out = quat.create(7, 7, 7, 7);
+    quat.fromEuler(out, 0, 0, 0);
+    expect(quat.isEqual(out, quat.IDENTITY)).toBe(true);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.fromEuler(viewAt(pool, 2), 0, 0, 0);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
+  });
+});
