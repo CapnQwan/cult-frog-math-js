@@ -1074,3 +1074,305 @@ describe('fromEuler', () => {
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
   });
 });
+
+/** The rotation angle between two unit quaternions, in radians. */
+function angleBetween(a: ReadonlyQuat, b: ReadonlyQuat): number {
+  return 2 * Math.acos(Math.min(Math.abs(quat.dot(a, b)), 1));
+}
+
+/** The rotation of `angle` radians about `Vec3.UP`. */
+function yaw(angle: number): Quat {
+  return quat.fromAxisAngle(quat.create(), vec3.UP, angle);
+}
+
+function negated(q: ReadonlyQuat): Quat {
+  return quat.create(-q[0], -q[1], -q[2], -q[3]);
+}
+
+describe('slerp', () => {
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.slerp(out, quat.IDENTITY, yaw(1), 0.5)).toBe(out);
+  });
+
+  test('t = 0 gives exactly a', () => {
+    const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    expect(Array.from(quat.slerp(quat.create(), a, yaw(2), 0))).toEqual(Array.from(a));
+  });
+
+  test('t = 1 gives b', () => {
+    const b = yaw(2);
+    expectClose(quat.slerp(quat.create(), quat.IDENTITY, b, 1), b[0], b[1], b[2], b[3]);
+  });
+
+  test('turns at a constant angular speed', () => {
+    const b = yaw(2);
+    for (const t of [0.1, 0.25, 0.5, 0.75, 0.9]) {
+      const q = quat.slerp(quat.create(), quat.IDENTITY, b, t);
+      expect(angleBetween(quat.IDENTITY, q)).toBeCloseTo(2 * t, 5);
+    }
+  });
+
+  test('stays on the arc: the midpoint is the half-angle rotation about the same axis', () => {
+    const half = yaw(1);
+    const mid = quat.slerp(quat.create(), quat.IDENTITY, yaw(2), 0.5);
+    expectClose(mid, half[0], half[1], half[2], half[3]);
+  });
+
+  test('takes the short way round when b is the negated form', () => {
+    const viaNegated = quat.slerp(quat.create(), quat.IDENTITY, negated(yaw(2)), 0.5);
+    expect(angleBetween(quat.IDENTITY, viaNegated)).toBeCloseTo(1, 5);
+  });
+
+  test('t = 1 gives -b when b had to be negated', () => {
+    const b = negated(yaw(2));
+    const end = quat.slerp(quat.create(), quat.IDENTITY, b, 1);
+
+    expectClose(end, -b[0], -b[1], -b[2], -b[3]);
+    expect(quat.isEqualEpsilon(end, b)).toBe(false);
+    expect(Math.abs(quat.dot(end, b))).toBeCloseTo(1, 6);
+  });
+
+  test('extrapolates along the same arc at the same speed', () => {
+    const b = yaw(1);
+    const twice = quat.slerp(quat.create(), quat.IDENTITY, b, 2);
+    expect(angleBetween(quat.IDENTITY, twice)).toBeCloseTo(2, 5);
+
+    const back = quat.slerp(quat.create(), quat.IDENTITY, b, -0.5);
+    const expected = yaw(-0.5);
+    expectClose(back, expected[0], expected[1], expected[2], expected[3]);
+  });
+
+  test('gives a unit quaternion', () => {
+    const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const b = quat.fromEuler(quat.create(), -2.4, 0.5, 3);
+    for (const t of [0.2, 0.5, 0.8]) {
+      expect(quat.magnitude(quat.slerp(quat.create(), a, b, t))).toBeCloseTo(1, 6);
+    }
+  });
+
+  test('within the threshold it gives exactly the nlerp result', () => {
+    // 3° apart, inside the roughly 3.6° cut-off.
+    const a = yaw(0.2);
+    const b = yaw(0.2 + (3 * Math.PI) / 180);
+    const viaSlerp = quat.slerp(quat.create(), a, b, 0.3);
+    const viaNlerp = quat.nlerp(quat.create(), a, b, 0.3);
+    expect(Array.from(viaSlerp)).toEqual(Array.from(viaNlerp));
+  });
+
+  test('outside the threshold it does not use nlerp', () => {
+    // 4° apart, just past the cut-off.
+    const a = yaw(0.2);
+    const b = yaw(0.2 + (4 * Math.PI) / 180);
+    const viaSlerp = quat.slerp(quat.create(), a, b, 0.3);
+    const viaNlerp = quat.nlerp(quat.create(), a, b, 0.3);
+    expect(Array.from(viaSlerp)).not.toEqual(Array.from(viaNlerp));
+  });
+
+  test('is continuous across the threshold', () => {
+    const just = (degrees: number): number => {
+      const b = yaw((degrees * Math.PI) / 180);
+      return angleBetween(quat.IDENTITY, quat.slerp(quat.create(), quat.IDENTITY, b, 0.5));
+    };
+    expect(just(3.62)).toBeCloseTo(just(3.63), 3);
+  });
+
+  test('identical inputs give that rotation', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    expectClose(quat.slerp(quat.create(), q, q, 0.4), q[0], q[1], q[2], q[3]);
+  });
+
+  test('does not return NaN when rounding pushes the dot product above 1', () => {
+    const candidates = [
+      quat.create(1, 2, 3, 4),
+      quat.create(0.1, 0.2, 0.3, 0.4),
+      quat.create(1, 1, 1, 1),
+      quat.create(3, -7, 2, 5),
+      quat.create(0.7, 0.1, -0.3, 0.2),
+    ].map((q) => quat.normalize(q, q));
+    const q = candidates.find((c) => quat.dot(c, c) > 1);
+
+    expect(q).toBeDefined();
+    const result = quat.slerp(quat.create(), q as Quat, q as Quat, 0.5);
+    expect(Array.from(result).some(Number.isNaN)).toBe(false);
+  });
+
+  test('non-unit inputs above the threshold quietly take the nlerp path', () => {
+    const a = quat.create(0, 0, 0, 2);
+    const b = yaw(2);
+    const doubledB = quat.create(2 * b[0], 2 * b[1], 2 * b[2], 2 * b[3]);
+    // The dot product is about 2.16, so it reads as "nearly identical".
+    expect(quat.dot(a, doubledB)).toBeGreaterThan(1);
+    expect(Array.from(quat.slerp(quat.create(), a, doubledB, 0.5))).toEqual(
+      Array.from(quat.nlerp(quat.create(), a, doubledB, 0.5))
+    );
+  });
+
+  test('a NaN in either input or in t gives NaN', () => {
+    const nanQuat = quat.create(Number.NaN, 0, 0, 1);
+    const results = [
+      quat.slerp(quat.create(), nanQuat, yaw(2), 0.5),
+      quat.slerp(quat.create(), quat.IDENTITY, nanQuat, 0.5),
+      quat.slerp(quat.create(), quat.IDENTITY, yaw(2), Number.NaN),
+      quat.slerp(quat.create(), quat.IDENTITY, yaw(0.01), Number.NaN),
+    ];
+    for (const q of results) expect(Array.from(q).every(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to either input', () => {
+    const a = quat.create(0, 0, 0, 1);
+    const b = quat.create(0, 1, 0, 0);
+    quat.slerp(quat.create(), a, b, 0.5);
+    expectComponents(a, 0, 0, 0, 1);
+    expectComponents(b, 0, 1, 0, 0);
+  });
+
+  test('out may be a or b', () => {
+    const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const b = yaw(2);
+    const expected = Array.from(quat.slerp(quat.create(), a, b, 0.3));
+
+    const intoA = quat.clone(a);
+    quat.slerp(intoA, intoA, b, 0.3);
+    expect(Array.from(intoA)).toEqual(expected);
+
+    const intoB = quat.clone(b);
+    quat.slerp(intoB, a, intoB, 0.3);
+    expect(Array.from(intoB)).toEqual(expected);
+  });
+
+  test('out may overlap either input', () => {
+    const other = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        for (const inputIsA of [true, false]) {
+          const buffer = sequentialBuffer(8);
+          const input = viewAt(buffer, inputOffset);
+          quat.normalize(input, input);
+          const a = inputIsA ? input : other;
+          const b = inputIsA ? other : input;
+          const expected = quat.slerp(quat.create(), quat.clone(a), quat.clone(b), 0.3);
+
+          quat.slerp(viewAt(buffer, outOffset), a, b, 0.3);
+
+          expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+        }
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.slerp(viewAt(pool, 2), quat.IDENTITY, quat.IDENTITY, 0.5);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
+  });
+});
+
+describe('nlerp', () => {
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.nlerp(out, quat.IDENTITY, yaw(1), 0.5)).toBe(out);
+  });
+
+  test('t = 0 and t = 1 give the endpoints', () => {
+    // A positive dot product, so b is not negated.
+    const a = quat.fromEuler(quat.create(), 0.3, 0.4, -0.2);
+    const b = yaw(2);
+    expect(quat.dot(a, b)).toBeGreaterThan(0);
+    expectClose(quat.nlerp(quat.create(), a, b, 0), a[0], a[1], a[2], a[3]);
+    expectClose(quat.nlerp(quat.create(), a, b, 1), b[0], b[1], b[2], b[3]);
+  });
+
+  test('t = 0.5 is exactly halfway, like slerp', () => {
+    const viaNlerp = quat.nlerp(quat.create(), quat.IDENTITY, yaw(2), 0.5);
+    const viaSlerp = quat.slerp(quat.create(), quat.IDENTITY, yaw(2), 0.5);
+    expectClose(viaNlerp, viaSlerp[0], viaSlerp[1], viaSlerp[2], viaSlerp[3]);
+  });
+
+  test('is slower near the ends than slerp: a quarter of a 2-radian turn covers about 0.47', () => {
+    const quarter = quat.nlerp(quat.create(), quat.IDENTITY, yaw(2), 0.25);
+    const angle = angleBetween(quat.IDENTITY, quarter);
+    expect(angle).toBeCloseTo(0.467, 3);
+    expect(angle).toBeLessThan(0.5);
+  });
+
+  test('stays on the same arc as slerp', () => {
+    // Every result is a rotation about the same axis, just at a different angle.
+    const q = quat.nlerp(quat.create(), quat.IDENTITY, yaw(2), 0.25);
+    expect(q[0]).toBeCloseTo(0, 6);
+    expect(q[2]).toBeCloseTo(0, 6);
+  });
+
+  test('takes the short way round when b is the negated form', () => {
+    const viaNegated = quat.nlerp(quat.create(), quat.IDENTITY, negated(yaw(2)), 0.5);
+    expect(angleBetween(quat.IDENTITY, viaNegated)).toBeCloseTo(1, 5);
+  });
+
+  test('t = 1 gives -b when b had to be negated', () => {
+    const b = negated(yaw(2));
+    expectClose(quat.nlerp(quat.create(), quat.IDENTITY, b, 1), -b[0], -b[1], -b[2], -b[3]);
+  });
+
+  test('falls short when extrapolating: t = 2 on a 1-radian turn reaches about 1.81', () => {
+    const twice = quat.nlerp(quat.create(), quat.IDENTITY, yaw(1), 2);
+    const angle = angleBetween(quat.IDENTITY, twice);
+    expect(angle).toBeCloseTo(1.807, 3);
+  });
+
+  test('gives a unit quaternion', () => {
+    const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const b = quat.fromEuler(quat.create(), -2.4, 0.5, 3);
+    for (const t of [0.2, 0.5, 0.8, 1.5]) {
+      expect(quat.magnitude(quat.nlerp(quat.create(), a, b, t))).toBeCloseTo(1, 6);
+    }
+  });
+
+  test('non-unit inputs still give a unit result, weighted towards the longer input', () => {
+    const doubledIdentity = quat.create(0, 0, 0, 2);
+    const q = quat.nlerp(quat.create(), doubledIdentity, yaw(2), 0.5);
+    expect(quat.magnitude(q)).toBeCloseTo(1, 6);
+    expect(angleBetween(quat.IDENTITY, q)).toBeLessThan(1);
+  });
+
+  test('a NaN in either input or in t gives NaN', () => {
+    const nanQuat = quat.create(Number.NaN, 0, 0, 1);
+    const results = [
+      quat.nlerp(quat.create(), nanQuat, yaw(2), 0.5),
+      quat.nlerp(quat.create(), quat.IDENTITY, nanQuat, 0.5),
+      quat.nlerp(quat.create(), quat.IDENTITY, yaw(2), Number.NaN),
+    ];
+    for (const q of results) expect(Array.from(q).every(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to either input', () => {
+    const a = quat.create(0, 0, 0, 1);
+    const b = quat.create(0, 1, 0, 0);
+    quat.nlerp(quat.create(), a, b, 0.5);
+    expectComponents(a, 0, 0, 0, 1);
+    expectComponents(b, 0, 1, 0, 0);
+  });
+
+  test('out may be a or b', () => {
+    const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const b = yaw(2);
+    const expected = Array.from(quat.nlerp(quat.create(), a, b, 0.3));
+
+    const intoA = quat.clone(a);
+    quat.nlerp(intoA, intoA, b, 0.3);
+    expect(Array.from(intoA)).toEqual(expected);
+
+    const intoB = quat.clone(b);
+    quat.nlerp(intoB, a, intoB, 0.3);
+    expect(Array.from(intoB)).toEqual(expected);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.nlerp(viewAt(pool, 2), quat.IDENTITY, quat.IDENTITY, 0.5);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
+  });
+});

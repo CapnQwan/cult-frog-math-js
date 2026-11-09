@@ -380,6 +380,150 @@ export function dot(a: ReadonlyQuat, b: ReadonlyQuat): number {
 }
 
 /**
+ * The dot product above which {@link slerp} hands over to {@link nlerp}.
+ *
+ * Slerp's weights divide by `sin θ`, which heads to `0` as the inputs
+ * converge, so the division loses precision and eventually becomes `0 / 0`.
+ * Rounding can also push the dot product of two nearly equal unit quaternions
+ * just above `1`, where `Math.acos` returns `NaN`; this cut-off catches that
+ * too. `0.9995` is a separation of about 3.6° between the two rotations, and
+ * at that size nlerp drifts from slerp's path by about a millionth of a radian.
+ */
+const SLERP_NLERP_THRESHOLD = 0.9995;
+
+/**
+ * Writes the spherical linear interpolation between `a` and `b` into `out`.
+ *
+ * The rotation turns at a constant angular speed along the shortest arc
+ * between the two, so `t = 0.5` is exactly halfway in angle. That makes it the
+ * choice for keyframed animation and anything where the timing of a turn must
+ * be even. When that doesn't matter, {@link nlerp} is cheaper.
+ *
+ * It always takes the short way round. `q` and `-q` describe the same
+ * rotation, so when the dot product is negative `b` is negated first, which
+ * avoids a turn of more than half a revolution. A consequence is that
+ * `t = 1` can give `-b` rather than `b`: the same rotation, but not equal
+ * under `isEqual`.
+ *
+ * When the two rotations are within about 3.6° of each other it falls back
+ * to `nlerp`, whose result is indistinguishable at that distance and which
+ * avoids dividing by a vanishing `sin θ`.
+ *
+ * `t` is not clamped, matching the scalar `lerp`. Outside `[0, 1]` the
+ * rotation keeps turning along the same arc at the same speed, so `t = 2`
+ * turns twice as far as `b`.
+ *
+ * Both inputs **must be unit length**. The dot product is only the cosine of
+ * the angle between unit quaternions; for anything else the angle is wrong,
+ * and a dot product above the threshold quietly takes the `nlerp` path. The
+ * result is unit length, up to float32 rounding.
+ *
+ * A `NaN` in either input or in `t` makes the result `NaN`. Both inputs are
+ * read into locals first, so `out` may be `a`, `b`, or a view overlapping
+ * either.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The unit rotation at `t = 0`.
+ * @param b - The unit rotation at `t = 1`.
+ * @param t - The interpolation factor, usually `0` to `1`.
+ * @returns `out`.
+ */
+export function slerp(out: Quat, a: ReadonlyQuat, b: ReadonlyQuat, t: number): Quat {
+  // biome-ignore format: packed component reads
+  const aX = a[0], aY = a[1], aZ = a[2], aW = a[3];
+  // biome-ignore format: packed component reads
+  let bX = b[0], bY = b[1], bZ = b[2], bW = b[3];
+
+  // θ is the angle between the two in 4D, which is half the rotation angle.
+  let cosTheta = aX * bX + aY * bY + aZ * bZ + aW * bW;
+
+  if (cosTheta < 0) {
+    cosTheta = -cosTheta;
+
+    bX = -bX;
+    bY = -bY;
+    bZ = -bZ;
+    bW = -bW;
+  }
+
+  if (cosTheta > SLERP_NLERP_THRESHOLD) {
+    return nlerp(out, a, b, t);
+  }
+
+  const theta = Math.acos(cosTheta);
+  const sinTheta = Math.sin(theta);
+
+  const wa = Math.sin((1 - t) * theta) / sinTheta;
+  const wb = Math.sin(t * theta) / sinTheta;
+
+  out[0] = aX * wa + bX * wb;
+  out[1] = aY * wa + bY * wb;
+  out[2] = aZ * wa + bZ * wb;
+  out[3] = aW * wa + bW * wb;
+
+  return out;
+}
+
+/**
+ * Writes the normalised linear interpolation between `a` and `b` into `out`:
+ * the components are blended linearly and the result is scaled back to unit
+ * length.
+ *
+ * It follows the same arc as {@link slerp} but not at the same speed: it moves
+ * slowest near the ends and fastest through the middle. For a turn of 2
+ * radians, `t = 0.25` covers about `0.47` radians rather than `0.5`, while
+ * `t = 0.5` is still exactly halfway. The gap shrinks quickly as the turn gets
+ * smaller, and there are no trigonometric calls, so this is the usual choice
+ * for per-frame smoothing such as easing a camera towards a target rotation.
+ *
+ * Like `slerp`, it always takes the short way round, negating `b` when the dot
+ * product is negative, so `t = 1` can give a normalised `-b` rather than `b`.
+ *
+ * `t` is not clamped, matching the scalar `lerp`, but extrapolation does not
+ * keep a steady turn: the blended point runs off along a straight line and
+ * normalising pulls it back, so it falls increasingly short. `t = 2` on a
+ * 1-radian turn reaches about `1.81` radians, not `2`. Use `slerp` to
+ * extrapolate.
+ *
+ * Both inputs should be unit length. Normalising hides an error in their
+ * lengths, but the blend is weighted towards the longer input.
+ *
+ * A `NaN` in either input or in `t` makes the result `NaN`. Both inputs are
+ * read into locals first, so `out` may be `a`, `b`, or a view overlapping
+ * either.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The unit rotation at `t = 0`.
+ * @param b - The unit rotation at `t = 1`.
+ * @param t - The interpolation factor, usually `0` to `1`.
+ * @returns `out`.
+ */
+export function nlerp(out: Quat, a: ReadonlyQuat, b: ReadonlyQuat, t: number): Quat {
+  // biome-ignore format: packed component reads
+  const aX = a[0], aY = a[1], aZ = a[2], aW = a[3];
+  // biome-ignore format: packed component reads
+  let bX = b[0], bY = b[1], bZ = b[2], bW = b[3];
+
+  const cosTheta = aX * bX + aY * bY + aZ * bZ + aW * bW;
+
+  if (cosTheta < 0) {
+    bX = -bX;
+    bY = -bY;
+    bZ = -bZ;
+    bW = -bW;
+  }
+
+  const invT = 1 - t;
+
+  out[0] = aX * invT + bX * t;
+  out[1] = aY * invT + bY * t;
+  out[2] = aZ * invT + bZ * t;
+  out[3] = aW * invT + bW * t;
+
+  return normalize(out, out);
+}
+
+/**
  * Writes the rotation of `angle` radians about `axis` into `out`.
  *
  * The rotation follows the right-hand rule: with your right thumb along

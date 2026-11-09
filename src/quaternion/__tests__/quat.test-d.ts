@@ -274,3 +274,28 @@ describe('fromEuler', () => {
     quat.fromEuler(live, axis);
   });
 });
+
+describe('slerp and nlerp', () => {
+  test('blend two readonly quaternions into a mutable out', () => {
+    expectTypeOf(quat.slerp).parameters.toEqualTypeOf<[Quat, ReadonlyQuat, ReadonlyQuat, number]>();
+    expectTypeOf(quat.nlerp).parameters.toEqualTypeOf<[Quat, ReadonlyQuat, ReadonlyQuat, number]>();
+    expectTypeOf(quat.slerp).returns.toEqualTypeOf<Quat>();
+    expectTypeOf(quat.nlerp).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.slerp(live, quat.IDENTITY, frozen, 0.5);
+    quat.nlerp(live, live, live, 0.5);
+    quat.slerp(shared, frozen, shared, 0.5);
+    // @ts-expect-error the shared constant must never be written through
+    quat.slerp(quat.IDENTITY, live, frozen, 0.5);
+    // @ts-expect-error the shared constant must never be written through
+    quat.nlerp(quat.IDENTITY, live, frozen, 0.5);
+    // @ts-expect-error t is required
+    quat.slerp(live, live, frozen);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.nlerp(live, vector, frozen, 0.5);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.slerp(live, live, raw, 0.5);
+  });
+});
