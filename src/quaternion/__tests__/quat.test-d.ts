@@ -305,6 +305,22 @@ describe('dot', () => {
   });
 });
 
+describe('angle', () => {
+  test('compares two readonly quaternions', () => {
+    expectTypeOf(quat.angle).parameters.toEqualTypeOf<[ReadonlyQuat, ReadonlyQuat]>();
+    expectTypeOf(quat.angle).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    quat.angle(quat.IDENTITY, frozen);
+    quat.angle(live, shared);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.angle(live, vector);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.angle(raw, live);
+  });
+});
+
 describe('fromEuler', () => {
   test('takes three angles and writes a mutable out', () => {
     expectTypeOf(quat.fromEuler).parameters.toEqualTypeOf<[Quat, number, number, number]>();
@@ -345,5 +361,27 @@ describe('slerp and nlerp', () => {
     quat.nlerp(live, vector, frozen, 0.5);
     // @ts-expect-error unbranded arrays are rejected
     quat.slerp(live, live, raw, 0.5);
+  });
+});
+
+describe('fromUnitVectors', () => {
+  test('takes two readonly Vec3 directions and writes a mutable out', () => {
+    expectTypeOf(quat.fromUnitVectors).parameters.toEqualTypeOf<
+      [Quat, ReadonlyVec3, ReadonlyVec3]
+    >();
+    expectTypeOf(quat.fromUnitVectors).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.fromUnitVectors(live, vec3.FORWARD, vec3.LEFT);
+    quat.fromUnitVectors(shared, axis, frozenAxis);
+    // @ts-expect-error the shared constant must never be written through
+    quat.fromUnitVectors(quat.IDENTITY, axis, axis);
+    // @ts-expect-error a Vec2 is not a Vec3
+    quat.fromUnitVectors(live, flat, axis);
+    // @ts-expect-error a Quat is not a direction
+    quat.fromUnitVectors(live, axis, live);
+    // @ts-expect-error both directions are required
+    quat.fromUnitVectors(live, axis);
   });
 });

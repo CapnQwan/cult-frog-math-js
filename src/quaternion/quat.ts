@@ -380,6 +380,37 @@ export function dot(a: ReadonlyQuat, b: ReadonlyQuat): number {
 }
 
 /**
+ * Returns the angle in radians of the rotation that takes `a` to `b`: how far
+ * apart the two orientations are. Pass {@link IDENTITY} as `a` to get the
+ * rotation angle of `b` on its own.
+ *
+ * The result is always between `0` and `π`, the short way round. `q` and `-q`
+ * are the same rotation, so they are `0` apart, and the order of the inputs
+ * doesn't matter.
+ *
+ * It is worked out as `2 * atan2(sin, cos)` of the half-angle rather than
+ * `2 * acos(dot(a, b))`. `acos` is badly conditioned near `1`, so for
+ * near-identical rotations the `acos` form is out by up to about `1e-3`
+ * radians, enough to break a "have we arrived?" check; this form gives `0`
+ * for `angle(q, q)` and stays accurate down to tiny separations. The lengths
+ * are divided out, so the inputs don't need to be exactly unit length, and a
+ * scaled quaternion gives the same angle as its normalised form.
+ *
+ * The zero quaternion is no rotation at all and gives `0` against anything. A
+ * `NaN` component in either input gives `NaN`.
+ *
+ * @param a - The first rotation.
+ * @param b - The second rotation.
+ * @returns The angle between them in radians, from `0` to `π`.
+ */
+export function angle(a: ReadonlyQuat, b: ReadonlyQuat): number {
+  const aMagSq = magnitudeSq(a);
+  const bMagSq = magnitudeSq(b);
+  const d = dot(a, b);
+  return 2 * Math.atan2(Math.sqrt(Math.max(0, aMagSq * bMagSq - d * d)), Math.abs(d));
+}
+
+/**
  * Writes the inverse of `a` into `out`: the {@link conjugate} divided by the
  * squared length, so `multiply(out, a, invert(tmp, a))` is the identity on
  * either side, whatever the length of `a`.
@@ -808,4 +839,81 @@ export function fromEuler(out: Quat, x: number, y: number, z: number): Quat {
   out[2] = cx * cy * sz - sx * sy * cz;
   out[3] = cx * cy * cz + sx * sy * sz;
   return out;
+}
+
+/**
+ * Writes the smallest rotation that turns the direction `from` into the
+ * direction `to` into `out`: a turn about the axis perpendicular to both, by
+ * the angle between them.
+ *
+ * Use it to align one direction with another when the roll about that
+ * direction doesn't matter, such as standing a model's up axis on a ground
+ * normal or pointing a turret's barrel at a target.
+ *
+ * It needs no trigonometry. `(cross(from, to), 1 + dot(from, to))` is the
+ * rotation's quaternion scaled by `2 cos(θ/2)`, by the double-angle
+ * identities, so normalising it gives the exact result. Identical inputs
+ * therefore give exactly the identity.
+ *
+ * Opposite directions have no single answer: a half turn about any axis
+ * perpendicular to `from` works, and near opposite the cross product is too
+ * small to give a stable axis. When `1 + dot(from, to)` is below `EPSILON`,
+ * within about 0.08° of opposite, it writes a half turn `(n, 0)` instead,
+ * where `n` is `Vec3.UP` with its `from` component removed, then normalised.
+ * A horizontal `from` therefore spins about `UP` and stays upright, rather than
+ * flipping over. If `from` is vertical, so that nothing of `UP` is left, `n`
+ * is `Vec3.RIGHT`. Inside that band the result turns `from` to exactly
+ * `-from`, so it can miss `to` by up to about 0.08°.
+ *
+ * Both inputs **must be unit length**, and neither is normalised. The `1` in
+ * `1 + dot` doesn't scale with them, so other lengths give the wrong angle,
+ * not a scaled rotation. The result is unit length, up to float32 rounding.
+ *
+ * Accuracy falls off close to opposite. Float32 inputs are never exactly unit
+ * length, and `1 + dot` cancels as it approaches `0`, so that rounding is
+ * magnified: the angle is out by about `3e-7` radians at 10° short of
+ * opposite, `2e-6` at 0.5° and `3e-5` at 0.1°, before the fallback takes over.
+ *
+ * A `NaN` component in either input makes every component `NaN`. All six
+ * components are read into locals first, so `out` may overlap either input,
+ * as in a pooled record that holds directions next to a rotation.
+ *
+ * @param out - The quaternion to write to.
+ * @param from - The unit direction to turn from.
+ * @param to - The unit direction to turn to.
+ * @returns `out`.
+ */
+export function fromUnitVectors(out: Quat, from: ReadonlyVec3, to: ReadonlyVec3): Quat {
+  // biome-ignore format: packed component reads
+  const fx = from[0], fy = from[1], fz = from[2];
+  // biome-ignore format: packed component reads
+  const tx = to[0], ty = to[1], tz = to[2];
+  const dot = fx * tx + fy * ty + fz * tz;
+
+  if (1 + dot < EPSILON) {
+    const nx = -fy * fx;
+    const ny = 1 - fy * fy;
+    const nz = -fy * fz;
+
+    if (nx * nx + ny * ny + nz * nz < EPSILON) {
+      out[0] = 1;
+      out[1] = 0;
+      out[2] = 0;
+      out[3] = 0;
+      return out;
+    }
+
+    out[0] = nx;
+    out[1] = ny;
+    out[2] = nz;
+    out[3] = 0;
+    return normalize(out, out);
+  }
+
+  out[0] = fy * tz - fz * ty;
+  out[1] = fz * tx - fx * tz;
+  out[2] = fx * ty - fy * tx;
+  out[3] = 1 + dot;
+
+  return normalize(out, out);
 }

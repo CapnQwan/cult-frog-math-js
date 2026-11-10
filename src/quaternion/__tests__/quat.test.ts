@@ -1292,6 +1292,87 @@ describe('dot', () => {
   });
 });
 
+describe('angle', () => {
+  test('is the rotation angle of b when a is the identity', () => {
+    const axis = vec3.normalize(vec3.create(), vec3.create(1, 2, 3));
+    for (const turn of [0.1, 1, 2, 3]) {
+      const q = quat.fromAxisAngle(quat.create(), axis, turn);
+      expect(quat.angle(quat.IDENTITY, q)).toBeCloseTo(turn, 6);
+    }
+  });
+
+  test('takes the short way round, so it never exceeds π', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.UP, 4);
+    expect(quat.angle(quat.IDENTITY, q)).toBeCloseTo(2 * Math.PI - 4, 6);
+  });
+
+  test('is the angle of the rotation that takes a to b', () => {
+    const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const b = quat.fromEuler(quat.create(), -2.4, 0.5, 3);
+    const delta = quat.multiply(quat.create(), quat.conjugate(quat.create(), a), b);
+    expect(quat.angle(a, b)).toBeCloseTo(quat.angle(quat.IDENTITY, delta), 6);
+  });
+
+  test('does not depend on the order', () => {
+    const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const b = quat.fromEuler(quat.create(), -2.4, 0.5, 3);
+    expect(quat.angle(a, b)).toBe(quat.angle(b, a));
+  });
+
+  test('a half turn is exactly π', () => {
+    expect(quat.angle(quat.IDENTITY, quat.create(0, 1, 0, 0))).toBe(Math.PI);
+  });
+
+  test('q and -q are 0 apart', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    expect(quat.angle(q, negated(q))).toBe(0);
+  });
+
+  test('a rotation is exactly 0 from itself, where the acos form drifts', () => {
+    // A small deterministic generator, so a failure always reproduces.
+    let seed = 1;
+    const random = (): number => {
+      seed = (seed * 16807) % 2147483647;
+      return (seed / 2147483647) * 2 - 1;
+    };
+    for (let i = 0; i < 2000; i++) {
+      const q = quat.normalize(quat.create(), quat.create(random(), random(), random(), random()));
+      expect(quat.angle(q, q)).toBe(0);
+    }
+  });
+
+  test('stays accurate for tiny separations', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.UP, 1e-4);
+    expect(quat.angle(quat.IDENTITY, q)).toBeCloseTo(1e-4, 9);
+  });
+
+  test('does not depend on the lengths of the inputs', () => {
+    const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const b = quat.fromEuler(quat.create(), -2.4, 0.5, 3);
+    const scaledA = quat.create(a[0] * 3, a[1] * 3, a[2] * 3, a[3] * 3);
+    const scaledB = quat.create(b[0] * 0.5, b[1] * 0.5, b[2] * 0.5, b[3] * 0.5);
+    expect(quat.angle(scaledA, scaledB)).toBeCloseTo(quat.angle(a, b), 6);
+  });
+
+  test('the zero quaternion gives 0', () => {
+    expect(quat.angle(quat.create(0, 0, 0, 0), yaw(2))).toBe(0);
+  });
+
+  test('a NaN component in either input gives NaN', () => {
+    const nanQuat = quat.create(Number.NaN, 0, 0, 1);
+    expect(quat.angle(nanQuat, quat.IDENTITY)).toBeNaN();
+    expect(quat.angle(quat.IDENTITY, nanQuat)).toBeNaN();
+  });
+
+  test('never writes to either input', () => {
+    const a = quat.create(1, 2, 3, 4);
+    const b = quat.create(0, 1, 0, 0);
+    quat.angle(a, b);
+    expectComponents(a, 1, 2, 3, 4);
+    expectComponents(b, 0, 1, 0, 0);
+  });
+});
+
 describe('fromEuler', () => {
   const X = vec3.create(1, 0, 0);
   const Y = vec3.create(0, 1, 0);
@@ -1744,6 +1825,172 @@ describe('nlerp', () => {
   test('writes only its own slots when out is a pooled view', () => {
     const pool = sequentialBuffer(8);
     quat.nlerp(viewAt(pool, 2), quat.IDENTITY, quat.IDENTITY, 0.5);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
+  });
+});
+
+describe('fromUnitVectors', () => {
+  const S = Math.SQRT1_2;
+  const unit = (x: number, y: number, z: number): Vec3 =>
+    vec3.normalize(vec3.create(), vec3.create(x, y, z));
+  const directions = [
+    vec3.RIGHT,
+    vec3.UP,
+    vec3.FORWARD,
+    vec3.LEFT,
+    vec3.DOWN,
+    vec3.BACK,
+    unit(1, 2, 3),
+    unit(-2, 1, 0.5),
+    unit(0.3, -0.9, -0.2),
+  ];
+
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.fromUnitVectors(out, vec3.FORWARD, vec3.LEFT)).toBe(out);
+  });
+
+  test('identical directions give exactly the identity', () => {
+    for (const v of directions) {
+      expectComponents(quat.fromUnitVectors(quat.create(), v, v), 0, 0, 0, 1);
+    }
+  });
+
+  test('turns from into to for every pair that is not opposite', () => {
+    for (const from of directions) {
+      for (const to of directions) {
+        if (vec3.dot(from, to) < -0.99) continue;
+        const q = quat.fromUnitVectors(quat.create(), from, to);
+        const turned = vec3.transformQuat(vec3.create(), from, q);
+        expectVec3Close(turned, to[0], to[1], to[2]);
+      }
+    }
+  });
+
+  test('stores the scalar last: FORWARD to LEFT is a quarter turn about UP', () => {
+    expectClose(quat.fromUnitVectors(quat.create(), vec3.FORWARD, vec3.LEFT), 0, S, 0, S);
+  });
+
+  test('works for angles past a quarter turn', () => {
+    const backLeft = unit(-1, 0, 1);
+    const q = quat.fromUnitVectors(quat.create(), vec3.FORWARD, backLeft);
+    expect(quat.angle(quat.IDENTITY, q)).toBeCloseTo((3 * Math.PI) / 4, 6);
+    const turned = vec3.transformQuat(vec3.create(), vec3.FORWARD, q);
+    expectVec3Close(turned, backLeft[0], backLeft[1], backLeft[2]);
+  });
+
+  test('turns about an axis perpendicular to both, by the angle between them', () => {
+    const from = unit(1, 2, 3);
+    const to = unit(-2, 1, 0.5);
+    const q = quat.fromUnitVectors(quat.create(), from, to);
+    const axis = vec3.create(q[0], q[1], q[2]);
+
+    expect(vec3.dot(axis, from)).toBeCloseTo(0, 6);
+    expect(vec3.dot(axis, to)).toBeCloseTo(0, 6);
+    expect(quat.angle(quat.IDENTITY, q)).toBeCloseTo(Math.acos(vec3.dot(from, to)), 6);
+  });
+
+  test('swapping the inputs gives the inverse rotation', () => {
+    const from = unit(1, 2, 3);
+    const to = unit(-2, 1, 0.5);
+    const forward = quat.fromUnitVectors(quat.create(), from, to);
+    const back = quat.conjugate(quat.create(), forward);
+    const swapped = quat.fromUnitVectors(quat.create(), to, from);
+    expectClose(swapped, back[0], back[1], back[2], back[3]);
+  });
+
+  test('gives a unit quaternion', () => {
+    for (const from of directions) {
+      for (const to of directions) {
+        expect(quat.magnitude(quat.fromUnitVectors(quat.create(), from, to))).toBeCloseTo(1, 6);
+      }
+    }
+  });
+
+  test('opposite horizontal directions spin about UP and stay upright', () => {
+    const q = quat.fromUnitVectors(quat.create(), vec3.FORWARD, vec3.BACK);
+    expectClose(q, 0, 1, 0, 0);
+    expectVec3Close(vec3.transformQuat(vec3.create(), vec3.UP, q), 0, 1, 0);
+    expectClose(quat.fromUnitVectors(quat.create(), vec3.RIGHT, vec3.LEFT), 0, 1, 0, 0);
+  });
+
+  test('opposite tilted directions turn about UP with the from component removed', () => {
+    const from = unit(1, 1, 0);
+    const to = unit(-1, -1, 0);
+    // UP minus its from component is (-0.5, 0.5, 0), normalised.
+    expectClose(quat.fromUnitVectors(quat.create(), from, to), -S, S, 0, 0);
+  });
+
+  test('opposite vertical directions turn about RIGHT', () => {
+    expectClose(quat.fromUnitVectors(quat.create(), vec3.UP, vec3.DOWN), 1, 0, 0, 0);
+    expectClose(quat.fromUnitVectors(quat.create(), vec3.DOWN, vec3.UP), 1, 0, 0, 0);
+  });
+
+  test('half a degree short of opposite still reaches to, to within float32 cancellation', () => {
+    const offset = (0.5 * Math.PI) / 180;
+    const to = vec3.create(Math.sin(offset), 0, Math.cos(offset));
+    const q = quat.fromUnitVectors(quat.create(), vec3.FORWARD, to);
+    const turned = vec3.transformQuat(vec3.create(), vec3.FORWARD, q);
+    // 1 + dot cancels this close to opposite, so the documented error is about 2e-6.
+    expect(Math.abs(turned[0] - to[0])).toBeLessThan(1e-5);
+    expect(Math.abs(turned[1] - to[1])).toBeLessThan(1e-5);
+    expect(Math.abs(turned[2] - to[2])).toBeLessThan(1e-5);
+  });
+
+  test('within the threshold of opposite it takes the fallback half turn', () => {
+    const offset = (0.01 * Math.PI) / 180;
+    const to = vec3.create(Math.sin(offset), 0, Math.cos(offset));
+    const q = quat.fromUnitVectors(quat.create(), vec3.FORWARD, to);
+    expectClose(q, 0, 1, 0, 0);
+
+    // It misses to by the offset, well inside the documented 0.08°.
+    const turned = vec3.transformQuat(vec3.create(), vec3.FORWARD, q);
+    expect(Math.acos(Math.min(vec3.dot(turned, to), 1))).toBeLessThan((0.08 * Math.PI) / 180);
+  });
+
+  test('a NaN component in either input makes every component NaN', () => {
+    const nanVector = vec3.create(Number.NaN, 0, 0);
+    const results = [
+      quat.fromUnitVectors(quat.create(), nanVector, vec3.UP),
+      quat.fromUnitVectors(quat.create(), vec3.UP, nanVector),
+    ];
+    for (const q of results) expect(Array.from(q).every(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to either input', () => {
+    const from = vec3.create(1, 0, 0);
+    const to = vec3.create(0, 1, 0);
+    quat.fromUnitVectors(quat.create(), from, to);
+    expect(Array.from(from)).toEqual([1, 0, 0]);
+    expect(Array.from(to)).toEqual([0, 1, 0]);
+  });
+
+  test('out may overlap either input, as in a pooled record', () => {
+    const from = unit(1, 2, 3);
+    const to = unit(-2, 1, 0.5);
+    for (let outOffset = 0; outOffset <= 6; outOffset++) {
+      const buffer = new ArrayBuffer(10 * FLOAT_BYTES);
+      const floats = new Float32Array(buffer);
+      floats.set(from, 0);
+      floats.set(to, 3);
+      const fromView = vec3ViewAt(buffer, 0);
+      const toView = vec3ViewAt(buffer, 3);
+      const expected = quat.fromUnitVectors(
+        quat.create(),
+        vec3.clone(fromView),
+        vec3.clone(toView)
+      );
+
+      quat.fromUnitVectors(viewAt(buffer, outOffset), fromView, toView);
+
+      expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.fromUnitVectors(viewAt(pool, 2), vec3.FORWARD, vec3.FORWARD);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
   });
