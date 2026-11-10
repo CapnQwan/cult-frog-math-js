@@ -11,7 +11,7 @@ import { EPSILON } from '../../constants.js';
 import { lerp as lerpScalar } from '../../interpolation.js';
 import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
-import type { ReadonlyQuat } from '../../quaternion/index.js';
+import type { ReadonlyQuat } from '../../quaternion/_types/quat.js';
 import type { ReadonlyVec3, Vec3 } from './_types/vec3.js';
 
 /** The number of elements in a `Vec3`. */

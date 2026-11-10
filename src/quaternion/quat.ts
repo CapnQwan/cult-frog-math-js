@@ -27,7 +27,7 @@
 import { EPSILON } from '../constants.js';
 import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
 
-import type { ReadonlyVec3 } from '../vector/index.js';
+import type { ReadonlyVec3 } from '../vector/vec3/_types/vec3.js';
 import type { Quat, ReadonlyQuat } from './_types/quat.js';
 
 /** The number of elements in a `Quat`. */
@@ -411,7 +411,11 @@ const SLERP_NLERP_THRESHOLD = 0.9995;
  *
  * `t` is not clamped, matching the scalar `lerp`. Outside `[0, 1]` the
  * rotation keeps turning along the same arc at the same speed, so `t = 2`
- * turns twice as far as `b`.
+ * turns twice as far as `b`. The exception is the `nlerp` fallback: for
+ * rotations within about 3.6° of each other, extrapolation follows `nlerp`
+ * and falls short as `t` grows. The gap is negligible near the ends (about
+ * 0.01° at `t = 2`) but reaches about 1° by `t = 10`, and the turn never
+ * passes half a revolution however large `t` gets.
  *
  * Both inputs **must be unit length**. The dot product is only the cosine of
  * the angle between unit quaternions; for anything else the angle is wrong,
@@ -447,7 +451,14 @@ export function slerp(out: Quat, a: ReadonlyQuat, b: ReadonlyQuat, t: number): Q
   }
 
   if (cosTheta > SLERP_NLERP_THRESHOLD) {
-    return nlerp(out, a, b, t);
+    const invT = 1 - t;
+
+    out[0] = aX * invT + bX * t;
+    out[1] = aY * invT + bY * t;
+    out[2] = aZ * invT + bZ * t;
+    out[3] = aW * invT + bW * t;
+
+    return normalize(out, out);
   }
 
   const theta = Math.acos(cosTheta);

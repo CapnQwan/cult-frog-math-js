@@ -1369,6 +1369,28 @@ describe('nlerp', () => {
     expect(Array.from(intoB)).toEqual(expected);
   });
 
+  test('out may overlap either input', () => {
+    const other = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        for (const inputIsA of [true, false]) {
+          const buffer = sequentialBuffer(8);
+          const input = viewAt(buffer, inputOffset);
+          quat.normalize(input, input);
+          const a = inputIsA ? input : other;
+          const b = inputIsA ? other : input;
+          const expected = quat.nlerp(quat.create(), quat.clone(a), quat.clone(b), 0.3);
+
+          quat.nlerp(viewAt(buffer, outOffset), a, b, 0.3);
+
+          expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+        }
+      }
+    }
+  });
+
   test('writes only its own slots when out is a pooled view', () => {
     const pool = sequentialBuffer(8);
     quat.nlerp(viewAt(pool, 2), quat.IDENTITY, quat.IDENTITY, 0.5);
