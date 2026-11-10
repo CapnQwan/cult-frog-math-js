@@ -375,25 +375,3 @@ describe('transformQuat', () => {
     vec3.transformQuat(live, live, raw);
   });
 });
-
-describe('fromAxisQuat', () => {
-  test('reads a readonly quaternion into a mutable out', () => {
-    expectTypeOf(vec3.fromAxisQuat).parameters.toEqualTypeOf<[Vec3, ReadonlyQuat]>();
-    expectTypeOf(vec3.fromAxisQuat).returns.toEqualTypeOf<Vec3>();
-  });
-
-  test('call sites', () => {
-    vec3.fromAxisQuat(live, rotation);
-    vec3.fromAxisQuat(shared, frozenRotation);
-    // @ts-expect-error readonly can never be an out parameter
-    vec3.fromAxisQuat(frozen, rotation);
-    // @ts-expect-error the shared constant must never be written through
-    vec3.fromAxisQuat(vec3.UP, rotation);
-    // @ts-expect-error a Quat is not a Vec3 out
-    vec3.fromAxisQuat(rotation, rotation);
-    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
-    vec3.fromAxisQuat(live, four);
-    // @ts-expect-error unbranded arrays are rejected
-    vec3.fromAxisQuat(live, raw);
-  });
-});

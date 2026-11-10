@@ -385,3 +385,27 @@ describe('fromUnitVectors', () => {
     quat.fromUnitVectors(live, axis);
   });
 });
+
+describe('toAxisAngle', () => {
+  test('writes the axis to a mutable Vec3 and returns the angle', () => {
+    expectTypeOf(quat.toAxisAngle).parameters.toEqualTypeOf<[Vec3, ReadonlyQuat]>();
+    expectTypeOf(quat.toAxisAngle).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    const angle: number = quat.toAxisAngle(axis, frozen);
+    void angle;
+    quat.toAxisAngle(axis, quat.IDENTITY);
+    quat.toAxisAngle(axis, shared);
+    // @ts-expect-error a readonly vector can never be written to
+    quat.toAxisAngle(frozenAxis, live);
+    // @ts-expect-error the shared constant must never be written through
+    quat.toAxisAngle(vec3.UP, live);
+    // @ts-expect-error the axis is a Vec3, not a Quat
+    quat.toAxisAngle(live, live);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.toAxisAngle(axis, vector);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.toAxisAngle(axis, raw);
+  });
+});

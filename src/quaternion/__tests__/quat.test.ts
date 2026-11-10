@@ -1830,6 +1830,206 @@ describe('nlerp', () => {
   });
 });
 
+describe('toAxisAngle', () => {
+  const unit = (x: number, y: number, z: number): Vec3 =>
+    vec3.normalize(vec3.create(), vec3.create(x, y, z));
+  const about = (axis: ReadonlyVec3, angle: number): Quat =>
+    quat.fromAxisAngle(quat.create(), axis, angle);
+  const axes = [vec3.RIGHT, vec3.UP, vec3.BACK, unit(1, 2, 3), unit(-2, 1, 0.5)];
+
+  function expectClose(v: ReadonlyVec3, x: number, y: number, z: number): void {
+    expect(v[0]).toBeCloseTo(x, 6);
+    expect(v[1]).toBeCloseTo(y, 6);
+    expect(v[2]).toBeCloseTo(z, 6);
+  }
+
+  /** Exact comparison against float32-rounded expectations, for the three axis components. */
+  function expectAxis(v: ReadonlyVec3, x: number, y: number, z: number): void {
+    expect([v[0], v[1], v[2]]).toEqual([Math.fround(x), Math.fround(y), Math.fround(z)]);
+  }
+
+  /** Test-only cast site: a Quat view over element `index` of a shared buffer. */
+  function quatViewAt(buffer: ArrayBufferLike, index: number): Quat {
+    return new Float32Array(buffer, index * FLOAT_BYTES, 4) as Quat;
+  }
+
+  test('writes the axis into outAxis and returns the angle', () => {
+    const outAxis = vec3.create();
+    const angle = quat.toAxisAngle(outAxis, about(vec3.UP, 1));
+    expect(angle).toBeCloseTo(1, 6);
+    expectClose(outAxis, 0, 1, 0);
+  });
+
+  test('recovers the axis and angle given to fromAxisAngle for turns up to half a revolution', () => {
+    for (const axis of axes) {
+      for (const angle of [0.3, 1, 2, 3]) {
+        const outAxis = vec3.create();
+        expect(quat.toAxisAngle(outAxis, about(axis, angle))).toBeCloseTo(angle, 6);
+        expectClose(outAxis, axis[0], axis[1], axis[2]);
+      }
+    }
+  });
+
+  test('a turn of more than half a revolution comes back as the shorter turn about the reversed axis', () => {
+    const outAxis = vec3.create();
+    expect(quat.toAxisAngle(outAxis, about(vec3.UP, 4))).toBeCloseTo(2 * Math.PI - 4, 6);
+    expectClose(outAxis, 0, -1, 0);
+  });
+
+  test('a negative angle comes back as a positive angle about the reversed axis', () => {
+    const outAxis = vec3.create();
+    expect(quat.toAxisAngle(outAxis, about(vec3.UP, -1))).toBeCloseTo(1, 6);
+    expectClose(outAxis, 0, -1, 0);
+  });
+
+  test('reads both halves from -q when w is negative', () => {
+    const outAxis = vec3.create();
+    const angle = quat.toAxisAngle(outAxis, quat.create(0, 0.6, 0, -0.8));
+    expectClose(outAxis, 0, -1, 0);
+    expect(angle).toBeCloseTo(2 * Math.atan2(0.6, 0.8), 6);
+  });
+
+  test('q and -q give the same axis and angle', () => {
+    const q = about(unit(1, 2, 3), 1.2);
+    const negated = quat.create(-q[0], -q[1], -q[2], -q[3]);
+    const fromQ = vec3.create();
+    const fromNegated = vec3.create();
+    const angleQ = quat.toAxisAngle(fromQ, q);
+    const angleNegated = quat.toAxisAngle(fromNegated, negated);
+
+    expect(angleNegated).toBeCloseTo(angleQ, 6);
+    expectClose(fromNegated, fromQ[0], fromQ[1], fromQ[2]);
+  });
+
+  test('an exact half turn gives an angle of π, with the axis following the vector part', () => {
+    const fromQ = vec3.create();
+    const fromNegated = vec3.create();
+    expect(quat.toAxisAngle(fromQ, quat.create(0, 1, 0, 0))).toBeCloseTo(Math.PI, 6);
+    expect(quat.toAxisAngle(fromNegated, quat.create(0, -1, 0, -0))).toBeCloseTo(Math.PI, 6);
+    expectAxis(fromQ, 0, 1, 0);
+    expectAxis(fromNegated, 0, -1, 0);
+  });
+
+  test('the angle is always between 0 and π', () => {
+    for (const angle of [-6, -3.5, -1, 0.5, 3.1, 4, 6.2, 9]) {
+      const result = quat.toAxisAngle(vec3.create(), about(unit(1, 2, 3), angle));
+      expect(result).toBeGreaterThanOrEqual(0);
+      expect(result).toBeLessThanOrEqual(Math.PI);
+    }
+  });
+
+  test('the angle matches angle(IDENTITY, q)', () => {
+    const rotations = [
+      quat.fromEuler(quat.create(), 0.3, -1.1, 0.7),
+      quat.fromEuler(quat.create(), -2.4, 0.5, 3),
+      about(vec3.BACK, 5),
+    ];
+    for (const q of rotations) {
+      expect(quat.toAxisAngle(vec3.create(), q)).toBeCloseTo(quat.angle(quat.IDENTITY, q), 6);
+    }
+  });
+
+  test('fromAxisAngle of the result rebuilds the same rotation', () => {
+    const rotations = [
+      quat.fromEuler(quat.create(), 0.3, -1.1, 0.7),
+      quat.fromEuler(quat.create(), -2.4, 0.5, 3),
+      about(vec3.BACK, 5),
+      about(unit(-2, 1, 0.5), -2),
+    ];
+    for (const q of rotations) {
+      const axis = vec3.create();
+      const angle = quat.toAxisAngle(axis, q);
+      const rebuilt = quat.fromAxisAngle(quat.create(), axis, angle);
+      expect(quat.angle(q, rebuilt)).toBeCloseTo(0, 6);
+    }
+  });
+
+  test('gives a unit axis', () => {
+    const axis = vec3.create();
+    quat.toAxisAngle(axis, quat.fromEuler(quat.create(), 0.3, -1.1, 0.7));
+    expect(vec3.magnitude(axis)).toBeCloseTo(1, 6);
+  });
+
+  test('does not depend on the length of q', () => {
+    const q = about(unit(1, 2, 3), 1.2);
+    const scaled = quat.create(q[0] * 5, q[1] * 5, q[2] * 5, q[3] * 5);
+    const fromQ = vec3.create();
+    const fromScaled = vec3.create();
+    const angleQ = quat.toAxisAngle(fromQ, q);
+
+    expect(quat.toAxisAngle(fromScaled, scaled)).toBeCloseTo(angleQ, 6);
+    expectClose(fromScaled, fromQ[0], fromQ[1], fromQ[2]);
+  });
+
+  test('stays accurate for tiny rotations, where 2 * acos(w) gives 0', () => {
+    const axis = unit(1, 2, 3);
+    const q = about(axis, 1e-6);
+    const recovered = vec3.create();
+    const angle = quat.toAxisAngle(recovered, q);
+
+    expectClose(recovered, axis[0], axis[1], axis[2]);
+    expect(Math.abs(angle - 1e-6)).toBeLessThan(1e-12);
+    expect(2 * Math.acos(q[3])).toBe(0);
+  });
+
+  test('a rotation of zero gives RIGHT and an angle of 0', () => {
+    for (const q of [quat.IDENTITY, quat.create(0, 0, 0, -1), quat.create(0, 0, 0, 0)]) {
+      const axis = vec3.create(7, 7, 7);
+      expect(quat.toAxisAngle(axis, q)).toBe(0);
+      expectAxis(axis, 1, 0, 0);
+    }
+  });
+
+  test('only an exact zero is special-cased: a tiny vector part still gives its real axis', () => {
+    const axis = vec3.create();
+    const angle = quat.toAxisAngle(axis, quat.create(0, 0, 1e-20, 1));
+    expectClose(axis, 0, 0, 1);
+    expect(angle).toBeGreaterThan(0);
+  });
+
+  test('a NaN in the vector part makes the axis and the angle NaN', () => {
+    const axis = vec3.create();
+    const angle = quat.toAxisAngle(axis, quat.create(Number.NaN, 0, 0, 1));
+    expect(Array.from(axis).every(Number.isNaN)).toBe(true);
+    expect(angle).toBeNaN();
+  });
+
+  test('a NaN w does not reach the axis, but makes the angle NaN', () => {
+    const axis = vec3.create();
+    const angle = quat.toAxisAngle(axis, quat.create(0, 1, 0, Number.NaN));
+    expectAxis(axis, 0, 1, 0);
+    expect(angle).toBeNaN();
+  });
+
+  test('never writes to q', () => {
+    const q = quat.create(1, 2, 3, 4);
+    quat.toAxisAngle(vec3.create(), q);
+    expect(Array.from(q)).toEqual([1, 2, 3, 4]);
+  });
+
+  test('outAxis may overlap q, as in a pooled axis-and-rotation record', () => {
+    for (let outOffset = 0; outOffset <= 5; outOffset++) {
+      const buffer = new ArrayBuffer(8 * FLOAT_BYTES);
+      new Float32Array(buffer).set(about(unit(1, 2, 3), 1.2), 2);
+      const q = quatViewAt(buffer, 2);
+      const expectedAxis = vec3.create();
+      const expectedAngle = quat.toAxisAngle(expectedAxis, quat.clone(q));
+
+      const angle = quat.toAxisAngle(vec3ViewAt(buffer, outOffset), q);
+
+      expect(angle).toBe(expectedAngle);
+      expect(Array.from(vec3ViewAt(buffer, outOffset))).toEqual(Array.from(expectedAxis));
+    }
+  });
+
+  test('writes only its own slots when outAxis is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.toAxisAngle(vec3ViewAt(pool, 2), quat.IDENTITY);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 1, 0, 0, 6, 7, 8]);
+  });
+});
+
 describe('fromUnitVectors', () => {
   const S = Math.SQRT1_2;
   const unit = (x: number, y: number, z: number): Vec3 =>

@@ -774,62 +774,6 @@ export function transformQuat(out: Vec3, v: ReadonlyVec3, q: ReadonlyQuat): Vec3
 }
 
 /**
- * Writes the unit axis that `q` rotates about into `out`. The partner of
- * `Quat.angle(Quat.IDENTITY, q)`, which gives the angle about this axis, so
- * the pair is the reverse of `Quat.fromAxisAngle`.
- *
- * `q` and `-q` are the same rotation, and the axis is read the way that keeps
- * the angle between `0` and `π`, which is the angle `Quat.angle` reports: if
- * `w` is negative, the axis is taken from `-q`. So a rotation of more than
- * half a turn comes back as the shorter turn the other way, about the reversed
- * axis, and `q` and `-q` give the same axis. With that rule,
- * `Quat.fromAxisAngle(tmp, fromAxisQuat(out, q), Quat.angle(Quat.IDENTITY, q))`
- * rebuilds `q` or `-q`, the same rotation either way.
- *
- * The axis is the vector part of `q`, normalised. That divides out the length
- * of `q`, so `q` doesn't have to be exactly unit length, and it stays accurate
- * for tiny rotations, where dividing by `sin(angle / 2)` would not.
- *
- * A rotation of zero has no axis: when the vector part is exactly zero, as for
- * the identity, `-IDENTITY` or the zero quaternion, `out` is set to
- * `Vec3.RIGHT`. Any axis would be correct there, since the angle is `0`, but a
- * fixed one keeps the result unit length and deterministic. Only an exact zero
- * is special-cased; a very small rotation still gives its real axis.
- *
- * A `NaN` in the vector part makes every component `NaN`. A `NaN` `w` doesn't
- * reach the axis, but `Quat.angle` reports `NaN` for it.
- *
- * `q` is read into locals first, so `out` may be a view overlapping it, as in
- * a pooled record that stores an axis next to a rotation.
- *
- * @param out - The vector to write the axis to.
- * @param q - The rotation to read the axis from.
- * @returns `out`.
- */
-export function fromAxisQuat(out: Vec3, q: ReadonlyQuat): number {
-  // biome-ignore format: packed component reads
-  const qx = q[0], qy = q[1], qz = q[2], qw = q[3];
-
-  const w = Math.max(-1, Math.min(1, qw));
-
-  const angle = 2 * Math.acos(w);
-  const sinHalfAngle = Math.sqrt(1 - w * w);
-
-  if (sinHalfAngle < EPSILON) {
-    out[0] = 1;
-    out[1] = 0;
-    out[2] = 0;
-    return 0;
-  }
-
-  const inv = 1 / sinHalfAngle;
-  out[0] = qx * inv;
-  out[1] = qy * inv;
-  out[2] = qz * inv;
-  return angle;
-}
-
-/**
  * `(0, 0, 0)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`

@@ -27,7 +27,7 @@
 import { EPSILON } from '../constants.js';
 import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
 
-import type { ReadonlyVec3 } from '../vector/vec3/_types/vec3.js';
+import type { ReadonlyVec3, Vec3 } from '../vector/vec3/_types/vec3.js';
 import type { Quat, ReadonlyQuat } from './_types/quat.js';
 
 /** The number of elements in a `Quat`. */
@@ -629,9 +629,9 @@ const SLERP_NLERP_THRESHOLD = 0.9995;
  * rotation keeps turning along the same arc at the same speed, so `t = 2`
  * turns twice as far as `b`. The exception is the `nlerp` fallback: for
  * rotations within about 3.6° of each other, extrapolation follows `nlerp`
- * and falls short as `t` grows. The gap is negligible near the ends (about
- * 0.01° at `t = 2`) but reaches about 1° by `t = 10`, and the turn never
- * passes half a revolution however large `t` gets.
+ * and falls short as `t` grows. The gap is negligible near the ends (under
+ * 0.005° at `t = 2`) but reaches about 1° by `t = 10`, and however large `t`
+ * gets, the turn levels off at about half a revolution instead of continuing.
  *
  * Both inputs **must be unit length**. The dot product is only the cosine of
  * the angle between unit quaternions; for anything else the angle is wrong,
@@ -751,6 +751,69 @@ export function nlerp(out: Quat, a: ReadonlyQuat, b: ReadonlyQuat, t: number): Q
 }
 
 /**
+ * Splits `q` into the unit axis it rotates about, written into `outAxis`, and
+ * the angle in radians about that axis, which is returned. It is the reverse
+ * of {@link fromAxisAngle}.
+ *
+ * Unlike the rest of the package, this returns the angle rather than its
+ * `out` parameter. The axis and angle only mean something together, and
+ * producing both in one call guarantees they come from the same sign of `q`.
+ *
+ * `q` and `-q` are the same rotation, and the result is the reading with an
+ * angle from `0` to `π`: when `w` is negative, both halves are taken from
+ * `-q`. So a rotation of more than half a turn comes back as the shorter turn
+ * the other way, about the reversed axis, and `q` and `-q` give the same axis
+ * and angle. The exception is an exact half turn, where `w` is zero and
+ * neither way is shorter. The angle is `π` for both, but the axis follows the
+ * sign of the vector part, so `q` and `-q` give opposite axes. Both are
+ * correct. Either way, `fromAxisAngle(tmp, outAxis, angle)` rebuilds `q` or
+ * `-q`, the same rotation, and the angle matches `angle(IDENTITY, q)`.
+ *
+ * The axis is the vector part normalised, and the angle is
+ * `2 * atan2(length of the vector part, |w|)`. Both divide out the length of
+ * `q`, so it doesn't have to be exactly unit length, and both stay accurate
+ * for tiny rotations, where dividing by `sin(angle / 2)` or taking
+ * `2 * acos(w)` would not.
+ *
+ * A rotation of zero has no axis: when the vector part is exactly zero, as for
+ * the identity, `-IDENTITY` or the zero quaternion, `outAxis` is set to
+ * `Vec3.RIGHT` and the angle is `0`. Any axis would be correct there, but a
+ * fixed one keeps the axis unit length and deterministic. Only an exact zero
+ * is special-cased; a very small rotation still gives its real axis.
+ *
+ * A `NaN` in the vector part makes the axis and the angle `NaN`. A `NaN` `w`
+ * doesn't reach the axis, but makes the angle `NaN`.
+ *
+ * `q` is read into locals first, so `outAxis` may be a view overlapping it,
+ * as in a pooled record that stores an axis next to a rotation.
+ *
+ * @param outAxis - The vector to write the unit axis to.
+ * @param q - The rotation to split.
+ * @returns The angle in radians, from `0` to `π`.
+ */
+export function toAxisAngle(outAxis: Vec3, q: ReadonlyQuat): number {
+  // biome-ignore format: packed component reads
+  const qx = q[0], qy = q[1], qz = q[2], qw = q[3];
+  const lengthSq = qx * qx + qy * qy + qz * qz;
+
+  if (lengthSq === 0) {
+    outAxis[0] = 1;
+    outAxis[1] = 0;
+    outAxis[2] = 0;
+    return 0;
+  }
+
+  const length = Math.sqrt(lengthSq);
+  const sign = qw < 0 ? -1 : 1;
+  const inv = sign / length;
+
+  outAxis[0] = qx * inv;
+  outAxis[1] = qy * inv;
+  outAxis[2] = qz * inv;
+  return 2 * Math.atan2(length, qw * sign);
+}
+
+/**
  * Writes the rotation of `angle` radians about `axis` into `out`.
  *
  * The rotation follows the right-hand rule: with your right thumb along
@@ -861,8 +924,8 @@ export function fromEuler(out: Quat, x: number, y: number, z: number): Quat {
  * within about 0.08° of opposite, it writes a half turn `(n, 0)` instead,
  * where `n` is `Vec3.UP` with its `from` component removed, then normalised.
  * A horizontal `from` therefore spins about `UP` and stays upright, rather than
- * flipping over. If `from` is vertical, so that nothing of `UP` is left, `n`
- * is `Vec3.RIGHT`. Inside that band the result turns `from` to exactly
+ * flipping over. If `from` is within about 0.06° of vertical, so that too
+ * little of `UP` is left to give a stable axis, `n` is `Vec3.RIGHT`. Inside that band the result turns `from` to exactly
  * `-from`, so it can miss `to` by up to about 0.08°.
  *
  * Both inputs **must be unit length**, and neither is normalised. The `1` in
