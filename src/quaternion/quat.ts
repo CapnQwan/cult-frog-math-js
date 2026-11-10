@@ -427,6 +427,144 @@ export function invert(out: Quat, a: ReadonlyQuat): Quat {
 }
 
 /**
+ * Rotates `a` by `angle` radians about its own x axis and writes the result
+ * into `out`.
+ *
+ * This is `multiply(out, a, fromAxisAngle(tmp, Vec3.RIGHT, angle))` with the
+ * zero terms dropped: no temporary quaternion, and 8 multiplies instead of 16
+ * plus the constructor. Because the turn is on the right, it happens in `a`'s
+ * local frame, about the axis `a` has turned `Vec3.RIGHT` into, so that axis
+ * stays put. To turn about the world x axis instead, multiply on the left:
+ * `multiply(out, fromAxisAngle(tmp, Vec3.RIGHT, angle), a)`.
+ *
+ * It follows the right-hand rule, so a positive angle tilts the object's own
+ * `FORWARD` towards its own `UP`, the same as a positive pitch in
+ * {@link fromEuler}.
+ *
+ * Nothing renormalises. A unit `a` stays unit in exact arithmetic and `a`'s
+ * length is otherwise kept, but float32 rounding drifts the length when this is
+ * applied every frame, so call {@link normalize} periodically. Angles a full
+ * turn apart give opposite quaternions for the same rotation.
+ *
+ * A `NaN` angle makes every component `NaN`. A `NaN` component of `a` comes out
+ * `NaN` in its own slot and in the slot it's paired with (`x` with `w`, `y`
+ * with `z`).
+ *
+ * `a` is read into locals first, so `out` may be `a` or a view overlapping it.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The rotation to turn.
+ * @param angle - The angle in radians, about `a`'s own x axis.
+ * @returns `out`.
+ */
+export function rotateX(out: Quat, a: ReadonlyQuat, angle: number): Quat {
+  // biome-ignore format: packed component reads
+  const x = a[0], y = a[1], z = a[2], w = a[3];
+
+  const s = Math.sin(angle * 0.5);
+  const c = Math.cos(angle * 0.5);
+
+  out[0] = w * s + x * c;
+  out[1] = y * c + z * s;
+  out[2] = z * c - y * s;
+  out[3] = w * c - x * s;
+
+  return out;
+}
+
+/**
+ * Rotates `a` by `angle` radians about its own y axis and writes the result
+ * into `out`.
+ *
+ * This is `multiply(out, a, fromAxisAngle(tmp, Vec3.UP, angle))` with the
+ * zero terms dropped: no temporary quaternion, and 8 multiplies instead of 16
+ * plus the constructor. Because the turn is on the right, it happens in `a`'s
+ * local frame, about the axis `a` has turned `Vec3.UP` into, so that axis
+ * stays put. To turn about the world y axis instead, multiply on the left:
+ * `multiply(out, fromAxisAngle(tmp, Vec3.UP, angle), a)`.
+ *
+ * It follows the right-hand rule, so a positive angle turns the object's own
+ * `FORWARD` towards its own `LEFT`, the same as a positive yaw in
+ * {@link fromEuler}.
+ *
+ * Nothing renormalises. A unit `a` stays unit in exact arithmetic and `a`'s
+ * length is otherwise kept, but float32 rounding drifts the length when this is
+ * applied every frame, so call {@link normalize} periodically. Angles a full
+ * turn apart give opposite quaternions for the same rotation.
+ *
+ * A `NaN` angle makes every component `NaN`. A `NaN` component of `a` comes out
+ * `NaN` in its own slot and in the slot it's paired with (`y` with `w`, `x`
+ * with `z`).
+ *
+ * `a` is read into locals first, so `out` may be `a` or a view overlapping it.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The rotation to turn.
+ * @param angle - The angle in radians, about `a`'s own y axis.
+ * @returns `out`.
+ */
+export function rotateY(out: Quat, a: ReadonlyQuat, angle: number): Quat {
+  // biome-ignore format: packed component reads
+  const x = a[0], y = a[1], z = a[2], w = a[3];
+
+  const s = Math.sin(angle * 0.5);
+  const c = Math.cos(angle * 0.5);
+
+  out[0] = x * c - z * s;
+  out[1] = w * s + y * c;
+  out[2] = x * s + z * c;
+  out[3] = w * c - y * s;
+
+  return out;
+}
+
+/**
+ * Rotates `a` by `angle` radians about its own z axis and writes the result
+ * into `out`.
+ *
+ * This is `multiply(out, a, fromAxisAngle(tmp, Vec3.BACK, angle))` with the
+ * zero terms dropped: no temporary quaternion, and 8 multiplies instead of 16
+ * plus the constructor. Because the turn is on the right, it happens in `a`'s
+ * local frame, about the axis `a` has turned `Vec3.BACK` into, so that axis
+ * stays put. To turn about the world z axis instead, multiply on the left:
+ * `multiply(out, fromAxisAngle(tmp, Vec3.BACK, angle), a)`.
+ *
+ * It follows the right-hand rule, so a positive angle tips the object's own
+ * `UP` towards its own `LEFT`, the same as a positive roll in
+ * {@link fromEuler}.
+ *
+ * Nothing renormalises. A unit `a` stays unit in exact arithmetic and `a`'s
+ * length is otherwise kept, but float32 rounding drifts the length when this is
+ * applied every frame, so call {@link normalize} periodically. Angles a full
+ * turn apart give opposite quaternions for the same rotation.
+ *
+ * A `NaN` angle makes every component `NaN`. A `NaN` component of `a` comes out
+ * `NaN` in its own slot and in the slot it's paired with (`z` with `w`, `x`
+ * with `y`).
+ *
+ * `a` is read into locals first, so `out` may be `a` or a view overlapping it.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The rotation to turn.
+ * @param angle - The angle in radians, about `a`'s own z axis.
+ * @returns `out`.
+ */
+export function rotateZ(out: Quat, a: ReadonlyQuat, angle: number): Quat {
+  // biome-ignore format: packed component reads
+  const x = a[0], y = a[1], z = a[2], w = a[3];
+
+  const s = Math.sin(angle * 0.5);
+  const c = Math.cos(angle * 0.5);
+
+  out[0] = x * c + y * s;
+  out[1] = y * c - x * s;
+  out[2] = w * s + z * c;
+  out[3] = w * c - z * s;
+
+  return out;
+}
+
+/**
  * The dot product above which {@link slerp} hands over to {@link nlerp}.
  *
  * Slerp's weights divide by `sin θ`, which heads to `0` as the inputs

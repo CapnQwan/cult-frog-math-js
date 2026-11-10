@@ -5,7 +5,7 @@ import * as vec3 from '../../vector/vec3/vec3.js';
 import * as vec4 from '../../vector/vec4/vec4.js';
 import * as quat from '../quat.js';
 
-import type { Vec3 } from '../../vector/vec3/_types/vec3.js';
+import type { ReadonlyVec3, Vec3 } from '../../vector/vec3/_types/vec3.js';
 import type { Quat, ReadonlyQuat } from '../_types/quat.js';
 
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
@@ -893,6 +893,209 @@ describe('invert', () => {
     quat.invert(viewAt(pool, 2), quat.create(0, 2, 0, 0));
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, -0, -0.5, -0, 0, 7, 8]);
+  });
+});
+
+/** Each single-axis rotate, the unit axis it turns about, and its pairs of coupled slots. */
+const AXIS_ROTATIONS = [
+  { name: 'rotateX', rotateAbout: quat.rotateX, axis: vec3.RIGHT, pairs: [0, 3, 1, 2] },
+  { name: 'rotateY', rotateAbout: quat.rotateY, axis: vec3.UP, pairs: [1, 3, 0, 2] },
+  { name: 'rotateZ', rotateAbout: quat.rotateZ, axis: vec3.BACK, pairs: [2, 3, 0, 1] },
+] as const;
+
+/** The largest absolute difference between matching components. */
+function maxDifference(a: ReadonlyQuat, b: ReadonlyQuat): number {
+  return Math.max(
+    Math.abs(a[0] - b[0]),
+    Math.abs(a[1] - b[1]),
+    Math.abs(a[2] - b[2]),
+    Math.abs(a[3] - b[3])
+  );
+}
+
+function expectVec3Close(v: ReadonlyVec3, x: number, y: number, z: number): void {
+  expect(v[0]).toBeCloseTo(x, 6);
+  expect(v[1]).toBeCloseTo(y, 6);
+  expect(v[2]).toBeCloseTo(z, 6);
+}
+
+for (const { name, rotateAbout, axis, pairs } of AXIS_ROTATIONS) {
+  describe(name, () => {
+    const starts = [
+      quat.IDENTITY,
+      quat.fromEuler(quat.create(), 0.3, -1.1, 0.7),
+      quat.fromEuler(quat.create(), 2, -1, 0.4),
+    ];
+    const angles = [0.8, -2.5, Math.PI, 7];
+
+    test('writes into out and returns it', () => {
+      const out = quat.create();
+      expect(rotateAbout(out, quat.IDENTITY, 1)).toBe(out);
+    });
+
+    test('is a multiplied on the right by the rotation about the axis', () => {
+      for (const a of starts) {
+        for (const angle of angles) {
+          const turn = quat.fromAxisAngle(quat.create(), axis, angle);
+          const expected = quat.multiply(quat.create(), a, turn);
+          expect(maxDifference(rotateAbout(quat.create(), a, angle), expected)).toBeLessThan(1e-6);
+        }
+      }
+    });
+
+    test('on the identity it is fromAxisAngle', () => {
+      const expected = quat.fromAxisAngle(quat.create(), axis, 1.2);
+      expect(maxDifference(rotateAbout(quat.create(), quat.IDENTITY, 1.2), expected)).toBeLessThan(
+        1e-6
+      );
+    });
+
+    test("turns about a's own axis, which stays put, not the world axis", () => {
+      const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+      const turned = rotateAbout(quat.create(), a, 1.2);
+
+      const ownAxis = vec3.transformQuat(vec3.create(), axis, a);
+      const ownAxisAfter = vec3.transformQuat(vec3.create(), axis, turned);
+      expectVec3Close(ownAxisAfter, ownAxis[0], ownAxis[1], ownAxis[2]);
+
+      const worldTurn = quat.multiply(
+        quat.create(),
+        quat.fromAxisAngle(quat.create(), axis, 1.2),
+        a
+      );
+      expect(maxDifference(turned, worldTurn)).toBeGreaterThan(0.1);
+    });
+
+    test('a zero angle leaves a exactly unchanged', () => {
+      const a = quat.create(1, 2, 3, 4);
+      expect(Array.from(rotateAbout(quat.create(), a, 0))).toEqual(Array.from(a));
+    });
+
+    test('consecutive turns add up', () => {
+      const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+      const twoSteps = rotateAbout(quat.create(), rotateAbout(quat.create(), a, 0.4), 1.1);
+      const oneStep = rotateAbout(quat.create(), a, 1.5);
+      expect(maxDifference(twoSteps, oneStep)).toBeLessThan(1e-6);
+    });
+
+    test('a negative angle undoes a positive one', () => {
+      const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+      const back = rotateAbout(quat.create(), rotateAbout(quat.create(), a, 1.3), -1.3);
+      expect(maxDifference(back, a)).toBeLessThan(1e-6);
+    });
+
+    test('a full turn gives -a, the same rotation with opposite signs', () => {
+      const a = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+      const fullTurn = rotateAbout(quat.create(), a, 2 * Math.PI);
+      expect(maxDifference(fullTurn, negated(a))).toBeLessThan(1e-6);
+    });
+
+    test('keeps the length of a and does not renormalise', () => {
+      const a = quat.create(1, 2, 3, 4);
+      expect(quat.magnitude(rotateAbout(quat.create(), a, 1.2))).toBeCloseTo(Math.sqrt(30), 5);
+
+      const unit = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+      expect(quat.magnitude(rotateAbout(quat.create(), unit, 1.2))).toBeCloseTo(1, 6);
+    });
+
+    test('a NaN angle makes every component NaN', () => {
+      const q = rotateAbout(quat.create(), quat.IDENTITY, Number.NaN);
+      expect(Array.from(q).every(Number.isNaN)).toBe(true);
+    });
+
+    test('a NaN component comes out NaN in its own slot and its paired slot only', () => {
+      const partner = new Map([
+        [pairs[0], pairs[1]],
+        [pairs[1], pairs[0]],
+        [pairs[2], pairs[3]],
+        [pairs[3], pairs[2]],
+      ]);
+      for (const slot of [0, 1, 2, 3] as const) {
+        const a = quat.create(0.1, 0.2, 0.3, 0.9);
+        a[slot] = Number.NaN;
+        const q = rotateAbout(quat.create(), a, 1.2);
+        const nanSlots = [0, 1, 2, 3].filter((i) => Number.isNaN(q[i]));
+        expect(new Set(nanSlots)).toEqual(new Set([slot, partner.get(slot)]));
+        expect(nanSlots).toHaveLength(2);
+      }
+    });
+
+    test('never writes to the input', () => {
+      const source = quat.create(1, 2, 3, 4);
+      rotateAbout(quat.create(), source, 1.2);
+      expectComponents(source, 1, 2, 3, 4);
+    });
+
+    test('out may be the same object as the input', () => {
+      const q = quat.create(1, 2, 3, 4);
+      const expected = Array.from(rotateAbout(quat.create(), q, 1.2));
+      rotateAbout(q, q, 1.2);
+      expect(Array.from(q)).toEqual(expected);
+    });
+
+    test('every overlap of two distinct views is exact', () => {
+      for (let outOffset = 0; outOffset < 4; outOffset++) {
+        for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+          if (outOffset === inputOffset) continue;
+
+          const buffer = sequentialBuffer(8);
+          const input = viewAt(buffer, inputOffset);
+          const expected = rotateAbout(quat.create(), quat.clone(input), 1.2);
+
+          rotateAbout(viewAt(buffer, outOffset), input, 1.2);
+
+          expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+        }
+      }
+    });
+
+    test('writes only its own slots when out is a pooled view', () => {
+      const pool = sequentialBuffer(8);
+      rotateAbout(viewAt(pool, 2), quat.IDENTITY, 0);
+
+      expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
+    });
+  });
+}
+
+describe('rotateX, rotateY and rotateZ together', () => {
+  test('a positive rotateX tilts FORWARD towards UP', () => {
+    const q = quat.rotateX(quat.create(), quat.IDENTITY, Math.PI / 2);
+    expectVec3Close(vec3.transformQuat(vec3.create(), vec3.FORWARD, q), 0, 1, 0);
+  });
+
+  test('a positive rotateY turns FORWARD towards LEFT', () => {
+    const q = quat.rotateY(quat.create(), quat.IDENTITY, Math.PI / 2);
+    expectVec3Close(vec3.transformQuat(vec3.create(), vec3.FORWARD, q), -1, 0, 0);
+  });
+
+  test('a positive rotateZ tips UP towards LEFT', () => {
+    const q = quat.rotateZ(quat.create(), quat.IDENTITY, Math.PI / 2);
+    expectVec3Close(vec3.transformQuat(vec3.create(), vec3.UP, q), -1, 0, 0);
+  });
+
+  test('match the pitch, yaw and roll of fromEuler', () => {
+    const pitch = quat.rotateX(quat.create(), quat.IDENTITY, 0.7);
+    const yawed = quat.rotateY(quat.create(), quat.IDENTITY, 0.7);
+    const roll = quat.rotateZ(quat.create(), quat.IDENTITY, 0.7);
+    expect(maxDifference(pitch, quat.fromEuler(quat.create(), 0.7, 0, 0))).toBeLessThan(1e-6);
+    expect(maxDifference(yawed, quat.fromEuler(quat.create(), 0, 0.7, 0))).toBeLessThan(1e-6);
+    expect(maxDifference(roll, quat.fromEuler(quat.create(), 0, 0, 0.7))).toBeLessThan(1e-6);
+  });
+
+  test('yaw, then pitch, then roll about the own axes builds fromEuler', () => {
+    const q = quat.rotateY(quat.create(), quat.IDENTITY, -1.1);
+    quat.rotateX(q, q, 0.3);
+    quat.rotateZ(q, q, 0.7);
+    expect(maxDifference(q, quat.fromEuler(quat.create(), 0.3, -1.1, 0.7))).toBeLessThan(1e-6);
+  });
+
+  test('a pitched object yaws about its own tilted up axis', () => {
+    const pitched = quat.rotateX(quat.create(), quat.IDENTITY, Math.PI / 2);
+    const thenYawed = quat.rotateY(quat.create(), pitched, Math.PI / 2);
+    // Pitching up 90° points the object's up axis at BACK; yawing about it
+    // swings the facing direction from UP round to LEFT.
+    expectVec3Close(vec3.transformQuat(vec3.create(), vec3.FORWARD, thenYawed), -1, 0, 0);
   });
 });
 

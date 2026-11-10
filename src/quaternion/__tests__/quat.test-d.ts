@@ -239,6 +239,33 @@ describe('invert', () => {
   });
 });
 
+describe('rotateX, rotateY and rotateZ', () => {
+  test('turn a readonly input into a mutable out', () => {
+    expectTypeOf(quat.rotateX).parameters.toEqualTypeOf<[Quat, ReadonlyQuat, number]>();
+    expectTypeOf(quat.rotateY).parameters.toEqualTypeOf<[Quat, ReadonlyQuat, number]>();
+    expectTypeOf(quat.rotateZ).parameters.toEqualTypeOf<[Quat, ReadonlyQuat, number]>();
+    expectTypeOf(quat.rotateX).returns.toEqualTypeOf<Quat>();
+    expectTypeOf(quat.rotateY).returns.toEqualTypeOf<Quat>();
+    expectTypeOf(quat.rotateZ).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.rotateX(live, frozen, 1);
+    quat.rotateY(live, live, 1);
+    quat.rotateZ(shared, quat.IDENTITY, 1);
+    // @ts-expect-error the shared constant must never be written through
+    quat.rotateX(quat.IDENTITY, live, 1);
+    // @ts-expect-error the angle is required
+    quat.rotateY(live, live);
+    // @ts-expect-error there is no in-place form: pass the quaternion twice
+    quat.rotateZ(live, 1);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.rotateX(live, vector, 1);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.rotateY(live, raw, 1);
+  });
+});
+
 describe('fromAxisAngle', () => {
   test('takes a readonly Vec3 axis and writes a mutable out', () => {
     expectTypeOf(quat.fromAxisAngle).parameters.toEqualTypeOf<[Quat, ReadonlyVec3, number]>();
