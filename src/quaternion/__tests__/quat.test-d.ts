@@ -218,6 +218,27 @@ describe('normalize and conjugate', () => {
   });
 });
 
+describe('invert', () => {
+  test('writes a mutable out from a readonly input', () => {
+    expectTypeOf(quat.invert).parameters.toEqualTypeOf<[Quat, ReadonlyQuat]>();
+    expectTypeOf(quat.invert).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.invert(live, frozen);
+    quat.invert(live, live);
+    quat.invert(shared, quat.IDENTITY);
+    // @ts-expect-error there is no one-argument in-place form: pass the quaternion twice
+    quat.invert(live);
+    // @ts-expect-error the shared constant must never be written through
+    quat.invert(quat.IDENTITY, live);
+    // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
+    quat.invert(live, vector);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.invert(live, raw);
+  });
+});
+
 describe('fromAxisAngle', () => {
   test('takes a readonly Vec3 axis and writes a mutable out', () => {
     expectTypeOf(quat.fromAxisAngle).parameters.toEqualTypeOf<[Quat, ReadonlyVec3, number]>();

@@ -749,6 +749,153 @@ describe('conjugate', () => {
   });
 });
 
+describe('invert', () => {
+  test('writes into out and returns it', () => {
+    const out = quat.create();
+    expect(quat.invert(out, quat.IDENTITY)).toBe(out);
+  });
+
+  test('is the conjugate divided by the squared length, with w stored last', () => {
+    // Squared length 30.
+    expectClose(
+      quat.invert(quat.create(), quat.create(1, 2, 3, 4)),
+      -1 / 30,
+      -2 / 30,
+      -3 / 30,
+      4 / 30
+    );
+  });
+
+  test('the identity is its own inverse, with a negative-zero vector part', () => {
+    const inverse = quat.invert(quat.create(), quat.IDENTITY);
+    expect(quat.isEqual(inverse, quat.IDENTITY)).toBe(true);
+    expect(Object.is(inverse[0], -0)).toBe(true);
+  });
+
+  test('inverts a non-unit quaternion on either side', () => {
+    const q = quat.create(1, 2, 3, 4);
+    const inverse = quat.invert(quat.create(), q);
+
+    expectClose(quat.multiply(quat.create(), q, inverse), 0, 0, 0, 1);
+    expectClose(quat.multiply(quat.create(), inverse, q), 0, 0, 0, 1);
+  });
+
+  test('matches the conjugate for a unit quaternion', () => {
+    const axis = vec3.normalize(vec3.create(), vec3.create(1, 2, 3));
+    const q = quat.fromAxisAngle(quat.create(), axis, 1.2);
+    const viaConjugate = quat.conjugate(quat.create(), q);
+    expectClose(
+      quat.invert(quat.create(), q),
+      viaConjugate[0],
+      viaConjugate[1],
+      viaConjugate[2],
+      viaConjugate[3]
+    );
+  });
+
+  test('is exactly the conjugate when the squared length is exactly 1', () => {
+    const halfTurn = quat.create(0, 1, 0, 0);
+    expectComponents(quat.invert(quat.create(), halfTurn), -0, -1, -0, 0);
+  });
+
+  test('inverting twice gives back the original', () => {
+    const q = quat.create(1, 2, 3, 4);
+    const twice = quat.invert(quat.create(), quat.invert(quat.create(), q));
+    expectClose(twice, 1, 2, 3, 4);
+  });
+
+  test('the inverse has length 1 / magnitude(a), so it is not unit for non-unit input', () => {
+    const q = quat.create(0, 0, 0, 2);
+    const inverse = quat.invert(quat.create(), q);
+    expect(quat.magnitude(inverse)).toBe(0.5);
+  });
+
+  test('normalise then conjugate is how to undo a drifted rotation', () => {
+    const rotation = quat.fromAxisAngle(quat.create(), vec3.UP, Math.PI / 3);
+    const drifted = quat.create(
+      rotation[0] * 1.01,
+      rotation[1] * 1.01,
+      rotation[2] * 1.01,
+      rotation[3] * 1.01
+    );
+
+    const undo = quat.conjugate(quat.create(), quat.normalize(quat.create(), drifted));
+    const [x, y, z] = rotate(undo, rotate(rotation, [1, 2, 3]));
+    expect(x).toBeCloseTo(1, 5);
+    expect(y).toBeCloseTo(2, 5);
+    expect(z).toBeCloseTo(3, 5);
+
+    // The inverse of the drifted quaternion has the wrong length for rotating vectors.
+    expect(quat.magnitude(quat.invert(quat.create(), drifted))).toBeCloseTo(1 / 1.01, 6);
+  });
+
+  test('the zero quaternion gives the identity', () => {
+    const zero = quat.create(0, 0, 0, 0);
+    expectComponents(quat.invert(quat.create(), zero), 0, 0, 0, 1);
+  });
+
+  test('the zero fallback is not an inverse: zero times it is still zero', () => {
+    const zero = quat.create(0, 0, 0, 0);
+    const product = quat.multiply(quat.create(), zero, quat.invert(quat.create(), zero));
+    expect(quat.magnitudeSq(product)).toBe(0);
+  });
+
+  test('only an exact zero is special-cased: a very short quaternion gives a very long inverse', () => {
+    const inverse = quat.invert(quat.create(), quat.create(0, 0, 0, 1e-20));
+    expect(inverse[3] / 1e20).toBeCloseTo(1, 6);
+  });
+
+  test('a subnormal length overflows to Infinity', () => {
+    const inverse = quat.invert(quat.create(), quat.create(0, 0, 0, 1e-40));
+    expect(inverse[3]).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('a NaN component makes every component NaN', () => {
+    const inverse = quat.invert(quat.create(), quat.create(Number.NaN, 0, 0, 1));
+    expect(Array.from(inverse).every(Number.isNaN)).toBe(true);
+  });
+
+  test('an infinite component gives NaN in its own slot', () => {
+    const inverse = quat.invert(quat.create(), quat.create(Number.POSITIVE_INFINITY, 0, 0, 1));
+    expect(Number.isNaN(inverse[0])).toBe(true);
+  });
+
+  test('never writes to the input', () => {
+    const source = quat.create(1, 2, 3, 4);
+    quat.invert(quat.create(), source);
+    expectComponents(source, 1, 2, 3, 4);
+  });
+
+  test('out may be the same object as the input', () => {
+    const q = quat.create(1, 2, 3, 4);
+    quat.invert(q, q);
+    expectClose(q, -1 / 30, -2 / 30, -3 / 30, 4 / 30);
+  });
+
+  test('every overlap of two distinct views is exact', () => {
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const buffer = sequentialBuffer(8);
+        const input = viewAt(buffer, inputOffset);
+        const expected = quat.invert(quat.create(), quat.clone(input));
+
+        quat.invert(viewAt(buffer, outOffset), input);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    quat.invert(viewAt(pool, 2), quat.create(0, 2, 0, 0));
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, -0, -0.5, -0, 0, 7, 8]);
+  });
+});
+
 describe('fromAxisAngle', () => {
   const S = Math.SQRT1_2;
 

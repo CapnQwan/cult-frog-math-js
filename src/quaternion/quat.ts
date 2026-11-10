@@ -302,11 +302,11 @@ export function magnitude(a: ReadonlyQuat): number {
  * @returns `out`.
  */
 export function normalize(out: Quat, a: ReadonlyQuat): Quat {
-  const magSq = magnitudeSq(a);
-  if (magSq === 0) return identity(out);
-
   // biome-ignore format: packed component reads
   const x = a[0], y = a[1], z = a[2], w = a[3];
+  const magSq = x * x + y * y + z * z + w * w;
+  if (magSq === 0) return identity(out);
+
   const invMag = 1 / Math.sqrt(magSq);
 
   out[0] = x * invMag;
@@ -377,6 +377,53 @@ export function dot(a: ReadonlyQuat, b: ReadonlyQuat): number {
   // biome-ignore format: packed component reads
   const bX = b[0], bY = b[1], bZ = b[2], bW = b[3];
   return aX * bX + aY * bY + aZ * bZ + aW * bW;
+}
+
+/**
+ * Writes the inverse of `a` into `out`: the {@link conjugate} divided by the
+ * squared length, so `multiply(out, a, invert(tmp, a))` is the identity on
+ * either side, whatever the length of `a`.
+ *
+ * For a unit quaternion this is the conjugate, and `conjugate` is cheaper, so
+ * prefer it for rotations. Reach for `invert` when `a` may not be unit length
+ * and the product must still come out as the identity.
+ *
+ * That is not the same as undoing a drifted rotation. The inverse of a
+ * non-unit `a` has length `1 / magnitude(a)`, so it isn't unit either and
+ * isn't fit for `Vec3.transformQuat`, which requires a unit quaternion. To
+ * undo a rotation that may have drifted, normalise it and then conjugate it.
+ *
+ * The zero quaternion has no inverse and gives the identity, matching
+ * {@link normalize}, so a broken rotation falls back to no rotation rather than
+ * `NaN`. The product of zero with that identity is still zero, not the
+ * identity. Only an exact zero is special-cased: a very short `a` gives a very
+ * long inverse, and only subnormal lengths can overflow to `Infinity`.
+ *
+ * The squared length is computed in float64 and the result is rounded to
+ * float32 as it is stored. A zero in the vector part comes out as `-0`, so
+ * `invert(out, IDENTITY)` is `(-0, -0, -0, 1)`, which `isEqual` still treats
+ * as the identity. Bad input stays visible: a `NaN` component makes every
+ * component `NaN`, and an infinite one gives `NaN` in its own slot.
+ *
+ * `a` is read into locals first, so `out` may be `a` or a view overlapping it.
+ *
+ * @param out - The quaternion to write to.
+ * @param a - The quaternion to invert.
+ * @returns `out`.
+ */
+export function invert(out: Quat, a: ReadonlyQuat): Quat {
+  // biome-ignore format: packed component reads
+  const x = a[0], y = a[1], z = a[2], w = a[3];
+  const magSq = x * x + y * y + z * z + w * w;
+  if (magSq === 0) return identity(out);
+
+  const inv = 1 / magSq;
+  out[0] = -x * inv;
+  out[1] = -y * inv;
+  out[2] = -z * inv;
+  out[3] = w * inv;
+
+  return out;
 }
 
 /**
