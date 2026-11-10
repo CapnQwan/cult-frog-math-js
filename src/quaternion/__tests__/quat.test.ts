@@ -1,6 +1,7 @@
 // src/quaternion/__tests__/quat.test.ts
 import { describe, expect, test } from 'vitest';
 
+import { EPSILON } from '../../constants.js';
 import * as vec3 from '../../vector/vec3/vec3.js';
 import * as vec4 from '../../vector/vec4/vec4.js';
 import * as quat from '../quat.js';
@@ -2193,5 +2194,111 @@ describe('fromUnitVectors', () => {
     quat.fromUnitVectors(viewAt(pool, 2), vec3.FORWARD, vec3.FORWARD);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 1, 7, 8]);
+  });
+});
+
+describe('isEqualRotation', () => {
+  const turn = (angle: number): Quat => quat.fromAxisAngle(quat.create(), vec3.UP, angle);
+
+  test('a rotation is equal to itself', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    expect(quat.isEqualRotation(q, q)).toBe(true);
+    expect(quat.isEqualRotation(q, quat.clone(q), 0)).toBe(true);
+  });
+
+  test('q and -q are equal, where isEqualEpsilon says they differ', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const negated = quat.create(-q[0], -q[1], -q[2], -q[3]);
+
+    expect(quat.isEqualRotation(q, negated)).toBe(true);
+    expect(quat.isEqualRotation(q, negated, 0)).toBe(true);
+    expect(quat.isEqualEpsilon(q, negated)).toBe(false);
+  });
+
+  test('recognises the -b that slerp can return at t = 1', () => {
+    const a = quat.IDENTITY;
+    const b = quat.create(0, -Math.sin(1), 0, -Math.cos(1));
+    const end = quat.slerp(quat.create(), a, b, 1);
+
+    expect(quat.isEqualEpsilon(end, b)).toBe(false);
+    expect(quat.isEqualRotation(end, b)).toBe(true);
+  });
+
+  test('does not depend on the order', () => {
+    const a = turn(0.3);
+    const b = turn(0.3005);
+    expect(quat.isEqualRotation(a, b, 1e-3)).toBe(quat.isEqualRotation(b, a, 1e-3));
+    expect(quat.isEqualRotation(a, b, 1e-4)).toBe(quat.isEqualRotation(b, a, 1e-4));
+  });
+
+  test('the tolerance is the angle between the rotations, in radians', () => {
+    const a = turn(0.3);
+    const b = turn(0.3 + 0.01);
+    expect(quat.isEqualRotation(a, b, 0.011)).toBe(true);
+    expect(quat.isEqualRotation(a, b, 0.009)).toBe(false);
+  });
+
+  test('a tolerance in degrees works as documented', () => {
+    const tenthOfADegree = (0.1 * Math.PI) / 180;
+    expect(quat.isEqualRotation(turn(1), turn(1 + tenthOfADegree / 2), tenthOfADegree)).toBe(true);
+    expect(quat.isEqualRotation(turn(1), turn(1 + tenthOfADegree * 2), tenthOfADegree)).toBe(false);
+  });
+
+  test('the default tolerance tells apart rotations 2e-6 radians apart', () => {
+    expect(quat.isEqualRotation(turn(0.3), turn(0.3 + 5e-7))).toBe(true);
+    expect(quat.isEqualRotation(turn(0.3), turn(0.3 + 2e-6))).toBe(false);
+  });
+
+  test('which a dot-product check with the same tolerance cannot', () => {
+    const a = turn(0.3);
+    const b = turn(0.3 + 2e-6);
+    expect(Math.abs(quat.dot(a, b)) > 1 - EPSILON).toBe(true);
+    expect(quat.isEqualRotation(a, b)).toBe(false);
+  });
+
+  test('different rotations are unequal', () => {
+    expect(quat.isEqualRotation(quat.IDENTITY, turn(0.5))).toBe(false);
+    expect(quat.isEqualRotation(turn(Math.PI), quat.IDENTITY)).toBe(false);
+  });
+
+  test('a scaled copy is the same rotation', () => {
+    const q = quat.fromEuler(quat.create(), 0.3, -1.1, 0.7);
+    const scaled = quat.create(q[0] * 3, q[1] * 3, q[2] * 3, q[3] * 3);
+    expect(quat.isEqualRotation(q, scaled)).toBe(true);
+  });
+
+  test('the zero quaternion is not equal to any rotation, even with a huge tolerance', () => {
+    const zero = quat.create(0, 0, 0, 0);
+    expect(quat.isEqualRotation(zero, quat.IDENTITY)).toBe(false);
+    expect(quat.isEqualRotation(zero, turn(2), Math.PI)).toBe(false);
+    expect(quat.isEqualRotation(turn(2), zero, Math.PI)).toBe(false);
+    // angle alone would have let it through.
+    expect(quat.angle(zero, quat.IDENTITY)).toBe(0);
+  });
+
+  test('the zero quaternion is equal to another zero, including -0 components', () => {
+    expect(quat.isEqualRotation(quat.create(0, 0, 0, 0), quat.create(0, 0, 0, 0))).toBe(true);
+    expect(quat.isEqualRotation(quat.create(-0, 0, -0, 0), quat.create(0, 0, 0, -0), 0)).toBe(true);
+  });
+
+  test('a very short quaternion is still a rotation, not zero', () => {
+    const tiny = quat.create(0, 0, 0, 1e-30);
+    expect(quat.isEqualRotation(tiny, quat.IDENTITY)).toBe(true);
+    expect(quat.isEqualRotation(tiny, quat.create(0, 0, 0, 0))).toBe(false);
+  });
+
+  test('a NaN component in either input gives false', () => {
+    const nan = quat.create(Number.NaN, 0, 0, 1);
+    expect(quat.isEqualRotation(nan, quat.IDENTITY)).toBe(false);
+    expect(quat.isEqualRotation(quat.IDENTITY, nan)).toBe(false);
+    expect(quat.isEqualRotation(nan, nan)).toBe(false);
+  });
+
+  test('never writes to either input', () => {
+    const a = quat.create(1, 2, 3, 4);
+    const b = quat.create(5, 6, 7, 8);
+    quat.isEqualRotation(a, b);
+    expectComponents(a, 1, 2, 3, 4);
+    expectComponents(b, 5, 6, 7, 8);
   });
 });

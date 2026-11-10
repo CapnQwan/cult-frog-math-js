@@ -134,7 +134,11 @@ describe('equality', () => {
     expectTypeOf(quat.isEqualXYZW).parameters.toEqualTypeOf<
       [ReadonlyQuat, number, number, number, number]
     >();
+    expectTypeOf(quat.isEqualRotation).parameters.toEqualTypeOf<
+      [ReadonlyQuat, ReadonlyQuat, (number | undefined)?]
+    >();
     expectTypeOf(quat.isEqual).returns.toEqualTypeOf<boolean>();
+    expectTypeOf(quat.isEqualRotation).returns.toEqualTypeOf<boolean>();
     expectTypeOf(quat.isEqualEpsilon).returns.toEqualTypeOf<boolean>();
     expectTypeOf(quat.isEqualXYZW).returns.toEqualTypeOf<boolean>();
   });
@@ -144,6 +148,12 @@ describe('equality', () => {
     quat.isEqual(shared, live);
     quat.isEqualEpsilon(frozen, live, 0.1);
     quat.isEqualXYZW(frozen, 0, 0, 0, 1);
+    quat.isEqualRotation(frozen, shared);
+    quat.isEqualRotation(quat.IDENTITY, live, 0.01);
+    // @ts-expect-error a Vec4 is not a Quat, even for comparing rotations
+    quat.isEqualRotation(live, vector);
+    // @ts-expect-error the tolerance is a number of radians
+    quat.isEqualRotation(live, frozen, '0.01');
     // @ts-expect-error a Vec4 is not a Quat, identical layout notwithstanding
     quat.isEqual(live, vector);
     // @ts-expect-error unbranded arrays are rejected

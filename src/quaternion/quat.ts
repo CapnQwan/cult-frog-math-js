@@ -202,6 +202,45 @@ export function isEqualXYZW(a: ReadonlyQuat, x: number, y: number, z: number, w:
 }
 
 /**
+ * Returns whether two quaternions represent the same rotation, to within
+ * `tolerance` radians.
+ *
+ * Unlike {@link isEqual} and {@link isEqualEpsilon}, this compares rotations
+ * rather than components, so `q` and `-q` are equal. That matters for results
+ * from this package: {@link slerp} and {@link nlerp} can return `-b` at
+ * `t = 1`, which `isEqualEpsilon` reports as different from `b`. Use this for
+ * checks such as "has the turn arrived?".
+ *
+ * The tolerance is the angle of the rotation that takes one input to the
+ * other, so "within a tenth of a degree" is `0.1 * Math.PI / 180`. It is
+ * measured with {@link angle}, which stays accurate for nearly identical
+ * rotations. A check on the dot product, such as
+ * `Math.abs(dot(a, b)) > 1 - tolerance`, can't do that: the dot product moves
+ * with the square of the angle, so two rotations `1e-6` radians apart differ
+ * in it by about `1e-13`, far below float32 rounding.
+ *
+ * Lengths are divided out, so a quaternion and a scaled copy of it are the
+ * same rotation. The zero quaternion is no rotation at all, so it is equal
+ * only to another zero quaternion. {@link angle} reports `0` between zero and
+ * anything, and without this exception a broken rotation would pass every
+ * equality check. A `NaN` component in either input gives `false`.
+ *
+ * @param a - The first rotation.
+ * @param b - The second rotation.
+ * @param tolerance - The largest angle between them, in radians, that still
+ * counts as equal. Defaults to {@link EPSILON}.
+ * @returns `true` if the rotations are within `tolerance` of each other.
+ */
+export function isEqualRotation(
+  a: ReadonlyQuat,
+  b: ReadonlyQuat,
+  tolerance: number = EPSILON
+): boolean {
+  if (magnitudeSq(a) === 0 || magnitudeSq(b) === 0) return magnitudeSq(a) === magnitudeSq(b);
+  return angle(a, b) <= tolerance;
+}
+
+/**
  * Multiplies two quaternions (the Hamilton product `a * b`) and writes the
  * result into `out`.
  *
