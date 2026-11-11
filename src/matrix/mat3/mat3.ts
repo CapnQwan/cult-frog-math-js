@@ -33,8 +33,13 @@ export const SIZE = 9;
 /**
  * Allocates a new matrix from elements given in row-major order.
  *
- * Omitted elements default to `0`, so `create()` is the **zero** matrix, not
- * the identity. For a fresh identity matrix use `clone(IDENTITY)`.
+ * Omitted elements default to the identity's: `1` on the diagonal and `0`
+ * everywhere else, so `create()` is the identity matrix, the transform that
+ * changes nothing. A zero default would give the zero matrix, which collapses
+ * everything onto the origin and has no inverse. Defaults apply element by
+ * element, so a partial argument list keeps the rest of the identity:
+ * `create(2)` is the identity with `a00` set to `2`, and the rest of the
+ * diagonal is still `1`. For the zero matrix, pass all nine elements as `0`.
  *
  * Values are stored as float32, so they may be rounded.
  *
@@ -42,9 +47,9 @@ export const SIZE = 9;
  */
 // biome-ignore format: visual alignment with the matrix
 export function create(
-  a00: number = 0, a01: number = 0, a02: number = 0,
-  a10: number = 0, a11: number = 0, a12: number = 0,
-  a20: number = 0, a21: number = 0, a22: number = 0
+  a00: number = 1, a01: number = 0, a02: number = 0,
+  a10: number = 0, a11: number = 1, a12: number = 0,
+  a20: number = 0, a21: number = 0, a22: number = 1
 ): Mat3 {
   const out = new Float32Array(SIZE) as Mat3;
 
@@ -59,8 +64,7 @@ export function create(
  * Allocates a new matrix with the same elements as `a`.
  *
  * Use this to take a standalone snapshot of a pooled view: the result has its
- * own buffer and won't change when the original memory is written to. It is
- * also how you get a mutable identity matrix, via `clone(IDENTITY)`.
+ * own buffer and won't change when the original memory is written to.
  *
  * @param a - The matrix to clone.
  * @returns A new matrix with its own buffer.
@@ -124,7 +128,7 @@ export function copy(out: Mat3, a: ReadonlyMat3): Mat3 {
  * Writes the identity matrix into `out`, discarding its previous contents.
  *
  * This is the in-place reset; it allocates nothing. To get a *new* identity
- * matrix, use `clone(IDENTITY)`.
+ * matrix, use `create()`.
  *
  * @param out - The matrix to write to.
  * @returns `out`.

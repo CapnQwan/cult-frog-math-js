@@ -36,8 +36,13 @@ function sequentialBuffer(count: number): ArrayBuffer {
 }
 
 describe('create', () => {
-  test('is the zero matrix by default, not the identity', () => {
-    expectStorage(mat2.create(), [0, 0, 0, 0]);
+  test('is the identity by default', () => {
+    expectStorage(mat2.create(), [1, 0, 0, 1]);
+    expect(mat2.isEqual(mat2.create(), mat2.IDENTITY)).toBe(true);
+  });
+
+  test('gives the zero matrix only when every element is passed as 0', () => {
+    expectStorage(mat2.create(0, 0, 0, 0), [0, 0, 0, 0]);
   });
 
   test('takes row-major arguments and stores them column major', () => {
@@ -46,8 +51,11 @@ describe('create', () => {
     expectStorage(mat2.create(1, 2, 3, 4), [1, 3, 2, 4]);
   });
 
-  test('defaults only the omitted elements', () => {
-    expectStorage(mat2.create(5), [5, 0, 0, 0]);
+  test('defaults only the omitted elements, to the identity', () => {
+    expectStorage(mat2.create(5), [5, 0, 0, 1]);
+    // Rows:  5 2
+    //        0 1
+    expectStorage(mat2.create(5, 2), [5, 0, 2, 1]);
   });
 
   test('rounds elements to float32', () => {
@@ -121,7 +129,7 @@ describe('clone', () => {
     expectStorage(snapshot, [3, 4, 5, 6]);
   });
 
-  test('clone(IDENTITY) is the documented way to get a mutable identity', () => {
+  test('clone(IDENTITY) gives a mutable identity with its own buffer', () => {
     const m = mat2.clone(mat2.IDENTITY);
 
     expectStorage(m, [1, 0, 0, 1]);
@@ -227,13 +235,13 @@ describe('copy', () => {
     const pool = sequentialBuffer(8);
     mat2.copy(viewAt(pool, 2), mat2.create());
 
-    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 0, 0, 0, 0, 7, 8]);
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 1, 0, 0, 1, 7, 8]);
   });
 });
 
 describe('identity', () => {
   test('writes the identity matrix and returns out', () => {
-    const out = mat2.create();
+    const out = mat2.create(1, 2, 3, 4);
     const result = mat2.identity(out);
 
     expect(result).toBe(out);
@@ -302,7 +310,7 @@ describe('isEqual', () => {
   });
 
   test('treats -0 and 0 as equal', () => {
-    expect(mat2.isEqual(mat2.create(-0, 0, 0, -0), mat2.create())).toBe(true);
+    expect(mat2.isEqual(mat2.create(-0, -0, -0, -0), mat2.create(0, 0, 0, 0))).toBe(true);
   });
 
   test('NaN is never equal, even to itself', () => {
@@ -344,8 +352,8 @@ describe('isEqualEpsilon', () => {
   });
 
   test('accepts a custom tolerance', () => {
-    expect(mat2.isEqualEpsilon(mat2.create(), mat2.create(0, 0.05, 0, 0), 0.1)).toBe(true);
-    expect(mat2.isEqualEpsilon(mat2.create(), mat2.create(0, 0.5, 0, 0), 0.1)).toBe(false);
+    expect(mat2.isEqualEpsilon(mat2.create(), mat2.create(1, 0.05, 0, 1), 0.1)).toBe(true);
+    expect(mat2.isEqualEpsilon(mat2.create(), mat2.create(1, 0.5, 0, 1), 0.1)).toBe(false);
   });
 
   test('NaN is never equal', () => {

@@ -71,8 +71,20 @@ const IDENTITY_STORAGE = [
 ] as const;
 
 describe('create', () => {
-  test('is the zero matrix by default, not the identity', () => {
-    expectStorage(mat4.create(), ZEROS);
+  test('is the identity by default', () => {
+    expectStorage(mat4.create(), IDENTITY_STORAGE);
+    expect(mat4.isEqual(mat4.create(), mat4.IDENTITY)).toBe(true);
+  });
+
+  test('gives the zero matrix only when every element is passed as 0', () => {
+    // biome-ignore format: visual alignment with the matrix
+    const zero = mat4.create(
+      0, 0, 0, 0,
+      0, 0, 0, 0,
+      0, 0, 0, 0,
+      0, 0, 0, 0
+    );
+    expectStorage(zero, ZEROS);
   });
 
   test('takes row-major arguments and stores them column major', () => {
@@ -92,8 +104,8 @@ describe('create', () => {
     expect([transform[12], transform[13], transform[14], transform[15]]).toEqual([10, 20, 30, 1]);
   });
 
-  test('defaults only the omitted elements', () => {
-    expectStorage(mat4.create(5), [5, ...ZEROS.slice(1)]);
+  test('defaults only the omitted elements, to the identity', () => {
+    expectStorage(mat4.create(5), [5, ...IDENTITY_STORAGE.slice(1)]);
   });
 
   test('rounds elements to float32', () => {
@@ -163,7 +175,7 @@ describe('clone', () => {
     );
   });
 
-  test('clone(IDENTITY) is the documented way to get a mutable identity', () => {
+  test('clone(IDENTITY) gives a mutable identity with its own buffer', () => {
     const m = mat4.clone(mat4.IDENTITY);
 
     expectStorage(m, IDENTITY_STORAGE);
@@ -273,13 +285,13 @@ describe('copy', () => {
     const pool = sequentialBuffer(32);
     mat4.copy(viewAt(pool, 2), mat4.create());
 
-    expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(32, 2, ZEROS));
+    expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(32, 2, IDENTITY_STORAGE));
   });
 });
 
 describe('identity', () => {
   test('writes the identity matrix and returns out', () => {
-    const out = mat4.create();
+    const out = mat4.create(...ROW_MAJOR_ARGS);
     const result = mat4.identity(out);
 
     expect(result).toBe(out);
@@ -359,7 +371,9 @@ describe('isEqual', () => {
   test('treats -0 and 0 as equal', () => {
     const negativeZeros = mat4.create();
     negativeZeros.fill(-0);
-    expect(mat4.isEqual(negativeZeros, mat4.create())).toBe(true);
+    const zeros = mat4.create();
+    zeros.fill(0);
+    expect(mat4.isEqual(negativeZeros, zeros)).toBe(true);
   });
 
   test('NaN is never equal, even to itself', () => {
@@ -410,8 +424,8 @@ describe('isEqualEpsilon', () => {
   test('accepts a custom tolerance', () => {
     const near = mat4.create();
     const far = mat4.create();
-    near[5] = 0.05;
-    far[5] = 0.5;
+    near[4] = 0.05;
+    far[4] = 0.5;
     expect(mat4.isEqualEpsilon(mat4.create(), near, 0.1)).toBe(true);
     expect(mat4.isEqualEpsilon(mat4.create(), far, 0.1)).toBe(false);
   });

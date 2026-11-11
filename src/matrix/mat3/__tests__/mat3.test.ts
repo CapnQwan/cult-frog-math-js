@@ -57,16 +57,25 @@ const COLUMN_MAJOR_STORAGE = [1, 4, 7, 2, 5, 8, 3, 6, 9] as const;
 const IDENTITY_STORAGE = [1, 0, 0, 0, 1, 0, 0, 0, 1] as const;
 
 describe('create', () => {
-  test('is the zero matrix by default, not the identity', () => {
-    expectStorage(mat3.create(), new Array(ELEMENTS).fill(0));
+  test('is the identity by default', () => {
+    expectStorage(mat3.create(), IDENTITY_STORAGE);
+    expect(mat3.isEqual(mat3.create(), mat3.IDENTITY)).toBe(true);
+  });
+
+  test('gives the zero matrix only when every element is passed as 0', () => {
+    expectStorage(mat3.create(0, 0, 0, 0, 0, 0, 0, 0, 0), new Array(ELEMENTS).fill(0));
   });
 
   test('takes row-major arguments and stores them column major', () => {
     expectStorage(mat3.create(...ROW_MAJOR_ARGS), COLUMN_MAJOR_STORAGE);
   });
 
-  test('defaults only the omitted elements', () => {
-    expectStorage(mat3.create(5), [5, 0, 0, 0, 0, 0, 0, 0, 0]);
+  test('defaults only the omitted elements, to the identity', () => {
+    expectStorage(mat3.create(5), [5, 0, 0, 0, 1, 0, 0, 0, 1]);
+    // Rows:  5 2 3
+    //        0 1 0
+    //        0 0 1
+    expectStorage(mat3.create(5, 2, 3), [5, 0, 0, 2, 1, 0, 3, 0, 1]);
   });
 
   test('rounds elements to float32', () => {
@@ -134,7 +143,7 @@ describe('clone', () => {
     expectStorage(snapshot, [3, 4, 5, 6, 7, 8, 9, 10, 11]);
   });
 
-  test('clone(IDENTITY) is the documented way to get a mutable identity', () => {
+  test('clone(IDENTITY) gives a mutable identity with its own buffer', () => {
     const m = mat3.clone(mat3.IDENTITY);
 
     expectStorage(m, IDENTITY_STORAGE);
@@ -244,15 +253,13 @@ describe('copy', () => {
     const pool = sequentialBuffer(18);
     mat3.copy(viewAt(pool, 2), mat3.create());
 
-    expect(Array.from(new Float32Array(pool))).toEqual(
-      poolAfter(18, 2, new Array(ELEMENTS).fill(0))
-    );
+    expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(18, 2, IDENTITY_STORAGE));
   });
 });
 
 describe('identity', () => {
   test('writes the identity matrix and returns out', () => {
-    const out = mat3.create();
+    const out = mat3.create(...ROW_MAJOR_ARGS);
     const result = mat3.identity(out);
 
     expect(result).toBe(out);
@@ -324,7 +331,11 @@ describe('isEqual', () => {
   });
 
   test('treats -0 and 0 as equal', () => {
-    expect(mat3.isEqual(mat3.create(-0, 0, -0, 0, -0, 0, -0, 0, -0), mat3.create())).toBe(true);
+    const negativeZeros = mat3.create();
+    negativeZeros.fill(-0);
+    const zeros = mat3.create();
+    zeros.fill(0);
+    expect(mat3.isEqual(negativeZeros, zeros)).toBe(true);
   });
 
   test('NaN is never equal, even to itself', () => {
@@ -375,8 +386,8 @@ describe('isEqualEpsilon', () => {
   test('accepts a custom tolerance', () => {
     const near = mat3.create();
     const far = mat3.create();
-    near[4] = 0.05;
-    far[4] = 0.5;
+    near[3] = 0.05;
+    far[3] = 0.5;
     expect(mat3.isEqualEpsilon(mat3.create(), near, 0.1)).toBe(true);
     expect(mat3.isEqualEpsilon(mat3.create(), far, 0.1)).toBe(false);
   });
