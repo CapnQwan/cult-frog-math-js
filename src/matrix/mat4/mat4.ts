@@ -191,3 +191,57 @@ export function isEqualEpsilon(a: ReadonlyMat4, b: ReadonlyMat4, eps = EPSILON):
   for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
   return true;
 }
+
+/**
+ * Multiplies two matrices (the matrix product `a * b`) and writes the result
+ * into `out`.
+ *
+ * Vectors are columns, so the result applies `b` first, then `a`: to build a
+ * model-view-projection matrix, multiply `projection * view * model`. Order
+ * matters: `multiply(out, a, b)` and `multiply(out, b, a)` are generally
+ * different transforms. In practice, `multiply(out, m, delta)` applies `delta`
+ * in `m`'s local frame, while `multiply(out, delta, m)` applies it in the
+ * parent frame. `IDENTITY` leaves the other input unchanged on either side.
+ *
+ * `out` may be the same matrix as `a` or `b`, or a view overlapping either:
+ * both inputs are read into locals before anything is written.
+ *
+ * @param out - The matrix to write to.
+ * @param a - The left operand, applied second.
+ * @param b - The right operand, applied first.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function multiply(out: Mat4, a: ReadonlyMat4, b: ReadonlyMat4): Mat4 {
+  const a00 = a[0], a01 = a[4], a02 = a[8],  a03 = a[12];
+  const a10 = a[1], a11 = a[5], a12 = a[9],  a13 = a[13];
+  const a20 = a[2], a21 = a[6], a22 = a[10], a23 = a[14];
+  const a30 = a[3], a31 = a[7], a32 = a[11], a33 = a[15];
+
+  const b00 = b[0], b01 = b[4], b02 = b[8],  b03 = b[12];
+  const b10 = b[1], b11 = b[5], b12 = b[9],  b13 = b[13];
+  const b20 = b[2], b21 = b[6], b22 = b[10], b23 = b[14];
+  const b30 = b[3], b31 = b[7], b32 = b[11], b33 = b[15];
+
+  out[0] = a00 * b00 + a01 * b10 + a02 * b20 + a03 * b30;
+  out[1] = a10 * b00 + a11 * b10 + a12 * b20 + a13 * b30;
+  out[2] = a20 * b00 + a21 * b10 + a22 * b20 + a23 * b30;
+  out[3] = a30 * b00 + a31 * b10 + a32 * b20 + a33 * b30;
+
+  out[4] = a00 * b01 + a01 * b11 + a02 * b21 + a03 * b31;
+  out[5] = a10 * b01 + a11 * b11 + a12 * b21 + a13 * b31;
+  out[6] = a20 * b01 + a21 * b11 + a22 * b21 + a23 * b31;
+  out[7] = a30 * b01 + a31 * b11 + a32 * b21 + a33 * b31;
+
+  out[8] = a00 * b02 + a01 * b12 + a02 * b22 + a03 * b32;
+  out[9] = a10 * b02 + a11 * b12 + a12 * b22 + a13 * b32;
+  out[10] = a20 * b02 + a21 * b12 + a22 * b22 + a23 * b32;
+  out[11] = a30 * b02 + a31 * b12 + a32 * b22 + a33 * b32;
+
+  out[12] = a00 * b03 + a01 * b13 + a02 * b23 + a03 * b33;
+  out[13] = a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33;
+  out[14] = a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33;
+  out[15] = a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33;
+
+  return out;
+}

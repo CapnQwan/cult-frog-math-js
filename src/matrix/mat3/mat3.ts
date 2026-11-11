@@ -180,3 +180,45 @@ export function isEqualEpsilon(a: ReadonlyMat3, b: ReadonlyMat3, eps = EPSILON):
   for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
   return true;
 }
+
+/**
+ * Multiplies two matrices (the matrix product `a * b`) and writes the result
+ * into `out`.
+ *
+ * Vectors are columns, so the result applies `b` first, then `a`. Order
+ * matters: `multiply(out, a, b)` and `multiply(out, b, a)` are generally
+ * different matrices. `IDENTITY` leaves the other input unchanged on either
+ * side.
+ *
+ * `out` may be the same matrix as `a` or `b`, or a view overlapping either:
+ * both inputs are read into locals before anything is written.
+ *
+ * @param out - The matrix to write to.
+ * @param a - The left operand, applied second.
+ * @param b - The right operand, applied first.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function multiply(out: Mat3, a: ReadonlyMat3, b: ReadonlyMat3): Mat3 {
+  const a00 = a[0], a01 = a[3], a02 = a[6];
+  const a10 = a[1], a11 = a[4], a12 = a[7];
+  const a20 = a[2], a21 = a[5], a22 = a[8];
+
+  const b00 = b[0], b01 = b[3], b02 = b[6];
+  const b10 = b[1], b11 = b[4], b12 = b[7];
+  const b20 = b[2], b21 = b[5], b22 = b[8];
+
+  out[0] = a00 * b00 + a01 * b10 + a02 * b20;
+  out[1] = a10 * b00 + a11 * b10 + a12 * b20;
+  out[2] = a20 * b00 + a21 * b10 + a22 * b20;
+
+  out[3] = a00 * b01 + a01 * b11 + a02 * b21;
+  out[4] = a10 * b01 + a11 * b11 + a12 * b21;
+  out[5] = a20 * b01 + a21 * b11 + a22 * b21;
+
+  out[6] = a00 * b02 + a01 * b12 + a02 * b22;
+  out[7] = a10 * b02 + a11 * b12 + a12 * b22;
+  out[8] = a20 * b02 + a21 * b12 + a22 * b22;
+
+  return out;
+}

@@ -436,3 +436,123 @@ describe('isEqualEpsilon', () => {
     expect(mat4.isEqualEpsilon(m, m)).toBe(false);
   });
 });
+
+describe('multiply', () => {
+  const a = mat4.create(...ROW_MAJOR_ARGS);
+  // Rows:  16 15 14 13
+  //        12 11 10  9
+  //         8  7  6  5
+  //         4  3  2  1
+  const b = mat4.create(16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1);
+  // Rows:   80  70  60  50
+  //        240 214 188 162
+  //        400 358 316 274
+  //        560 502 444 386
+  // biome-ignore format: visual alignment with the matrix
+  const abStorage = [
+    80,  240, 400, 560,
+    70,  214, 358, 502,
+    60,  188, 316, 444,
+    50,  162, 274, 386,
+  ] as const;
+
+  test('writes a * b and returns out', () => {
+    const out = mat4.create();
+    const result = mat4.multiply(out, a, b);
+
+    expect(result).toBe(out);
+    expectStorage(out, abStorage);
+  });
+
+  test('order matters: b * a is a different matrix', () => {
+    expect(
+      mat4.isEqual(mat4.multiply(mat4.create(), b, a), mat4.multiply(mat4.create(), a, b))
+    ).toBe(false);
+  });
+
+  test('IDENTITY leaves the other input unchanged on either side', () => {
+    expectStorage(mat4.multiply(mat4.create(), mat4.IDENTITY, a), COLUMN_MAJOR_STORAGE);
+    expectStorage(mat4.multiply(mat4.create(), a, mat4.IDENTITY), COLUMN_MAJOR_STORAGE);
+  });
+
+  test('applies b first, then a', () => {
+    // biome-ignore format: visual alignment with the matrix
+    const translate = mat4.create(
+      1, 0, 0, 10,
+      0, 1, 0, 20,
+      0, 0, 1, 30,
+      0, 0, 0, 1,
+    );
+    // biome-ignore format: visual alignment with the matrix
+    const scale = mat4.create(
+      2, 0, 0, 0,
+      0, 2, 0, 0,
+      0, 0, 2, 0,
+      0, 0, 0, 1,
+    );
+
+    // Scale then translate: the translation is untouched.
+    const scaleThenTranslate = mat4.multiply(mat4.create(), translate, scale);
+    expect([scaleThenTranslate[12], scaleThenTranslate[13], scaleThenTranslate[14]]).toEqual([
+      10, 20, 30,
+    ]);
+
+    // Translate then scale: the translation is scaled too.
+    const translateThenScale = mat4.multiply(mat4.create(), scale, translate);
+    expect([translateThenScale[12], translateThenScale[13], translateThenScale[14]]).toEqual([
+      20, 40, 60,
+    ]);
+  });
+
+  test('never writes to the inputs', () => {
+    mat4.multiply(mat4.create(), a, b);
+    expectStorage(a, COLUMN_MAJOR_STORAGE);
+    expectStorage(b, [16, 12, 8, 4, 15, 11, 7, 3, 14, 10, 6, 2, 13, 9, 5, 1]);
+  });
+
+  test('out === a', () => {
+    const m = mat4.clone(a);
+    mat4.multiply(m, m, b);
+    expectStorage(m, abStorage);
+  });
+
+  test('out === b', () => {
+    const m = mat4.clone(b);
+    mat4.multiply(m, a, m);
+    expectStorage(m, abStorage);
+  });
+
+  test('out === a === b squares in place', () => {
+    const expected = mat4.multiply(mat4.create(), mat4.clone(a), mat4.clone(a));
+    const m = mat4.clone(a);
+    mat4.multiply(m, m, m);
+    expect(mat4.isEqual(m, expected)).toBe(true);
+  });
+
+  test('every overlap of out with either input is exact', () => {
+    for (let outOffset = 0; outOffset < ELEMENTS; outOffset++) {
+      for (let inputOffset = 0; inputOffset < ELEMENTS; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const leftBuffer = sequentialBuffer(ELEMENTS * 2);
+        const left = viewAt(leftBuffer, inputOffset);
+        const leftExpected = mat4.multiply(mat4.create(), mat4.clone(left), b);
+        mat4.multiply(viewAt(leftBuffer, outOffset), left, b);
+        expect(mat4.isEqual(viewAt(leftBuffer, outOffset), leftExpected)).toBe(true);
+
+        const rightBuffer = sequentialBuffer(ELEMENTS * 2);
+        const right = viewAt(rightBuffer, inputOffset);
+        const rightExpected = mat4.multiply(mat4.create(), a, mat4.clone(right));
+        mat4.multiply(viewAt(rightBuffer, outOffset), a, right);
+        expect(mat4.isEqual(viewAt(rightBuffer, outOffset), rightExpected)).toBe(true);
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(32);
+    mat4.multiply(viewAt(pool, 2), a, b);
+
+    expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(32, 2, abStorage));
+  });
+});

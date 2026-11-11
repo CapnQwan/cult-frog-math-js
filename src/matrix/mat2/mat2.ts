@@ -167,3 +167,36 @@ export function isEqualEpsilon(a: ReadonlyMat2, b: ReadonlyMat2, eps = EPSILON):
   for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
   return true;
 }
+
+/**
+ * Multiplies two matrices (the matrix product `a * b`) and writes the result
+ * into `out`.
+ *
+ * Vectors are columns, so the result applies `b` first, then `a`. Order
+ * matters: `multiply(out, a, b)` and `multiply(out, b, a)` are generally
+ * different matrices. `IDENTITY` leaves the other input unchanged on either
+ * side.
+ *
+ * `out` may be the same matrix as `a` or `b`, or a view overlapping either:
+ * both inputs are read into locals before anything is written.
+ *
+ * @param out - The matrix to write to.
+ * @param a - The left operand, applied second.
+ * @param b - The right operand, applied first.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function multiply(out: Mat2, a: ReadonlyMat2, b: ReadonlyMat2): Mat2 {
+  const a00 = a[0], a01 = a[2];
+  const a10 = a[1], a11 = a[3];
+
+  const b00 = b[0], b01 = b[2];
+  const b10 = b[1], b11 = b[3];
+
+  out[0] = a00 * b00 + a01 * b10;
+  out[1] = a10 * b00 + a11 * b10;
+  out[2] = a00 * b01 + a01 * b11;
+  out[3] = a10 * b01 + a11 * b11;
+
+  return out;
+}

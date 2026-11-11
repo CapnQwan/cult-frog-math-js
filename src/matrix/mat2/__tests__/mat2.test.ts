@@ -361,3 +361,84 @@ describe('isEqualEpsilon', () => {
     expect(mat2.isEqualEpsilon(m, m)).toBe(false);
   });
 });
+
+describe('multiply', () => {
+  // Rows:  1 2      5 6
+  //        3 4      7 8
+  const a = mat2.create(1, 2, 3, 4);
+  const b = mat2.create(5, 6, 7, 8);
+
+  test('writes a * b and returns out', () => {
+    const out = mat2.create();
+    const result = mat2.multiply(out, a, b);
+
+    expect(result).toBe(out);
+    // Rows: 19 22
+    //       43 50
+    expectStorage(out, [19, 43, 22, 50]);
+  });
+
+  test('order matters: b * a is a different matrix', () => {
+    // Rows: 23 34
+    //       31 46
+    expectStorage(mat2.multiply(mat2.create(), b, a), [23, 31, 34, 46]);
+  });
+
+  test('IDENTITY leaves the other input unchanged on either side', () => {
+    expectStorage(mat2.multiply(mat2.create(), mat2.IDENTITY, a), [1, 3, 2, 4]);
+    expectStorage(mat2.multiply(mat2.create(), a, mat2.IDENTITY), [1, 3, 2, 4]);
+  });
+
+  test('never writes to the inputs', () => {
+    mat2.multiply(mat2.create(), a, b);
+    expectStorage(a, [1, 3, 2, 4]);
+    expectStorage(b, [5, 7, 6, 8]);
+  });
+
+  test('out === a', () => {
+    const m = mat2.clone(a);
+    mat2.multiply(m, m, b);
+    expectStorage(m, [19, 43, 22, 50]);
+  });
+
+  test('out === b', () => {
+    const m = mat2.clone(b);
+    mat2.multiply(m, a, m);
+    expectStorage(m, [19, 43, 22, 50]);
+  });
+
+  test('out === a === b squares in place', () => {
+    const m = mat2.clone(a);
+    mat2.multiply(m, m, m);
+    // Rows:  7 10
+    //       15 22
+    expectStorage(m, [7, 15, 10, 22]);
+  });
+
+  test('every overlap of out with either input is exact', () => {
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const leftBuffer = sequentialBuffer(8);
+        const left = viewAt(leftBuffer, inputOffset);
+        const leftExpected = mat2.multiply(mat2.create(), mat2.clone(left), b);
+        mat2.multiply(viewAt(leftBuffer, outOffset), left, b);
+        expect(mat2.isEqual(viewAt(leftBuffer, outOffset), leftExpected)).toBe(true);
+
+        const rightBuffer = sequentialBuffer(8);
+        const right = viewAt(rightBuffer, inputOffset);
+        const rightExpected = mat2.multiply(mat2.create(), a, mat2.clone(right));
+        mat2.multiply(viewAt(rightBuffer, outOffset), a, right);
+        expect(mat2.isEqual(viewAt(rightBuffer, outOffset), rightExpected)).toBe(true);
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    mat2.multiply(viewAt(pool, 2), a, b);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 19, 43, 22, 50, 7, 8]);
+  });
+});
