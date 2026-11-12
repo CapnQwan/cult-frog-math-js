@@ -174,8 +174,13 @@ export function isEqualEpsilon(a: ReadonlyMat2, b: ReadonlyMat2, eps = EPSILON):
  *
  * Vectors are columns, so the result applies `b` first, then `a`. Order
  * matters: `multiply(out, a, b)` and `multiply(out, b, a)` are generally
- * different matrices. `IDENTITY` leaves the other input unchanged on either
- * side.
+ * different transforms. `multiply(out, m, delta)` applies `delta` in `m`'s
+ * local frame, while `multiply(out, delta, m)` applies it in the parent
+ * frame.
+ *
+ * With finite elements, `IDENTITY` on either side gives back the other input.
+ * An infinite element meets the identity's zeros, and `0 * Infinity` is
+ * `NaN`, so the rest of its row or column comes out as `NaN`.
  *
  * `out` may be the same matrix as `a` or `b`, or a view overlapping either:
  * both inputs are read into locals before anything is written.
@@ -197,6 +202,46 @@ export function multiply(out: Mat2, a: ReadonlyMat2, b: ReadonlyMat2): Mat2 {
   out[1] = a10 * b00 + a11 * b10;
   out[2] = a00 * b01 + a01 * b11;
   out[3] = a10 * b01 + a11 * b11;
+
+  return out;
+}
+
+/**
+ * Transposes `a`, swapping its rows and columns, and writes the result into
+ * `out`.
+ *
+ * The element at row `r`, column `c` moves to row `c`, column `r`, so the
+ * diagonal stays where it is and `a01` trades places with `a10`. No arithmetic
+ * is done: every element is copied bit for bit, including `NaN`, `-0` and
+ * infinities, so transposing twice gives back the original exactly.
+ *
+ * For a pure rotation, the transpose is also the inverse, and much cheaper to
+ * compute. That holds only while the columns are unit length and
+ * perpendicular to each other: once the matrix scales or shears, the transpose
+ * no longer undoes it.
+ *
+ * Row-major data viewed as a `Mat2` holds the transpose of the matrix it
+ * describes, so transposing it gives that matrix in this package's
+ * column-major layout, and the reverse converts back.
+ *
+ * `out` may be the same matrix as `a`, which transposes in place, or a view
+ * overlapping it: every element is read into a local before anything is
+ * written.
+ *
+ * @param out - The matrix to write to.
+ * @param a - The matrix to transpose.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transpose(out: Mat2, a: ReadonlyMat2): Mat2 {
+  const a00 = a[0], a01 = a[2];
+  const a10 = a[1], a11 = a[3];
+
+  out[0] = a00;
+  out[1] = a01;
+
+  out[2] = a10;
+  out[3] = a11;
 
   return out;
 }

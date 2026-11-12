@@ -484,3 +484,136 @@ describe('multiply', () => {
     expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(18, 2, abStorage));
   });
 });
+
+describe('transpose', () => {
+  const a = mat3.create(...ROW_MAJOR_ARGS);
+
+  /** Rotation about z, then about x, so every element of the result is in play. */
+  function rotation(): Mat3 {
+    const c = Math.cos(0.7);
+    const s = Math.sin(0.7);
+    const rotZ = mat3.create(c, -s, 0, s, c, 0, 0, 0, 1);
+    const rotX = mat3.create(1, 0, 0, 0, c, -s, 0, s, c);
+    return mat3.multiply(mat3.create(), rotX, rotZ);
+  }
+
+  test('swaps rows and columns and returns out', () => {
+    const out = mat3.create();
+    const result = mat3.transpose(out, a);
+
+    expect(result).toBe(out);
+    // Rows:  1 4 7
+    //        2 5 8
+    //        3 6 9
+    expectStorage(out, ROW_MAJOR_ARGS);
+  });
+
+  test('agrees with create given the off-diagonal elements swapped', () => {
+    expect(
+      mat3.isEqual(mat3.transpose(mat3.create(), a), mat3.create(1, 4, 7, 2, 5, 8, 3, 6, 9))
+    ).toBe(true);
+  });
+
+  test('transposing twice gives back the original', () => {
+    const m = mat3.create(0.1, -0.7, 1.3, 2.9, 0.3, -1.1, 4.7, 0.05, -2.2);
+    const twice = mat3.transpose(mat3.create(), mat3.transpose(mat3.create(), m));
+
+    expect(mat3.isEqual(twice, m)).toBe(true);
+  });
+
+  test('IDENTITY and other symmetric matrices transpose to themselves', () => {
+    expectStorage(mat3.transpose(mat3.create(), mat3.IDENTITY), IDENTITY_STORAGE);
+
+    const symmetric = mat3.create(1, 2, 3, 2, 4, 5, 3, 5, 6);
+    expect(mat3.isEqual(mat3.transpose(mat3.create(), symmetric), symmetric)).toBe(true);
+  });
+
+  test('copies elements bit for bit, including NaN, -0 and infinities', () => {
+    const inf = Number.POSITIVE_INFINITY;
+    const nan = Number.NaN;
+    // Rows:     1   -0  NaN
+    //         Inf    2 -Inf
+    //          -0  NaN    3
+    const special = [1, -0, nan, inf, 2, -inf, -0, nan, 3] as const;
+    const t = mat3.transpose(mat3.create(), mat3.create(...special));
+
+    // The transpose's storage is the original's row-major argument order.
+    for (let i = 0; i < ELEMENTS; i++) {
+      expect(Object.is(t[i], special[i]), `index ${i}`).toBe(true);
+    }
+  });
+
+  test('the transpose of a rotation is its inverse', () => {
+    const r = rotation();
+    const t = mat3.transpose(mat3.create(), r);
+
+    expect(mat3.isEqualEpsilon(mat3.multiply(mat3.create(), t, r), mat3.IDENTITY)).toBe(true);
+    expect(mat3.isEqualEpsilon(mat3.multiply(mat3.create(), r, t), mat3.IDENTITY)).toBe(true);
+  });
+
+  test('the transpose of a scaled rotation is not its inverse', () => {
+    const scale = mat3.create(2, 0, 0, 0, 2, 0, 0, 0, 2);
+    const scaled = mat3.multiply(mat3.create(), rotation(), scale);
+    const product = mat3.multiply(mat3.create(), mat3.transpose(mat3.create(), scaled), scaled);
+
+    // The scale is applied twice rather than undone.
+    expect(mat3.isEqualEpsilon(product, mat3.create(4, 0, 0, 0, 4, 0, 0, 0, 4))).toBe(true);
+  });
+
+  test('moves a 2D translation into the bottom row, so it is not the inverse', () => {
+    const c = Math.cos(0.7);
+    const s = Math.sin(0.7);
+    // Rows:  c -s  5
+    //        s  c -3
+    //        0  0  1
+    const m = mat3.create(c, -s, 5, s, c, -3, 0, 0, 1);
+    const t = mat3.transpose(mat3.create(), m);
+
+    // a20 and a21 hold the translation; the last column has none.
+    expect([t[2], t[5]]).toEqual([5, -3]);
+    expect([t[6], t[7]]).toEqual([0, 0]);
+    expect(mat3.isEqualEpsilon(mat3.multiply(mat3.create(), t, m), mat3.IDENTITY)).toBe(false);
+  });
+
+  test('turns row-major data into column-major storage', () => {
+    // Floats 1 to 9 read in row-major order describe the rows of `a`.
+    const rowMajor = viewAt(sequentialBuffer(ELEMENTS), 0);
+    mat3.transpose(rowMajor, rowMajor);
+
+    expect(mat3.isEqual(rowMajor, a)).toBe(true);
+  });
+
+  test('never writes to the input', () => {
+    mat3.transpose(mat3.create(), a);
+    expectStorage(a, COLUMN_MAJOR_STORAGE);
+  });
+
+  test('out === a transposes in place', () => {
+    const m = mat3.clone(a);
+    mat3.transpose(m, m);
+    expectStorage(m, ROW_MAJOR_ARGS);
+  });
+
+  test('every overlap of out with the input is exact', () => {
+    for (let outOffset = 0; outOffset < ELEMENTS; outOffset++) {
+      for (let inputOffset = 0; inputOffset < ELEMENTS; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const buffer = sequentialBuffer(ELEMENTS * 2);
+        const input = viewAt(buffer, inputOffset);
+        const expected = mat3.transpose(mat3.create(), mat3.clone(input));
+
+        mat3.transpose(viewAt(buffer, outOffset), input);
+
+        expect(mat3.isEqual(viewAt(buffer, outOffset), expected)).toBe(true);
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(18);
+    mat3.transpose(viewAt(pool, 2), a);
+
+    expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(18, 2, ROW_MAJOR_ARGS));
+  });
+});

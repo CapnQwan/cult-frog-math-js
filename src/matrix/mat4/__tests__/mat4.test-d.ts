@@ -131,3 +131,49 @@ describe('equality', () => {
     mat4.isEqualEpsilon(live, raw);
   });
 });
+
+describe('multiply', () => {
+  test('out is mutable, inputs are readonly, and out is returned', () => {
+    expectTypeOf(mat4.multiply).parameters.toEqualTypeOf<[Mat4, ReadonlyMat4, ReadonlyMat4]>();
+    expectTypeOf(mat4.multiply).returns.toEqualTypeOf<Mat4>();
+  });
+
+  test('call sites', () => {
+    mat4.multiply(live, frozen, mat4.IDENTITY);
+    mat4.multiply(live, live, live);
+    mat4.multiply(shared, shared, frozen);
+    // @ts-expect-error readonly can never be an out parameter
+    mat4.multiply(frozen, live, live);
+    // @ts-expect-error the shared constant must never be written through
+    mat4.multiply(mat4.IDENTITY, live, live);
+    // @ts-expect-error wrong-dimension out
+    mat4.multiply(other, live, live);
+    // @ts-expect-error wrong-dimension input
+    mat4.multiply(live, live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat4.multiply(live, raw, live);
+  });
+});
+
+describe('transpose', () => {
+  test('out is mutable, the input is readonly, and out is returned', () => {
+    expectTypeOf(mat4.transpose).parameters.toEqualTypeOf<[Mat4, ReadonlyMat4]>();
+    expectTypeOf(mat4.transpose).returns.toEqualTypeOf<Mat4>();
+  });
+
+  test('call sites', () => {
+    mat4.transpose(live, frozen);
+    mat4.transpose(live, live);
+    mat4.transpose(shared, mat4.IDENTITY);
+    // @ts-expect-error readonly can never be an out parameter
+    mat4.transpose(frozen, live);
+    // @ts-expect-error the shared constant must never be written through
+    mat4.transpose(mat4.IDENTITY, live);
+    // @ts-expect-error wrong-dimension out
+    mat4.transpose(other, live);
+    // @ts-expect-error wrong-dimension input
+    mat4.transpose(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat4.transpose(live, raw);
+  });
+});

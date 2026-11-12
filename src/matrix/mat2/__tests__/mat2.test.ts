@@ -442,3 +442,113 @@ describe('multiply', () => {
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 19, 43, 22, 50, 7, 8]);
   });
 });
+
+describe('transpose', () => {
+  // Rows:  1 2
+  //        3 4
+  const a = mat2.create(1, 2, 3, 4);
+
+  test('swaps rows and columns and returns out', () => {
+    const out = mat2.create();
+    const result = mat2.transpose(out, a);
+
+    expect(result).toBe(out);
+    // Rows:  1 3
+    //        2 4
+    expectStorage(out, [1, 2, 3, 4]);
+  });
+
+  test('agrees with create given the off-diagonal elements swapped', () => {
+    expect(mat2.isEqual(mat2.transpose(mat2.create(), a), mat2.create(1, 3, 2, 4))).toBe(true);
+  });
+
+  test('transposing twice gives back the original', () => {
+    const m = mat2.create(0.1, -0.7, 1.3, 2.9);
+    const twice = mat2.transpose(mat2.create(), mat2.transpose(mat2.create(), m));
+
+    expect(mat2.isEqual(twice, m)).toBe(true);
+  });
+
+  test('IDENTITY and other symmetric matrices transpose to themselves', () => {
+    expectStorage(mat2.transpose(mat2.create(), mat2.IDENTITY), [1, 0, 0, 1]);
+
+    const symmetric = mat2.create(1, 2, 2, 3);
+    expect(mat2.isEqual(mat2.transpose(mat2.create(), symmetric), symmetric)).toBe(true);
+  });
+
+  test('copies elements bit for bit, including NaN, -0 and infinities', () => {
+    // Rows:   -0  NaN
+    //        Inf -Inf
+    const special = [-0, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY] as const;
+    const t = mat2.transpose(mat2.create(), mat2.create(...special));
+
+    // The transpose's storage is the original's row-major argument order.
+    for (let i = 0; i < mat2.SIZE; i++) {
+      expect(Object.is(t[i], special[i]), `index ${i}`).toBe(true);
+    }
+  });
+
+  test('the transpose of a rotation is its inverse', () => {
+    const c = Math.cos(0.7);
+    const s = Math.sin(0.7);
+    const rotation = mat2.create(c, -s, s, c);
+    const t = mat2.transpose(mat2.create(), rotation);
+
+    const before = mat2.multiply(mat2.create(), t, rotation);
+    const after = mat2.multiply(mat2.create(), rotation, t);
+    expect(mat2.isEqualEpsilon(before, mat2.IDENTITY)).toBe(true);
+    expect(mat2.isEqualEpsilon(after, mat2.IDENTITY)).toBe(true);
+  });
+
+  test('the transpose of a scaled rotation is not its inverse', () => {
+    const c = 2 * Math.cos(0.7);
+    const s = 2 * Math.sin(0.7);
+    const scaled = mat2.create(c, -s, s, c);
+    const product = mat2.multiply(mat2.create(), mat2.transpose(mat2.create(), scaled), scaled);
+
+    // The scale is applied twice rather than undone.
+    expect(mat2.isEqualEpsilon(product, mat2.create(4, 0, 0, 4))).toBe(true);
+  });
+
+  test('turns row-major data into column-major storage', () => {
+    // Floats 1, 2, 3, 4 read in row-major order describe rows 1 2 / 3 4.
+    const rowMajor = viewAt(sequentialBuffer(4), 0);
+    mat2.transpose(rowMajor, rowMajor);
+
+    expect(mat2.isEqual(rowMajor, a)).toBe(true);
+  });
+
+  test('never writes to the input', () => {
+    mat2.transpose(mat2.create(), a);
+    expectStorage(a, [1, 3, 2, 4]);
+  });
+
+  test('out === a transposes in place', () => {
+    const m = mat2.clone(a);
+    mat2.transpose(m, m);
+    expectStorage(m, [1, 2, 3, 4]);
+  });
+
+  test('every overlap of out with the input is exact', () => {
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const buffer = sequentialBuffer(8);
+        const input = viewAt(buffer, inputOffset);
+        const expected = mat2.transpose(mat2.create(), mat2.clone(input));
+
+        mat2.transpose(viewAt(buffer, outOffset), input);
+
+        expect(mat2.isEqual(viewAt(buffer, outOffset), expected)).toBe(true);
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    mat2.transpose(viewAt(pool, 2), a);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 1, 2, 3, 4, 7, 8]);
+  });
+});

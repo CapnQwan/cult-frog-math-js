@@ -131,3 +131,49 @@ describe('equality', () => {
     mat2.isEqualEpsilon(live, raw);
   });
 });
+
+describe('multiply', () => {
+  test('out is mutable, inputs are readonly, and out is returned', () => {
+    expectTypeOf(mat2.multiply).parameters.toEqualTypeOf<[Mat2, ReadonlyMat2, ReadonlyMat2]>();
+    expectTypeOf(mat2.multiply).returns.toEqualTypeOf<Mat2>();
+  });
+
+  test('call sites', () => {
+    mat2.multiply(live, frozen, mat2.IDENTITY);
+    mat2.multiply(live, live, live);
+    mat2.multiply(shared, shared, frozen);
+    // @ts-expect-error readonly can never be an out parameter
+    mat2.multiply(frozen, live, live);
+    // @ts-expect-error the shared constant must never be written through
+    mat2.multiply(mat2.IDENTITY, live, live);
+    // @ts-expect-error wrong-dimension out
+    mat2.multiply(other, live, live);
+    // @ts-expect-error wrong-dimension input
+    mat2.multiply(live, live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat2.multiply(live, raw, live);
+  });
+});
+
+describe('transpose', () => {
+  test('out is mutable, the input is readonly, and out is returned', () => {
+    expectTypeOf(mat2.transpose).parameters.toEqualTypeOf<[Mat2, ReadonlyMat2]>();
+    expectTypeOf(mat2.transpose).returns.toEqualTypeOf<Mat2>();
+  });
+
+  test('call sites', () => {
+    mat2.transpose(live, frozen);
+    mat2.transpose(live, live);
+    mat2.transpose(shared, mat2.IDENTITY);
+    // @ts-expect-error readonly can never be an out parameter
+    mat2.transpose(frozen, live);
+    // @ts-expect-error the shared constant must never be written through
+    mat2.transpose(mat2.IDENTITY, live);
+    // @ts-expect-error wrong-dimension out
+    mat2.transpose(other, live);
+    // @ts-expect-error wrong-dimension input
+    mat2.transpose(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat2.transpose(live, raw);
+  });
+});

@@ -187,8 +187,13 @@ export function isEqualEpsilon(a: ReadonlyMat3, b: ReadonlyMat3, eps = EPSILON):
  *
  * Vectors are columns, so the result applies `b` first, then `a`. Order
  * matters: `multiply(out, a, b)` and `multiply(out, b, a)` are generally
- * different matrices. `IDENTITY` leaves the other input unchanged on either
- * side.
+ * different transforms. `multiply(out, m, delta)` applies `delta` in `m`'s
+ * local frame, while `multiply(out, delta, m)` applies it in the parent
+ * frame.
+ *
+ * With finite elements, `IDENTITY` on either side gives back the other input.
+ * An infinite element meets the identity's zeros, and `0 * Infinity` is
+ * `NaN`, so the rest of its row or column comes out as `NaN`.
  *
  * `out` may be the same matrix as `a` or `b`, or a view overlapping either:
  * both inputs are read into locals before anything is written.
@@ -219,6 +224,56 @@ export function multiply(out: Mat3, a: ReadonlyMat3, b: ReadonlyMat3): Mat3 {
   out[6] = a00 * b02 + a01 * b12 + a02 * b22;
   out[7] = a10 * b02 + a11 * b12 + a12 * b22;
   out[8] = a20 * b02 + a21 * b12 + a22 * b22;
+
+  return out;
+}
+
+/**
+ * Transposes `a`, swapping its rows and columns, and writes the result into
+ * `out`.
+ *
+ * The element at row `r`, column `c` moves to row `c`, column `r`, so the
+ * diagonal stays where it is and, for example, `a01` trades places with
+ * `a10`. No arithmetic is done: every element is copied bit for bit, including
+ * `NaN`, `-0` and infinities, so transposing twice gives back the original
+ * exactly.
+ *
+ * For a pure rotation, the transpose is also the inverse, and much cheaper to
+ * compute. That holds only while the columns are unit length and
+ * perpendicular to each other: once the matrix scales or shears, the transpose
+ * no longer undoes it. When a `Mat3` holds a 2D transform with a translation
+ * in its last column, the transpose moves that translation into the bottom
+ * row, so it is not the inverse either.
+ *
+ * Row-major data viewed as a `Mat3` holds the transpose of the matrix it
+ * describes, so transposing it gives that matrix in this package's
+ * column-major layout, and the reverse converts back.
+ *
+ * `out` may be the same matrix as `a`, which transposes in place, or a view
+ * overlapping it: every element is read into a local before anything is
+ * written.
+ *
+ * @param out - The matrix to write to.
+ * @param a - The matrix to transpose.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transpose(out: Mat3, a: ReadonlyMat3): Mat3 {
+  const a00 = a[0], a01 = a[3], a02 = a[6];
+  const a10 = a[1], a11 = a[4], a12 = a[7];
+  const a20 = a[2], a21 = a[5], a22 = a[8];
+
+  out[0] = a00;
+  out[1] = a01;
+  out[2] = a02;
+
+  out[3] = a10;
+  out[4] = a11;
+  out[5] = a12;
+
+  out[6] = a20;
+  out[7] = a21;
+  out[8] = a22;
 
   return out;
 }

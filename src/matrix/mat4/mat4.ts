@@ -196,12 +196,19 @@ export function isEqualEpsilon(a: ReadonlyMat4, b: ReadonlyMat4, eps = EPSILON):
  * Multiplies two matrices (the matrix product `a * b`) and writes the result
  * into `out`.
  *
- * Vectors are columns, so the result applies `b` first, then `a`: to build a
- * model-view-projection matrix, multiply `projection * view * model`. Order
+ * Vectors are columns, so the result applies `b` first, then `a`. Order
  * matters: `multiply(out, a, b)` and `multiply(out, b, a)` are generally
- * different transforms. In practice, `multiply(out, m, delta)` applies `delta`
- * in `m`'s local frame, while `multiply(out, delta, m)` applies it in the
- * parent frame. `IDENTITY` leaves the other input unchanged on either side.
+ * different transforms. `multiply(out, m, delta)` applies `delta` in `m`'s
+ * local frame, while `multiply(out, delta, m)` applies it in the parent
+ * frame.
+ *
+ * A model-view-projection matrix is `projection * view * model`, which is
+ * `multiply(mvp, projection, multiply(mvp, view, model))`. Reusing `mvp` for
+ * the inner product is safe, since `out` may alias an input.
+ *
+ * With finite elements, `IDENTITY` on either side gives back the other input.
+ * An infinite element meets the identity's zeros, and `0 * Infinity` is
+ * `NaN`, so the rest of its row or column comes out as `NaN`.
  *
  * `out` may be the same matrix as `a` or `b`, or a view overlapping either:
  * both inputs are read into locals before anything is written.
@@ -242,6 +249,67 @@ export function multiply(out: Mat4, a: ReadonlyMat4, b: ReadonlyMat4): Mat4 {
   out[13] = a10 * b03 + a11 * b13 + a12 * b23 + a13 * b33;
   out[14] = a20 * b03 + a21 * b13 + a22 * b23 + a23 * b33;
   out[15] = a30 * b03 + a31 * b13 + a32 * b23 + a33 * b33;
+
+  return out;
+}
+
+/**
+ * Transposes `a`, swapping its rows and columns, and writes the result into
+ * `out`.
+ *
+ * The element at row `r`, column `c` moves to row `c`, column `r`, so the
+ * diagonal stays where it is and, for example, `a03` trades places with
+ * `a30`. No arithmetic is done: every element is copied bit for bit, including
+ * `NaN`, `-0` and infinities, so transposing twice gives back the original
+ * exactly.
+ *
+ * For a pure rotation, the transpose is also the inverse, and much cheaper to
+ * compute. That holds only while the columns are unit length and
+ * perpendicular to each other: once the matrix scales or shears, the transpose
+ * no longer undoes it. Translation breaks it too. A transform with a
+ * translation keeps it in the last column, and the transpose moves it into the
+ * bottom row, which is no longer an affine transform. To undo a rotation and
+ * translation, transpose only the upper-left 3x3 and rotate the negated
+ * translation by it.
+ *
+ * Row-major data viewed as a `Mat4` holds the transpose of the matrix it
+ * describes, so transposing it gives that matrix in this package's
+ * column-major layout, and the reverse converts back.
+ *
+ * `out` may be the same matrix as `a`, which transposes in place, or a view
+ * overlapping it: every element is read into a local before anything is
+ * written.
+ *
+ * @param out - The matrix to write to.
+ * @param a - The matrix to transpose.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transpose(out: Mat4, a: ReadonlyMat4): Mat4 {
+  const a00 = a[0], a01 = a[4], a02 = a[8],  a03 = a[12];
+  const a10 = a[1], a11 = a[5], a12 = a[9],  a13 = a[13];
+  const a20 = a[2], a21 = a[6], a22 = a[10], a23 = a[14];
+  const a30 = a[3], a31 = a[7], a32 = a[11], a33 = a[15];
+
+  out[0] = a00;
+  out[1] = a01;
+  out[2] = a02;
+  out[3] = a03;
+
+  out[4] = a10;
+  out[5] = a11;
+  out[6] = a12;
+  out[7] = a13;
+
+  out[8] = a20;
+  out[9] = a21;
+  out[10] = a22;
+  out[11] = a23;
+
+  out[12] = a30;
+  out[13] = a31;
+  out[14] = a32;
+  out[15] = a33;
 
   return out;
 }
