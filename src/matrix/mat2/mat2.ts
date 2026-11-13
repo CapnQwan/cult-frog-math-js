@@ -245,3 +245,35 @@ export function transpose(out: Mat2, a: ReadonlyMat2): Mat2 {
 
   return out;
 }
+
+/**
+ * Returns the determinant of `a`.
+ *
+ * Its magnitude is the factor by which `a` scales area: `2` doubles it and
+ * `0.5` halves it. Its sign says whether `a` keeps orientation: a negative
+ * determinant means `a` mirrors, turning counter-clockwise order into
+ * clockwise. A rotation gives `1`, up to rounding.
+ *
+ * Determinants multiply under `multiply`, so a chain of transforms mirrors
+ * only if an odd number of them do. Transposing does not change the
+ * determinant.
+ *
+ * Zero means `a` collapses the plane onto a line or a point, and has no
+ * inverse. Rounding rarely lands exactly on zero for a matrix that is singular
+ * in theory, and a nearly singular matrix gives a small non-zero result, so
+ * test against a tolerance scaled to the elements' magnitude rather than
+ * `=== 0`.
+ *
+ * The elements are float32, but the arithmetic runs in float64, so the result
+ * is not rounded to float32. A `NaN` element gives `NaN`.
+ *
+ * @param a - The matrix to measure.
+ * @returns The determinant of `a`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function determinant(a: ReadonlyMat2): number {
+  const a00 = a[0], a01 = a[2];
+  const a10 = a[1], a11 = a[3];
+
+  return a00 * a11 - a01 * a10;
+}

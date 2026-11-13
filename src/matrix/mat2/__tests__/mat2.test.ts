@@ -552,3 +552,81 @@ describe('transpose', () => {
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 1, 2, 3, 4, 7, 8]);
   });
 });
+
+describe('determinant', () => {
+  test('is a00 * a11 - a01 * a10', () => {
+    // Rows:  1 2
+    //        3 4
+    expect(mat2.determinant(mat2.create(1, 2, 3, 4))).toBe(-2);
+  });
+
+  test('IDENTITY gives 1 and the zero matrix gives 0', () => {
+    expect(mat2.determinant(mat2.IDENTITY)).toBe(1);
+    expect(mat2.determinant(mat2.create(0, 0, 0, 0))).toBe(0);
+  });
+
+  test('dependent rows give 0', () => {
+    expect(mat2.determinant(mat2.create(1, 2, 2, 4))).toBe(0);
+  });
+
+  test('is the area scale', () => {
+    expect(mat2.determinant(mat2.create(3, 0, 0, 3))).toBe(9);
+    expect(mat2.determinant(mat2.create(2, 0, 0, 5))).toBe(10);
+  });
+
+  test('a rotation gives 1, up to rounding', () => {
+    const c = Math.cos(0.7);
+    const s = Math.sin(0.7);
+    expect(mat2.determinant(mat2.create(c, -s, s, c))).toBeCloseTo(1, 6);
+  });
+
+  test('a mirror gives a negative determinant', () => {
+    expect(mat2.determinant(mat2.create(-1, 0, 0, 1))).toBe(-1);
+    expect(mat2.determinant(mat2.create(1, 0, 0, -1))).toBe(-1);
+  });
+
+  test('swapping the rows flips the sign', () => {
+    expect(mat2.determinant(mat2.create(3, 4, 1, 2))).toBe(2);
+  });
+
+  test('the determinant of a product is the product of the determinants', () => {
+    const a = mat2.create(1, 2, 3, 4);
+    const b = mat2.create(5, 6, 7, 8);
+    const product = mat2.multiply(mat2.create(), a, b);
+
+    expect(mat2.determinant(product)).toBe(mat2.determinant(a) * mat2.determinant(b));
+  });
+
+  test('two mirrors cancel out', () => {
+    const mirrorX = mat2.create(-1, 0, 0, 1);
+    const mirrorY = mat2.create(1, 0, 0, -1);
+
+    expect(mat2.determinant(mat2.multiply(mat2.create(), mirrorX, mirrorY))).toBe(1);
+  });
+
+  test('transposing does not change it', () => {
+    const m = mat2.create(2, -3, 5, 7);
+
+    expect(mat2.determinant(m)).toBe(29);
+    expect(mat2.determinant(mat2.transpose(mat2.create(), m))).toBe(29);
+  });
+
+  test('is computed in float64, not rounded to float32', () => {
+    const f = Math.fround(0.1);
+
+    expect(mat2.determinant(mat2.create(0.1, 0, 0, 0.1))).toBe(f * f);
+    expect(Math.fround(f * f)).not.toBe(f * f);
+  });
+
+  test('a NaN element gives NaN', () => {
+    expect(mat2.determinant(mat2.create(1, Number.NaN, 0, 1))).toBeNaN();
+  });
+
+  test('reads only its own slots from a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    const view = viewAt(pool, 2);
+    mat2.set(view, 1, 2, 3, 4);
+
+    expect(mat2.determinant(view)).toBe(-2);
+  });
+});

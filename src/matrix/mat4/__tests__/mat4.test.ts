@@ -557,17 +557,17 @@ describe('multiply', () => {
   });
 });
 
+/** Rotation about z, then about x, so every element of the upper 3x3 is in play. */
+function rotation(): Mat4 {
+  const c = Math.cos(0.7);
+  const s = Math.sin(0.7);
+  const rotZ = mat4.create(c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+  const rotX = mat4.create(1, 0, 0, 0, 0, c, -s, 0, 0, s, c, 0, 0, 0, 0, 1);
+  return mat4.multiply(mat4.create(), rotX, rotZ);
+}
+
 describe('transpose', () => {
   const a = mat4.create(...ROW_MAJOR_ARGS);
-
-  /** Rotation about z, then about x, so every element of the upper 3x3 is in play. */
-  function rotation(): Mat4 {
-    const c = Math.cos(0.7);
-    const s = Math.sin(0.7);
-    const rotZ = mat4.create(c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
-    const rotX = mat4.create(1, 0, 0, 0, 0, c, -s, 0, 0, s, c, 0, 0, 0, 0, 1);
-    return mat4.multiply(mat4.create(), rotX, rotZ);
-  }
 
   test('swaps rows and columns and returns out', () => {
     const out = mat4.create();
@@ -696,5 +696,101 @@ describe('transpose', () => {
     mat4.transpose(viewAt(pool, 2), a);
 
     expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(32, 2, ROW_MAJOR_ARGS));
+  });
+});
+
+describe('determinant', () => {
+  // Rows:  1 0 2 -1
+  //        3 0 0  5
+  //        2 1 4 -3
+  //        1 0 5  0
+  const a = mat4.create(1, 0, 2, -1, 3, 0, 0, 5, 2, 1, 4, -3, 1, 0, 5, 0);
+
+  test('gives the cofactor expansion of a known matrix', () => {
+    expect(mat4.determinant(a)).toBe(30);
+  });
+
+  test('IDENTITY gives 1 and the zero matrix gives 0', () => {
+    expect(mat4.determinant(mat4.IDENTITY)).toBe(1);
+    expect(mat4.determinant(mat4.create(...ZEROS))).toBe(0);
+  });
+
+  test('dependent rows give 0', () => {
+    // Each row steps by the same amount, so the rows span only a plane.
+    expect(mat4.determinant(mat4.create(...ROW_MAJOR_ARGS))).toBe(0);
+  });
+
+  test('is the volume scale of an affine transform', () => {
+    expect(mat4.determinant(mat4.create(3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 3, 0, 0, 0, 0, 1))).toBe(27);
+    expect(mat4.determinant(mat4.create(2, 0, 0, 0, 0, 3, 0, 0, 0, 0, 4, 0, 0, 0, 0, 1))).toBe(24);
+  });
+
+  test('a rotation gives 1, up to rounding', () => {
+    expect(mat4.determinant(rotation())).toBeCloseTo(1, 6);
+  });
+
+  test('a mirror gives a negative determinant', () => {
+    const mirror = mat4.create(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1);
+
+    expect(mat4.determinant(mirror)).toBe(-1);
+    expect(mat4.determinant(mat4.multiply(mat4.create(), rotation(), mirror))).toBeCloseTo(-1, 6);
+  });
+
+  test('swapping two rows flips the sign', () => {
+    const swapped = mat4.create(3, 0, 0, 5, 1, 0, 2, -1, 2, 1, 4, -3, 1, 0, 5, 0);
+    expect(mat4.determinant(swapped)).toBe(-30);
+  });
+
+  test('the determinant of a product is the product of the determinants', () => {
+    // Rows:  1 2 0 0
+    //        0 1 3 0
+    //        4 0 1 0
+    //        0 0 0 2
+    const b = mat4.create(1, 2, 0, 0, 0, 1, 3, 0, 4, 0, 1, 0, 0, 0, 0, 2);
+    const product = mat4.multiply(mat4.create(), a, b);
+
+    expect(mat4.determinant(b)).toBe(50);
+    expect(mat4.determinant(product)).toBe(30 * 50);
+  });
+
+  test('two mirrors cancel out', () => {
+    const mirrorX = mat4.create(-1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+    const mirrorY = mat4.create(1, 0, 0, 0, 0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+
+    expect(mat4.determinant(mat4.multiply(mat4.create(), mirrorX, mirrorY))).toBe(1);
+  });
+
+  test('transposing does not change it', () => {
+    expect(mat4.determinant(mat4.transpose(mat4.create(), a))).toBe(30);
+  });
+
+  test('translation does not change it', () => {
+    // Rows:  2 0 0  5
+    //        0 3 0 -3
+    //        0 0 4  2
+    //        0 0 0  1
+    const m = mat4.create(2, 0, 0, 5, 0, 3, 0, -3, 0, 0, 4, 2, 0, 0, 0, 1);
+    expect(mat4.determinant(m)).toBe(24);
+  });
+
+  test('is computed in float64, not rounded to float32', () => {
+    const f = Math.fround(0.1);
+    const m = mat4.create(0.1, 0, 0, 0, 0, 0.1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+
+    expect(mat4.determinant(m)).toBe(f * f);
+    expect(Math.fround(f * f)).not.toBe(f * f);
+  });
+
+  test('a NaN element gives NaN', () => {
+    const m = mat4.create(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, Number.NaN, 0, 0, 0, 0, 1);
+    expect(mat4.determinant(m)).toBeNaN();
+  });
+
+  test('reads only its own slots from a pooled view', () => {
+    const pool = sequentialBuffer(32);
+    const view = viewAt(pool, 2);
+    mat4.copy(view, a);
+
+    expect(mat4.determinant(view)).toBe(30);
   });
 });

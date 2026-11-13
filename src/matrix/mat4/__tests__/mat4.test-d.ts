@@ -177,3 +177,21 @@ describe('transpose', () => {
     mat4.transpose(live, raw);
   });
 });
+
+describe('determinant', () => {
+  test('takes a readonly matrix and returns a number', () => {
+    expectTypeOf(mat4.determinant).parameters.toEqualTypeOf<[ReadonlyMat4]>();
+    expectTypeOf(mat4.determinant).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    mat4.determinant(live);
+    mat4.determinant(frozen);
+    mat4.determinant(shared);
+    mat4.determinant(mat4.IDENTITY);
+    // @ts-expect-error wrong-dimension input
+    mat4.determinant(other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat4.determinant(raw);
+  });
+});

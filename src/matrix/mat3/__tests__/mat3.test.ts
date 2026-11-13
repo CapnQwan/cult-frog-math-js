@@ -485,17 +485,17 @@ describe('multiply', () => {
   });
 });
 
+/** Rotation about z, then about x, so every element of the result is in play. */
+function rotation(): Mat3 {
+  const c = Math.cos(0.7);
+  const s = Math.sin(0.7);
+  const rotZ = mat3.create(c, -s, 0, s, c, 0, 0, 0, 1);
+  const rotX = mat3.create(1, 0, 0, 0, c, -s, 0, s, c);
+  return mat3.multiply(mat3.create(), rotX, rotZ);
+}
+
 describe('transpose', () => {
   const a = mat3.create(...ROW_MAJOR_ARGS);
-
-  /** Rotation about z, then about x, so every element of the result is in play. */
-  function rotation(): Mat3 {
-    const c = Math.cos(0.7);
-    const s = Math.sin(0.7);
-    const rotZ = mat3.create(c, -s, 0, s, c, 0, 0, 0, 1);
-    const rotX = mat3.create(1, 0, 0, 0, c, -s, 0, s, c);
-    return mat3.multiply(mat3.create(), rotX, rotZ);
-  }
 
   test('swaps rows and columns and returns out', () => {
     const out = mat3.create();
@@ -615,5 +615,94 @@ describe('transpose', () => {
     mat3.transpose(viewAt(pool, 2), a);
 
     expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(18, 2, ROW_MAJOR_ARGS));
+  });
+});
+
+describe('determinant', () => {
+  // Rows:  2 -3  1
+  //        2  0 -1
+  //        1  4  5
+  const a = mat3.create(2, -3, 1, 2, 0, -1, 1, 4, 5);
+
+  test('gives the cofactor expansion of a known matrix', () => {
+    expect(mat3.determinant(a)).toBe(49);
+  });
+
+  test('IDENTITY gives 1 and the zero matrix gives 0', () => {
+    expect(mat3.determinant(mat3.IDENTITY)).toBe(1);
+    expect(mat3.determinant(mat3.create(0, 0, 0, 0, 0, 0, 0, 0, 0))).toBe(0);
+  });
+
+  test('dependent rows give 0', () => {
+    // The middle row is the average of the other two.
+    expect(mat3.determinant(mat3.create(...ROW_MAJOR_ARGS))).toBe(0);
+  });
+
+  test('is the volume scale', () => {
+    expect(mat3.determinant(mat3.create(3, 0, 0, 0, 3, 0, 0, 0, 3))).toBe(27);
+    expect(mat3.determinant(mat3.create(2, 0, 0, 0, 3, 0, 0, 0, 4))).toBe(24);
+  });
+
+  test('a rotation gives 1, up to rounding', () => {
+    expect(mat3.determinant(rotation())).toBeCloseTo(1, 6);
+  });
+
+  test('a mirror gives a negative determinant', () => {
+    const mirror = mat3.create(1, 0, 0, 0, 1, 0, 0, 0, -1);
+
+    expect(mat3.determinant(mirror)).toBe(-1);
+    expect(mat3.determinant(mat3.multiply(mat3.create(), rotation(), mirror))).toBeCloseTo(-1, 6);
+  });
+
+  test('swapping two rows flips the sign', () => {
+    expect(mat3.determinant(mat3.create(2, 0, -1, 2, -3, 1, 1, 4, 5))).toBe(-49);
+  });
+
+  test('the determinant of a product is the product of the determinants', () => {
+    // Rows:  1 2 0
+    //        0 1 3
+    //        4 0 1
+    const b = mat3.create(1, 2, 0, 0, 1, 3, 4, 0, 1);
+    const product = mat3.multiply(mat3.create(), a, b);
+
+    expect(mat3.determinant(b)).toBe(25);
+    expect(mat3.determinant(product)).toBe(49 * 25);
+  });
+
+  test('two mirrors cancel out', () => {
+    const mirrorX = mat3.create(-1, 0, 0, 0, 1, 0, 0, 0, 1);
+    const mirrorY = mat3.create(1, 0, 0, 0, -1, 0, 0, 0, 1);
+
+    expect(mat3.determinant(mat3.multiply(mat3.create(), mirrorX, mirrorY))).toBe(1);
+  });
+
+  test('transposing does not change it', () => {
+    expect(mat3.determinant(mat3.transpose(mat3.create(), a))).toBe(49);
+  });
+
+  test('a 2D translation does not change it', () => {
+    // Rows:  2 0  5
+    //        0 3 -3
+    //        0 0  1
+    expect(mat3.determinant(mat3.create(2, 0, 5, 0, 3, -3, 0, 0, 1))).toBe(6);
+  });
+
+  test('is computed in float64, not rounded to float32', () => {
+    const f = Math.fround(0.1);
+
+    expect(mat3.determinant(mat3.create(0.1, 0, 0, 0, 0.1, 0, 0, 0, 1))).toBe(f * f);
+    expect(Math.fround(f * f)).not.toBe(f * f);
+  });
+
+  test('a NaN element gives NaN', () => {
+    expect(mat3.determinant(mat3.create(1, 0, 0, 0, Number.NaN, 0, 0, 0, 1))).toBeNaN();
+  });
+
+  test('reads only its own slots from a pooled view', () => {
+    const pool = sequentialBuffer(18);
+    const view = viewAt(pool, 2);
+    mat3.copy(view, a);
+
+    expect(mat3.determinant(view)).toBe(49);
   });
 });

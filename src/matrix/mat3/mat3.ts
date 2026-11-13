@@ -277,3 +277,45 @@ export function transpose(out: Mat3, a: ReadonlyMat3): Mat3 {
 
   return out;
 }
+
+/**
+ * Returns the determinant of `a`.
+ *
+ * Its magnitude is the factor by which `a` scales volume: `8` doubles every
+ * axis and `1` keeps volume. Its sign says whether `a` keeps handedness: a
+ * negative determinant means `a` mirrors, which reverses the winding order of
+ * the triangles it transforms, so back-face culling has to flip for them. A
+ * rotation gives `1`, up to rounding.
+ *
+ * When a `Mat3` holds a 2D transform with a translation in its last column,
+ * the bottom row is `0 0 1`, so the determinant is the area scale of its
+ * upper-left 2x2; translation does not affect it.
+ *
+ * Determinants multiply under `multiply`, so a chain of transforms mirrors
+ * only if an odd number of them do. Transposing does not change the
+ * determinant.
+ *
+ * Zero means `a` flattens space onto a plane, a line or a point, and has no
+ * inverse. Rounding rarely lands exactly on zero for a matrix that is singular
+ * in theory, and a nearly singular matrix gives a small non-zero result, so
+ * test against a tolerance scaled to the elements' magnitude rather than
+ * `=== 0`.
+ *
+ * The elements are float32, but the arithmetic runs in float64, so the result
+ * is not rounded to float32. A `NaN` element gives `NaN`.
+ *
+ * @param a - The matrix to measure.
+ * @returns The determinant of `a`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function determinant(a: ReadonlyMat3): number {
+  const a00 = a[0], a01 = a[3], a02 = a[6];
+  const a10 = a[1], a11 = a[4], a12 = a[7];
+  const a20 = a[2], a21 = a[5], a22 = a[8];
+
+  const m00 = a11 * a22 - a12 * a21;
+  const m01 = a10 * a22 - a12 * a20;
+  const m02 = a10 * a21 - a11 * a20;
+
+  return a00 * m00 - a01 * m01 + a02 * m02;
+}

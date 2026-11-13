@@ -313,3 +313,51 @@ export function transpose(out: Mat4, a: ReadonlyMat4): Mat4 {
 
   return out;
 }
+
+/**
+ * Returns the determinant of `a`.
+ *
+ * For an affine transform, the bottom row is `0 0 0 1`, so the determinant is
+ * that of the upper-left 3x3 and translation does not affect it. Its magnitude
+ * is then the factor by which the transform scales volume: `8` doubles every
+ * axis and `1` keeps volume. Its sign says whether the transform keeps
+ * handedness: a negative determinant means it mirrors, which reverses the
+ * winding order of the triangles it transforms, so back-face culling has to
+ * flip for them. A rotation gives `1`, up to rounding.
+ *
+ * Determinants multiply under `multiply`, so a chain of transforms mirrors
+ * only if an odd number of them do. Transposing does not change the
+ * determinant.
+ *
+ * Zero means `a` has no inverse. Rounding rarely lands exactly on zero for a
+ * matrix that is singular in theory, and a nearly singular matrix gives a
+ * small non-zero result, so test against a tolerance scaled to the elements'
+ * magnitude rather than `=== 0`.
+ *
+ * The elements are float32, but the arithmetic runs in float64, so the result
+ * is not rounded to float32. A `NaN` element gives `NaN`.
+ *
+ * @param a - The matrix to measure.
+ * @returns The determinant of `a`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function determinant(a: ReadonlyMat4): number {
+  const a00 = a[0], a01 = a[4], a02 = a[8],  a03 = a[12];
+  const a10 = a[1], a11 = a[5], a12 = a[9],  a13 = a[13];
+  const a20 = a[2], a21 = a[6], a22 = a[10], a23 = a[14];
+  const a30 = a[3], a31 = a[7], a32 = a[11], a33 = a[15];
+
+  const d23 = a22 * a33 - a23 * a32; 
+  const d13 = a21 * a33 - a23 * a31;
+  const d12 = a21 * a32 - a22 * a31;
+  const d03 = a20 * a33 - a23 * a30;
+  const d02 = a20 * a32 - a22 * a30;
+  const d01 = a20 * a31 - a21 * a30;
+
+  const m00 = a11 * d23 - a12 * d13 + a13 * d12;
+  const m01 = a10 * d23 - a12 * d03 + a13 * d02;
+  const m02 = a10 * d13 - a11 * d03 + a13 * d01;
+  const m03 = a10 * d12 - a11 * d02 + a12 * d01;
+
+  return a00 * m00 - a01 * m01 + a02 * m02 - a03 * m03;
+}
