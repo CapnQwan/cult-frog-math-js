@@ -195,3 +195,34 @@ describe('determinant', () => {
     mat3.determinant(raw);
   });
 });
+
+describe('invert', () => {
+  test('out is mutable, the input is readonly, and out or null is returned', () => {
+    expectTypeOf(mat3.invert).parameters.toEqualTypeOf<[Mat3, ReadonlyMat3]>();
+    expectTypeOf(mat3.invert).returns.toEqualTypeOf<Mat3 | null>();
+  });
+
+  test('the result must be checked before it is used', () => {
+    // @ts-expect-error the inverse is null for a singular matrix
+    mat3.multiply(live, mat3.invert(live, frozen), frozen);
+
+    const inverse = mat3.invert(live, frozen);
+    if (inverse) mat3.multiply(live, inverse, frozen);
+  });
+
+  test('call sites', () => {
+    mat3.invert(live, frozen);
+    mat3.invert(live, live);
+    mat3.invert(shared, mat3.IDENTITY);
+    // @ts-expect-error readonly can never be an out parameter
+    mat3.invert(frozen, live);
+    // @ts-expect-error the shared constant must never be written through
+    mat3.invert(mat3.IDENTITY, live);
+    // @ts-expect-error wrong-dimension out
+    mat3.invert(other, live);
+    // @ts-expect-error wrong-dimension input
+    mat3.invert(live, other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat3.invert(live, raw);
+  });
+});

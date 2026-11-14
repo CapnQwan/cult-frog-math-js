@@ -277,3 +277,54 @@ export function determinant(a: ReadonlyMat2): number {
 
   return a00 * a11 - a01 * a10;
 }
+
+/**
+ * Inverts `a` and writes the result into `out`, so that `a * out` and
+ * `out * a` are both the identity, up to rounding.
+ *
+ * The inverse undoes the transform: if `a` takes coordinates from a local
+ * frame into its parent, the inverse takes them back.
+ *
+ * Returns `null` when `a` is singular, meaning its determinant is exactly
+ * zero, as for a matrix that scales an axis to zero. A `NaN` element makes
+ * the determinant `NaN`, which returns `null` the same way. There is no
+ * inverse to write, so `out` is left untouched. Check the result before using
+ * it.
+ *
+ * The check is exact rather than within a tolerance, because a fixed
+ * tolerance can't tell a small but valid matrix from a nearly singular one:
+ * the determinant shrinks with the square of a uniform scale, so a scale of
+ * `0.01` gives `1e-4` and still inverts cleanly. A nearly singular matrix
+ * inverts to very large elements, most of whose precision has been lost to
+ * rounding. Infinite elements are not caught: if they make the determinant
+ * infinite rather than `NaN`, the result is zeros and `NaN` rather than an
+ * inverse.
+ *
+ * For a pure rotation, `transpose` gives the same result, exactly and more
+ * cheaply.
+ *
+ * `out` may be the same matrix as `a`, or a view overlapping it: every element
+ * is read into a local before anything is written.
+ *
+ * @param out - The matrix to write to. Untouched when `null` is returned.
+ * @param a - The matrix to invert.
+ * @returns `out`, or `null` if `a` has no inverse.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function invert(out: Mat2, a: ReadonlyMat2): Mat2 | null {
+  const a00 = a[0], a01 = a[2];
+  const a10 = a[1], a11 = a[3];
+
+  const det = a00 * a11 - a01 * a10;
+
+  if (!det) return null;
+
+  const invDet = 1 / det;
+
+  out[0] = a11 * invDet;
+  out[1] = -a10 * invDet;
+  out[2] = -a01 * invDet;
+  out[3] = a00 * invDet;
+
+  return out;
+}

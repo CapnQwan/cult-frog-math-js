@@ -794,3 +794,196 @@ describe('determinant', () => {
     expect(mat4.determinant(view)).toBe(30);
   });
 });
+
+describe('invert', () => {
+  // Rows:  1 2 0 3
+  //        0 1 4 0
+  //        0 0 1 5
+  //        0 0 0 1
+  const a = mat4.create(1, 2, 0, 3, 0, 1, 4, 0, 0, 0, 1, 5, 0, 0, 0, 1);
+  // Rows:  1 -2  8 -43
+  //        0  1 -4  20
+  //        0  0  1  -5
+  //        0  0  0   1
+  // biome-ignore format: visual alignment with the matrix
+  const inverseStorage = [
+    1,   0,  0, 0,
+    -2,  1,  0, 0,
+    8,   -4, 1, 0,
+    -43, 20, -5, 1,
+  ] as const;
+  // Rows:  1 0 2 -1
+  //        3 0 0  5
+  //        2 1 4 -3
+  //        1 0 5  0
+  const dense = mat4.create(1, 0, 2, -1, 3, 0, 0, 5, 2, 1, 4, -3, 1, 0, 5, 0);
+  // Float32 rounding in the inverse leaves products a little further from exact.
+  const ProductEpsilon = 1e-5;
+
+  /** `expectStorage`, counting `-0` as `0`: a zero cofactor term can come out as `-0`. */
+  function expectInverseStorage(m: ReadonlyMat4, expected: readonly number[]): void {
+    expect(storageOf(m).map((n) => n + 0)).toEqual(expected.map((n) => Math.fround(n)));
+  }
+  /** The inverse of a matrix the test knows is invertible. */
+  function inverseOf(m: ReadonlyMat4): Mat4 {
+    const inverse = mat4.invert(mat4.create(), m);
+    if (!inverse) throw new Error('expected an invertible matrix');
+    return inverse;
+  }
+
+  /** A buffer of `count` irregular floats, so no view over it is singular. */
+  function irregularBuffer(count: number): ArrayBuffer {
+    const buffer = new ArrayBuffer(count * FLOAT_BYTES);
+    const floats = new Float32Array(buffer);
+    for (let i = 0; i < count; i++) floats[i] = Math.sin(i + 1);
+    return buffer;
+  }
+
+  /** A translation by `(x, y, z)`. */
+  function translation(x: number, y: number, z: number): Mat4 {
+    return mat4.create(1, 0, 0, x, 0, 1, 0, y, 0, 0, 1, z, 0, 0, 0, 1);
+  }
+
+  test('writes the inverse and returns out', () => {
+    const out = mat4.create();
+    const result = mat4.invert(out, a);
+
+    expect(result).toBe(out);
+    expectInverseStorage(out, inverseStorage);
+  });
+
+  test('a * inverse and inverse * a both give the identity', () => {
+    const inverse = inverseOf(dense);
+
+    const after = mat4.multiply(mat4.create(), dense, inverse);
+    const before = mat4.multiply(mat4.create(), inverse, dense);
+    expect(mat4.isEqualEpsilon(after, mat4.IDENTITY, ProductEpsilon)).toBe(true);
+    expect(mat4.isEqualEpsilon(before, mat4.IDENTITY, ProductEpsilon)).toBe(true);
+  });
+
+  test('IDENTITY inverts to itself', () => {
+    expectInverseStorage(inverseOf(mat4.IDENTITY), IDENTITY_STORAGE);
+  });
+
+  test('the inverse of a rotation is its transpose', () => {
+    const r = rotation();
+    expect(mat4.isEqualEpsilon(inverseOf(r), mat4.transpose(mat4.create(), r))).toBe(true);
+  });
+
+  test('inverting twice gives back the original', () => {
+    expect(mat4.isEqualEpsilon(inverseOf(inverseOf(dense)), dense, ProductEpsilon)).toBe(true);
+  });
+
+  test('the determinant of the inverse is the reciprocal', () => {
+    expect(mat4.determinant(inverseOf(dense))).toBeCloseTo(1 / mat4.determinant(dense), 7);
+  });
+
+  test('a small uniform scale still inverts', () => {
+    // The determinant is 1e-6, far below any fixed tolerance, yet the inverse is exact enough.
+    const scale = mat4.create(0.01, 0, 0, 0, 0, 0.01, 0, 0, 0, 0, 0.01, 0, 0, 0, 0, 1);
+    const expected = mat4.create(100, 0, 0, 0, 0, 100, 0, 0, 0, 0, 100, 0, 0, 0, 0, 1);
+    expect(mat4.isEqualEpsilon(inverseOf(scale), expected)).toBe(true);
+  });
+
+  test('undoes a translation', () => {
+    expect(mat4.isEqual(inverseOf(translation(5, -3, 2)), translation(-5, 3, -2))).toBe(true);
+  });
+
+  test('a rotation then translation inverts to the reverse translation, then the transpose', () => {
+    const r = rotation();
+    const rigid = mat4.multiply(mat4.create(), translation(5, -3, 2), r);
+    const expected = mat4.multiply(
+      mat4.create(),
+      mat4.transpose(mat4.create(), r),
+      translation(-5, 3, -2)
+    );
+
+    expect(mat4.isEqualEpsilon(inverseOf(rigid), expected, ProductEpsilon)).toBe(true);
+  });
+
+  test('returns null and leaves out untouched for a singular matrix', () => {
+    const singular = [
+      mat4.create(...ZEROS),
+      // Each row steps by the same amount, so the rows span only a plane.
+      mat4.create(...ROW_MAJOR_ARGS),
+      // One axis scaled to zero.
+      mat4.create(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+    ];
+
+    for (const m of singular) {
+      const out = mat4.create(...SEVENS);
+      expect(mat4.invert(out, m)).toBeNull();
+      expectStorage(out, SEVENS);
+    }
+  });
+
+  test('returns null and leaves out untouched when any element is NaN', () => {
+    for (let i = 0; i < mat4.SIZE; i++) {
+      const m = mat4.clone(a);
+      m[i] = Number.NaN;
+      const out = mat4.create(...SEVENS);
+      expect(mat4.invert(out, m)).toBeNull();
+      expectStorage(out, SEVENS);
+    }
+  });
+
+  test('an infinite determinant is not caught', () => {
+    const infinite = mat4.create(
+      Number.POSITIVE_INFINITY,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1
+    );
+    const inverse = mat4.invert(mat4.create(), infinite);
+    expect(inverse).not.toBeNull();
+    expect(Array.from(inverse ?? []).some(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to the input', () => {
+    mat4.invert(mat4.create(), a);
+    expectStorage(a, [1, 0, 0, 0, 2, 1, 0, 0, 0, 4, 1, 0, 3, 0, 5, 1]);
+  });
+
+  test('out === a inverts in place', () => {
+    const m = mat4.clone(a);
+    mat4.invert(m, m);
+    expectInverseStorage(m, inverseStorage);
+  });
+
+  test('every overlap of out with the input is exact', () => {
+    for (let outOffset = 0; outOffset < ELEMENTS; outOffset++) {
+      for (let inputOffset = 0; inputOffset < ELEMENTS; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const buffer = irregularBuffer(ELEMENTS * 2);
+        const input = viewAt(buffer, inputOffset);
+        const expected = inverseOf(mat4.clone(input));
+
+        mat4.invert(viewAt(buffer, outOffset), input);
+
+        expect(mat4.isEqual(viewAt(buffer, outOffset), expected)).toBe(true);
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(32);
+    mat4.invert(viewAt(pool, 2), a);
+
+    expect(Array.from(new Float32Array(pool), (x) => x + 0)).toEqual(
+      poolAfter(32, 2, inverseStorage)
+    );
+  });
+});

@@ -630,3 +630,146 @@ describe('determinant', () => {
     expect(mat2.determinant(view)).toBe(-2);
   });
 });
+
+describe('invert', () => {
+  // Rows:  2 3
+  //        1 2
+  const a = mat2.create(2, 3, 1, 2);
+  // Rows:  2 -3
+  //       -1  2
+  const inverseStorage = [2, -1, -3, 2] as const;
+  // Rows:  4 7
+  //        2 6
+  const dense = mat2.create(4, 7, 2, 6);
+  // Float32 rounding in the inverse leaves products a little further from exact.
+  const ProductEpsilon = 1e-5;
+
+  /** `expectStorage`, counting `-0` as `0`: a zero cofactor term can come out as `-0`. */
+  function expectInverseStorage(m: ReadonlyMat2, expected: readonly number[]): void {
+    expect([m[0], m[1], m[2], m[3]].map((n) => n + 0)).toEqual(expected.map((n) => Math.fround(n)));
+  }
+  /** The inverse of a matrix the test knows is invertible. */
+  function inverseOf(m: ReadonlyMat2): Mat2 {
+    const inverse = mat2.invert(mat2.create(), m);
+    if (!inverse) throw new Error('expected an invertible matrix');
+    return inverse;
+  }
+
+  /** A buffer of `count` irregular floats, so no view over it is singular. */
+  function irregularBuffer(count: number): ArrayBuffer {
+    const buffer = new ArrayBuffer(count * FLOAT_BYTES);
+    const floats = new Float32Array(buffer);
+    for (let i = 0; i < count; i++) floats[i] = Math.sin(i + 1);
+    return buffer;
+  }
+
+  test('writes the inverse and returns out', () => {
+    const out = mat2.create();
+    const result = mat2.invert(out, a);
+
+    expect(result).toBe(out);
+    expectInverseStorage(out, inverseStorage);
+  });
+
+  test('a * inverse and inverse * a both give the identity', () => {
+    const inverse = inverseOf(dense);
+
+    const after = mat2.multiply(mat2.create(), dense, inverse);
+    const before = mat2.multiply(mat2.create(), inverse, dense);
+    expect(mat2.isEqualEpsilon(after, mat2.IDENTITY, ProductEpsilon)).toBe(true);
+    expect(mat2.isEqualEpsilon(before, mat2.IDENTITY, ProductEpsilon)).toBe(true);
+  });
+
+  test('IDENTITY inverts to itself', () => {
+    expectInverseStorage(inverseOf(mat2.IDENTITY), [1, 0, 0, 1]);
+  });
+
+  test('the inverse of a rotation is its transpose', () => {
+    const c = Math.cos(0.7);
+    const s = Math.sin(0.7);
+    const rotation = mat2.create(c, -s, s, c);
+
+    const transposed = mat2.transpose(mat2.create(), rotation);
+    expect(mat2.isEqualEpsilon(inverseOf(rotation), transposed)).toBe(true);
+  });
+
+  test('inverting twice gives back the original', () => {
+    expect(mat2.isEqualEpsilon(inverseOf(inverseOf(dense)), dense)).toBe(true);
+  });
+
+  test('the determinant of the inverse is the reciprocal', () => {
+    expect(mat2.determinant(inverseOf(dense))).toBeCloseTo(1 / mat2.determinant(dense), 7);
+  });
+
+  test('a small uniform scale still inverts', () => {
+    // The determinant is 1e-4, far below any fixed tolerance, yet the inverse is exact enough.
+    const inverse = inverseOf(mat2.create(0.01, 0, 0, 0.01));
+    expect(mat2.isEqualEpsilon(inverse, mat2.create(100, 0, 0, 100))).toBe(true);
+  });
+
+  test('returns null and leaves out untouched for a singular matrix', () => {
+    const singular = [
+      mat2.create(0, 0, 0, 0),
+      // Dependent rows.
+      mat2.create(1, 2, 2, 4),
+      // One axis scaled to zero.
+      mat2.create(1, 0, 0, 0),
+    ];
+
+    for (const m of singular) {
+      const out = mat2.create(7, 7, 7, 7);
+      expect(mat2.invert(out, m)).toBeNull();
+      expectStorage(out, [7, 7, 7, 7]);
+    }
+  });
+
+  test('returns null and leaves out untouched when any element is NaN', () => {
+    for (let i = 0; i < mat2.SIZE; i++) {
+      const m = mat2.clone(a);
+      m[i] = Number.NaN;
+      const out = mat2.create(7, 7, 7, 7);
+      expect(mat2.invert(out, m)).toBeNull();
+      expectStorage(out, [7, 7, 7, 7]);
+    }
+  });
+
+  test('an infinite determinant is not caught', () => {
+    const inverse = mat2.invert(mat2.create(), mat2.create(Number.POSITIVE_INFINITY, 0, 0, 1));
+    expect(inverse).not.toBeNull();
+    expect(Array.from(inverse ?? []).some(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to the input', () => {
+    mat2.invert(mat2.create(), a);
+    expectStorage(a, [2, 1, 3, 2]);
+  });
+
+  test('out === a inverts in place', () => {
+    const m = mat2.clone(a);
+    mat2.invert(m, m);
+    expectInverseStorage(m, inverseStorage);
+  });
+
+  test('every overlap of out with the input is exact', () => {
+    for (let outOffset = 0; outOffset < 4; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 4; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const buffer = irregularBuffer(8);
+        const input = viewAt(buffer, inputOffset);
+        const expected = inverseOf(mat2.clone(input));
+
+        mat2.invert(viewAt(buffer, outOffset), input);
+
+        expect(mat2.isEqual(viewAt(buffer, outOffset), expected)).toBe(true);
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(8);
+    mat2.invert(viewAt(pool, 2), a);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 2, -1, -3, 2, 7, 8]);
+  });
+});

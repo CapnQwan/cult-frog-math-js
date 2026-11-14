@@ -361,3 +361,125 @@ export function determinant(a: ReadonlyMat4): number {
 
   return a00 * m00 - a01 * m01 + a02 * m02 - a03 * m03;
 }
+
+/**
+ * Inverts `a` and writes the result into `out`, so that `a * out` and
+ * `out * a` are both the identity, up to rounding.
+ *
+ * The inverse undoes the transform: if `a` takes coordinates from a local
+ * frame into its parent, the inverse takes them back. A camera's view matrix
+ * is the inverse of its world matrix. The inverse of an affine transform is
+ * affine too, with the translation undone.
+ *
+ * Returns `null` when `a` is singular, meaning its determinant is exactly
+ * zero, as for a matrix that scales an axis to zero. A `NaN` element makes
+ * the determinant `NaN`, which returns `null` the same way. There is no
+ * inverse to write, so `out` is left untouched. Check the result before using
+ * it.
+ *
+ * The check is exact rather than within a tolerance, because a fixed
+ * tolerance can't tell a small but valid matrix from a nearly singular one:
+ * the determinant of an affine transform shrinks with the cube of a uniform
+ * scale, so a scale of `0.01` gives `1e-6` and still inverts cleanly. A
+ * nearly singular matrix inverts to very large elements, most of whose
+ * precision has been lost to rounding. Infinite elements are not caught: if
+ * they make the determinant infinite rather than `NaN`, the result is zeros
+ * and `NaN` rather than an inverse.
+ *
+ * For a pure rotation, `transpose` gives the same result, exactly and more
+ * cheaply.
+ *
+ * `out` may be the same matrix as `a`, or a view overlapping it: every element
+ * is read into a local before anything is written.
+ *
+ * @param out - The matrix to write to. Untouched when `null` is returned.
+ * @param a - The matrix to invert.
+ * @returns `out`, or `null` if `a` has no inverse.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function invert(out: Mat4, a: ReadonlyMat4): Mat4 | null {
+  const a00 = a[0], a01 = a[4], a02 = a[8],  a03 = a[12];
+  const a10 = a[1], a11 = a[5], a12 = a[9],  a13 = a[13];
+  const a20 = a[2], a21 = a[6], a22 = a[10], a23 = a[14];
+  const a30 = a[3], a31 = a[7], a32 = a[11], a33 = a[15];
+
+  // m<row><col> is the minor of a<row><col>: the 3x3 determinant left after
+  // deleting that row and column. Each is expanded along its first remaining
+  // row, using 2x2 determinants of the other two rows named by the pair of
+  // columns they use, so m<i><j> uses exactly the three whose names lack `j`.
+
+  // Rows 2 and 3, for the minors of rows 0 and 1.
+  const d23 = a22 * a33 - a23 * a32;
+  const d13 = a21 * a33 - a23 * a31;
+  const d12 = a21 * a32 - a22 * a31;
+  const d03 = a20 * a33 - a23 * a30;
+  const d02 = a20 * a32 - a22 * a30;
+  const d01 = a20 * a31 - a21 * a30;
+
+  const m00 = a11 * d23 - a12 * d13 + a13 * d12;
+  const m01 = a10 * d23 - a12 * d03 + a13 * d02;
+  const m02 = a10 * d13 - a11 * d03 + a13 * d01;
+  const m03 = a10 * d12 - a11 * d02 + a12 * d01;
+
+  const det = a00 * m00 - a01 * m01 + a02 * m02 - a03 * m03;
+
+  if (!det) return null;
+
+  const invDet = 1 / det;
+
+  const m10 = a01 * d23 - a02 * d13 + a03 * d12;
+  const m11 = a00 * d23 - a02 * d03 + a03 * d02;
+  const m12 = a00 * d13 - a01 * d03 + a03 * d01;
+  const m13 = a00 * d12 - a01 * d02 + a02 * d01;
+
+  // Rows 1 and 3, for the minors of row 2.
+  const e23 = a12 * a33 - a13 * a32;
+  const e13 = a11 * a33 - a13 * a31;
+  const e12 = a11 * a32 - a12 * a31;
+  const e03 = a10 * a33 - a13 * a30;
+  const e02 = a10 * a32 - a12 * a30;
+  const e01 = a10 * a31 - a11 * a30;
+
+  const m20 = a01 * e23 - a02 * e13 + a03 * e12;
+  const m21 = a00 * e23 - a02 * e03 + a03 * e02;
+  const m22 = a00 * e13 - a01 * e03 + a03 * e01;
+  const m23 = a00 * e12 - a01 * e02 + a02 * e01;
+
+  // Rows 1 and 2, for the minors of row 3.
+  const f23 = a12 * a23 - a13 * a22;
+  const f13 = a11 * a23 - a13 * a21;
+  const f12 = a11 * a22 - a12 * a21;
+  const f03 = a10 * a23 - a13 * a20;
+  const f02 = a10 * a22 - a12 * a20;
+  const f01 = a10 * a21 - a11 * a20;
+
+  const m30 = a01 * f23 - a02 * f13 + a03 * f12;
+  const m31 = a00 * f23 - a02 * f03 + a03 * f02;
+  const m32 = a00 * f13 - a01 * f03 + a03 * f01;
+  const m33 = a00 * f12 - a01 * f02 + a02 * f01;
+
+  // The inverse is the transposed cofactor matrix over the determinant. The
+  // cofactor of a<i><j> is m<i><j> with sign (-1)^(i + j), and transposing
+  // puts it at row j, column i, which is storage index 4i + j.
+  out[0]  =  m00 * invDet;
+  out[1]  = -m01 * invDet;
+  out[2]  =  m02 * invDet;
+  out[3]  = -m03 * invDet;
+
+  out[4]  = -m10 * invDet;
+  out[5]  =  m11 * invDet;
+  out[6]  = -m12 * invDet;
+  out[7]  =  m13 * invDet;
+
+  out[8]  =  m20 * invDet;
+  out[9]  = -m21 * invDet;
+  out[10] =  m22 * invDet;
+  out[11] = -m23 * invDet;
+
+  out[12] = -m30 * invDet;
+  out[13] =  m31 * invDet;
+  out[14] = -m32 * invDet;
+  out[15] =  m33 * invDet;
+
+  return out;
+}

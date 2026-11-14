@@ -319,3 +319,68 @@ export function determinant(a: ReadonlyMat3): number {
 
   return a00 * m00 - a01 * m01 + a02 * m02;
 }
+
+/**
+ * Inverts `a` and writes the result into `out`, so that `a * out` and
+ * `out * a` are both the identity, up to rounding.
+ *
+ * The inverse undoes the transform: if `a` takes coordinates from a local
+ * frame into its parent, the inverse takes them back. When `a` is a 2D
+ * transform with a translation in its last column, the inverse is one too,
+ * with the translation undone.
+ *
+ * Returns `null` when `a` is singular, meaning its determinant is exactly
+ * zero, as for a matrix that scales an axis to zero. A `NaN` element makes
+ * the determinant `NaN`, which returns `null` the same way. There is no
+ * inverse to write, so `out` is left untouched. Check the result before using
+ * it.
+ *
+ * The check is exact rather than within a tolerance, because a fixed
+ * tolerance can't tell a small but valid matrix from a nearly singular one:
+ * the determinant shrinks with the cube of a uniform scale, so a scale of
+ * `0.01` gives `1e-6` and still inverts cleanly. A nearly singular matrix
+ * inverts to very large elements, most of whose precision has been lost to
+ * rounding. Infinite elements are not caught: if they make the determinant
+ * infinite rather than `NaN`, the result is zeros and `NaN` rather than an
+ * inverse.
+ *
+ * For a pure rotation, `transpose` gives the same result, exactly and more
+ * cheaply.
+ *
+ * `out` may be the same matrix as `a`, or a view overlapping it: every element
+ * is read into a local before anything is written.
+ *
+ * @param out - The matrix to write to. Untouched when `null` is returned.
+ * @param a - The matrix to invert.
+ * @returns `out`, or `null` if `a` has no inverse.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function invert(out: Mat3, a: ReadonlyMat3): Mat3 | null {
+  const a00 = a[0], a01 = a[3], a02 = a[6];
+  const a10 = a[1], a11 = a[4], a12 = a[7];
+  const a20 = a[2], a21 = a[5], a22 = a[8];
+
+  const m00 = a11 * a22 - a12 * a21;
+  const m01 = a10 * a22 - a12 * a20;
+  const m02 = a10 * a21 - a11 * a20;
+
+  const det = a00 * m00 - a01 * m01 + a02 * m02;
+
+  if (!det) return null;
+
+  const invDet = 1 / det;
+
+  out[0] = m00 * invDet;
+  out[1] = (a12 * a20 - a10 * a22) * invDet;
+  out[2] = m02 * invDet;
+
+  out[3] = (a02 * a21 - a01 * a22) * invDet;
+  out[4] = (a00 * a22 - a02 * a20) * invDet;
+  out[5] = (a01 * a20 - a00 * a21) * invDet;
+
+  out[6] = (a01 * a12 - a02 * a11) * invDet;
+  out[7] = (a02 * a10 - a00 * a12) * invDet;
+  out[8] = (a00 * a11 - a01 * a10) * invDet;
+
+  return out;
+}
