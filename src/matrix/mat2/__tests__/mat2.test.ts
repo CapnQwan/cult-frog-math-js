@@ -1,8 +1,10 @@
 // src/matrix/mat2/__tests__/mat2.test.ts
 import { describe, expect, test } from 'vitest';
 
+import * as vec2 from '../../../vector/vec2/vec2.js';
 import * as mat2 from '../mat2.js';
 
+import type { ReadonlyVec2, Vec2 } from '../../../vector/vec2/_types/vec2.js';
 import type { Mat2, ReadonlyMat2 } from '../_types/mat2.js';
 
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
@@ -771,5 +773,158 @@ describe('invert', () => {
     mat2.invert(viewAt(pool, 2), a);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 2, -1, -3, 2, 7, 8]);
+  });
+});
+
+/** The raw column-major storage of `m`, in index order. */
+function elementsOf(m: ReadonlyMat2): number[] {
+  return [m[0], m[1], m[2], m[3]];
+}
+
+/** Test-only cast site: a Vec2 view over element `index` of a shared buffer. */
+function vec2At(buffer: ArrayBuffer, index: number): Vec2 {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 2) as Vec2;
+}
+
+/** Expects every storage element to agree with `expected` to 6 decimal places. */
+function expectStorageNear(m: ReadonlyMat2, expected: readonly number[]): void {
+  elementsOf(m).forEach((n, i) => {
+    expect(n).toBeCloseTo(expected[i] as number, 6);
+  });
+}
+
+/** Expects two vectors to agree to 5 decimal places. */
+function expectVec2Near(actual: ReadonlyVec2, expected: ReadonlyVec2): void {
+  expect(actual[0]).toBeCloseTo(expected[0], 5);
+  expect(actual[1]).toBeCloseTo(expected[1], 5);
+}
+
+/** Checks that building into a pooled view writes its own 4 slots and nothing else. */
+function expectPooledWrite(build: (out: Mat2) => Mat2): void {
+  const pool = sequentialBuffer(12);
+  const written = elementsOf(build(mat2.create()));
+  const expected = Array.from({ length: 12 }, (_, i) => i + 1);
+  written.forEach((value, i) => {
+    expected[2 + i] = value;
+  });
+
+  build(viewAt(pool, 2));
+
+  expect(Array.from(new Float32Array(pool))).toEqual(expected);
+}
+
+const BUILDER_POINT = vec2.create(0.3, -1.2);
+// Float32 rounding in rotation products leaves results a little further from exact.
+const RotationEpsilon = 1e-5;
+
+describe('fromRotation', () => {
+  test('a quarter turn is written column major and returns out', () => {
+    // Rows:  0 -1
+    //        1  0
+    const out = mat2.create(7, 7, 7, 7);
+    const result = mat2.fromRotation(out, Math.PI / 2);
+
+    expect(result).toBe(out);
+    expectStorageNear(out, [0, 1, -1, 0]);
+  });
+
+  test('a zero angle gives the identity', () => {
+    expect(mat2.isEqual(mat2.fromRotation(mat2.create(7, 7, 7, 7), 0), mat2.IDENTITY)).toBe(true);
+  });
+
+  test('a positive angle turns counter-clockwise: RIGHT towards UP', () => {
+    const m = mat2.fromRotation(mat2.create(), Math.PI / 2);
+    expectVec2Near(vec2.transformMat2(vec2.create(), vec2.RIGHT, m), vec2.UP);
+  });
+
+  test('negating the angle gives exactly the transpose', () => {
+    const forward = mat2.fromRotation(mat2.create(), 0.7);
+    const back = mat2.fromRotation(mat2.create(), -0.7);
+
+    expect(mat2.isEqual(back, mat2.transpose(mat2.create(), forward))).toBe(true);
+  });
+
+  test('rotations compose by adding their angles', () => {
+    const product = mat2.multiply(
+      mat2.create(),
+      mat2.fromRotation(mat2.create(), 0.7),
+      mat2.fromRotation(mat2.create(), 2.1)
+    );
+    const sum = mat2.fromRotation(mat2.create(), 2.8);
+
+    expect(mat2.isEqualEpsilon(product, sum, RotationEpsilon)).toBe(true);
+  });
+
+  test('preserves area: the determinant is 1', () => {
+    expect(mat2.determinant(mat2.fromRotation(mat2.create(), 2.4))).toBeCloseTo(1, 6);
+  });
+
+  test('a NaN angle makes every element NaN', () => {
+    expect(elementsOf(mat2.fromRotation(mat2.create(), Number.NaN)).every(Number.isNaN)).toBe(true);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => mat2.fromRotation(out, 0.7));
+  });
+});
+
+describe('fromScale', () => {
+  const s = vec2.create(2, 0.5);
+
+  test('writes the scale onto the diagonal and returns out', () => {
+    const out = mat2.create(7, 7, 7, 7);
+    const result = mat2.fromScale(out, s);
+
+    expect(result).toBe(out);
+    expectStorage(out, [2, 0, 0, 0.5]);
+  });
+
+  test('scales each axis of a point', () => {
+    const scaled = vec2.transformMat2(
+      vec2.create(),
+      BUILDER_POINT,
+      mat2.fromScale(mat2.create(), s)
+    );
+    expect(vec2.isEqual(scaled, vec2.mul(vec2.create(), BUILDER_POINT, s))).toBe(true);
+  });
+
+  test('the reciprocal scale is its exact inverse', () => {
+    const inverse = mat2.invert(mat2.create(), mat2.fromScale(mat2.create(), s));
+    const reciprocal = mat2.fromScale(mat2.create(), vec2.create(0.5, 2));
+
+    expect(inverse).not.toBeNull();
+    expect(mat2.isEqual(inverse ?? mat2.create(), reciprocal)).toBe(true);
+  });
+
+  test('the determinant is the product of the components, negative when mirrored', () => {
+    expect(mat2.determinant(mat2.fromScale(mat2.create(), vec2.create(2, -3)))).toBe(-6);
+  });
+
+  test('a zero component leaves no inverse', () => {
+    for (let i = 0; i < 2; i++) {
+      const flat = vec2.clone(s);
+      flat[i] = 0;
+      expect(mat2.invert(mat2.create(), mat2.fromScale(mat2.create(), flat))).toBeNull();
+    }
+  });
+
+  test('never writes to the input', () => {
+    mat2.fromScale(mat2.create(), s);
+    expect(vec2.isEqualXY(s, 2, 0.5)).toBe(true);
+  });
+
+  test('the input may overlap out', () => {
+    for (let index = 0; index <= 6; index++) {
+      const buffer = sequentialBuffer(8);
+      const expected = mat2.fromScale(mat2.create(), vec2At(buffer.slice(0), index));
+
+      mat2.fromScale(viewAt(buffer, 2), vec2At(buffer, index));
+
+      expect(elementsOf(viewAt(buffer, 2))).toEqual(elementsOf(expected));
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => mat2.fromScale(out, s));
   });
 });

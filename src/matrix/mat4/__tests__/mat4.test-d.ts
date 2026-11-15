@@ -5,6 +5,9 @@ import * as mat4 from '../mat4.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
+import type { ReadonlyVec3, Vec3 } from '../../../vector/vec3/_types/vec3.js';
+import type { Vec4 } from '../../../vector/vec4/_types/vec4.js';
 import type { Mat3 } from '../../mat3/_types/mat3.js';
 import type { Mat4, ReadonlyMat4 } from '../_types/mat4.js';
 
@@ -12,6 +15,11 @@ declare const live: Mat4;
 declare const frozen: ReadonlyMat4;
 declare const other: Mat3;
 declare const raw: Float32Array<ArrayBuffer>;
+declare const vector: Vec3;
+declare const frozenVector: ReadonlyVec3;
+declare const four: Vec4;
+declare const rotation: Quat;
+declare const frozenRotation: ReadonlyQuat;
 
 /** A `Mat4` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedMat4 = Brand<FixedFloat32Array<16, SharedArrayBuffer>, BrandOf<Mat4>>;
@@ -224,5 +232,46 @@ describe('invert', () => {
     mat4.invert(live, other);
     // @ts-expect-error unbranded arrays are rejected
     mat4.invert(live, raw);
+  });
+});
+
+describe('builders', () => {
+  test('out is mutable, the inputs are readonly, and out is returned', () => {
+    expectTypeOf(mat4.fromTranslation).parameters.toEqualTypeOf<[Mat4, ReadonlyVec3]>();
+    expectTypeOf(mat4.fromScale).parameters.toEqualTypeOf<[Mat4, ReadonlyVec3]>();
+    expectTypeOf(mat4.fromQuat).parameters.toEqualTypeOf<[Mat4, ReadonlyQuat]>();
+    expectTypeOf(mat4.fromAxisAngle).parameters.toEqualTypeOf<[Mat4, ReadonlyVec3, number]>();
+    expectTypeOf(mat4.fromTRS).parameters.toEqualTypeOf<
+      [Mat4, ReadonlyVec3, ReadonlyQuat, ReadonlyVec3]
+    >();
+    expectTypeOf(mat4.fromTranslation).returns.toEqualTypeOf<Mat4>();
+    expectTypeOf(mat4.fromScale).returns.toEqualTypeOf<Mat4>();
+    expectTypeOf(mat4.fromQuat).returns.toEqualTypeOf<Mat4>();
+    expectTypeOf(mat4.fromAxisAngle).returns.toEqualTypeOf<Mat4>();
+    expectTypeOf(mat4.fromTRS).returns.toEqualTypeOf<Mat4>();
+  });
+
+  test('call sites', () => {
+    mat4.fromTranslation(live, frozenVector);
+    mat4.fromScale(shared, vector);
+    mat4.fromQuat(live, frozenRotation);
+    mat4.fromAxisAngle(live, frozenVector, 0.5);
+    mat4.fromTRS(live, vector, rotation, frozenVector);
+    // @ts-expect-error readonly can never be an out parameter
+    mat4.fromTranslation(frozen, vector);
+    // @ts-expect-error the shared constant must never be written through
+    mat4.fromQuat(mat4.IDENTITY, rotation);
+    // @ts-expect-error wrong-dimension out
+    mat4.fromScale(other, vector);
+    // @ts-expect-error a quaternion is not a translation
+    mat4.fromTranslation(live, rotation);
+    // @ts-expect-error a vector is not a quaternion
+    mat4.fromQuat(live, four);
+    // @ts-expect-error the angle comes after the axis
+    mat4.fromAxisAngle(live, 0.5, vector);
+    // @ts-expect-error the rotation comes between the translation and the scale
+    mat4.fromTRS(live, vector, vector, rotation);
+    // @ts-expect-error unbranded arrays are rejected
+    mat4.fromScale(live, raw);
   });
 });

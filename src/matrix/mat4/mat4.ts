@@ -26,6 +26,8 @@
 import { EPSILON } from '../../constants.js';
 import { isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
+import type { ReadonlyQuat } from '../../quaternion/_types/quat.js';
+import type { ReadonlyVec3 } from '../../vector/vec3/_types/vec3.js';
 import type { Mat4, ReadonlyMat4 } from './_types/mat4.js';
 
 /** The number of elements in a `Mat4`. */
@@ -480,6 +482,321 @@ export function invert(out: Mat4, a: ReadonlyMat4): Mat4 | null {
   out[13] =  m31 * invDet;
   out[14] = -m32 * invDet;
   out[15] =  m33 * invDet;
+
+  return out;
+}
+
+/**
+ * Writes a translation by `v` into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than moving the one already in `out`. To translate an existing matrix,
+ * `multiply` by the result.
+ *
+ * The translation lands in the last column, at indices 12, 13 and 14, and the
+ * rest is the identity, so the result is exact. It moves points
+ * (`Vec3.transformMat4`) but leaves directions unchanged
+ * (`Vec3.transformDirectionMat4`). `fromTranslation` of the negated vector is
+ * its exact inverse.
+ *
+ * `v` is read into locals first, so it may be a view overlapping `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param v - The translation.
+ * @returns `out`.
+ */
+export function fromTranslation(out: Mat4, v: ReadonlyVec3): Mat4 {
+  // biome-ignore format: packed component reads
+  const x = v[0], y = v[1], z = v[2];
+
+  out[0] = 1;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+
+  out[4] = 0;
+  out[5] = 1;
+  out[6] = 0;
+  out[7] = 0;
+
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = 1;
+  out[11] = 0;
+
+  out[12] = x;
+  out[13] = y;
+  out[14] = z;
+  out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Writes the rotation described by the quaternion `q` into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than rotating the one already in `out`. To rotate an existing matrix,
+ * `multiply` by the result.
+ *
+ * The upper-left 3x3 is the rotation, and the translation and bottom row are
+ * those of the identity. Transforming by the result matches
+ * `Vec3.transformQuat` with the same `q`, up to rounding, and the conventions
+ * carry over: `fromQuat` of `Quat.multiply(tmp, a, b)` equals the `multiply`
+ * of `fromQuat(a)` and `fromQuat(b)`, applying `b` first. `q` and `-q` give
+ * exactly the same matrix. The inverse is the `transpose`, or `fromQuat` of
+ * the `Quat.conjugate`.
+ *
+ * `q` **must be unit length**, as for `Vec3.transformQuat`. A non-unit `q`
+ * gives neither a rotation nor a scaled one, so the matrix skews whatever it
+ * transforms. Normalise `q` first if it has drifted.
+ *
+ * Rotations are only close to exact: `Math.cos(Math.PI / 2)` is about `6e-17`
+ * rather than `0`, so even a quarter turn leaves tiny elements where the
+ * identity has zeros. Compare results with `isEqualEpsilon`.
+ *
+ * Bad input stays visible: a `NaN` component in `q` makes the rotation
+ * elements `NaN`.
+ *
+ * `q` is read into locals first, so it may be a view overlapping `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param q - The unit quaternion to rotate by.
+ * @returns `out`.
+ */
+export function fromQuat(out: Mat4, q: ReadonlyQuat): Mat4 {
+  // biome-ignore format: packed component reads
+  const x = q[0], y = q[1], z = q[2], w = q[3];
+
+  // Doubling each component once makes every term below a single multiply.
+  // biome-ignore format: packed quaternion terms
+  const xx = x + x, yy = y + y, zz = z + z;
+  // biome-ignore format: packed quaternion terms
+  const xyy = x * yy, xzz = x * zz, yzz = y * zz;
+  // biome-ignore format: packed quaternion terms
+  const wxx = w * xx, wyy = w * yy, wzz = w * zz;
+  // biome-ignore format: packed quaternion terms
+  const xx2 = x * xx, yy2 = y * yy, zz2 = z * zz;
+
+  out[0] = 1 - (yy2 + zz2);
+  out[1] = xyy + wzz;
+  out[2] = xzz - wyy;
+  out[3] = 0;
+
+  out[4] = xyy - wzz;
+  out[5] = 1 - (xx2 + zz2);
+  out[6] = yzz + wxx;
+  out[7] = 0;
+
+  out[8] = xzz + wyy;
+  out[9] = yzz - wxx;
+  out[10] = 1 - (xx2 + yy2);
+  out[11] = 0;
+
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Writes a rotation of `angle` radians about `axis` into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than rotating the one already in `out`. To rotate an existing matrix,
+ * `multiply` by the result.
+ *
+ * The rotation follows the right-hand rule, like `Quat.fromAxisAngle`: with
+ * the package's y-up, right-handed axes, a positive angle about `Vec3.UP`
+ * turns `Vec3.FORWARD` (negative z) towards `Vec3.LEFT`, which is
+ * counter-clockwise when viewed from above. The result matches
+ * `fromQuat(out, Quat.fromAxisAngle(tmp, axis, angle))`, up to rounding, but
+ * is built directly from the full angle, without the quaternion's half angle.
+ * So unlike the quaternion, angles a full turn apart give the same matrix, up
+ * to rounding. Negating the angle gives the inverse, which is also the
+ * `transpose`.
+ *
+ * `axis` **must be unit length**, and isn't normalised here. Any other length
+ * gives a matrix that isn't a rotation: a zero axis gives a uniform scale by
+ * `cos(angle)`. Normalise the axis first if it was computed rather than
+ * written as a constant.
+ *
+ * Rotations are only close to exact: `Math.cos(Math.PI / 2)` is about `6e-17`
+ * rather than `0`, so even a quarter turn leaves tiny elements where the
+ * identity has zeros. Compare results with `isEqualEpsilon`.
+ *
+ * `axis` is read into locals first, so it may be a view overlapping `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param axis - The unit axis to rotate about.
+ * @param angle - The rotation angle in radians.
+ * @returns `out`.
+ */
+export function fromAxisAngle(out: Mat4, axis: ReadonlyVec3, angle: number): Mat4 {
+  // biome-ignore format: packed component reads
+  const x = axis[0], y = axis[1], z = axis[2];
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  const t = 1 - cos;
+
+  // Rodrigues' rotation formula: cos * I + sin * [axis]x + t * axis * axisᵀ.
+  // biome-ignore format: packed axis terms
+  const tx = t * x, ty = t * y, tz = t * z;
+  // biome-ignore format: packed axis terms
+  const txy = tx * y, txz = tx * z, tyz = ty * z;
+  // biome-ignore format: packed axis terms
+  const sx = sin * x, sy = sin * y, sz = sin * z;
+
+  out[0] = tx * x + cos;
+  out[1] = txy + sz;
+  out[2] = txz - sy;
+  out[3] = 0;
+
+  out[4] = txy - sz;
+  out[5] = ty * y + cos;
+  out[6] = tyz + sx;
+  out[7] = 0;
+
+  out[8] = txz + sy;
+  out[9] = tyz - sx;
+  out[10] = tz * z + cos;
+  out[11] = 0;
+
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Writes a scale by `v` along each axis into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than scaling the one already in `out`. To scale an existing matrix,
+ * `multiply` by the result.
+ *
+ * The scale lands on the diagonal and the rest is the identity, so the result
+ * is exact. A negative component mirrors along that axis, which makes the
+ * `determinant` negative, and a zero component flattens it, which leaves the
+ * matrix without an inverse. `fromScale` of the reciprocals is its inverse.
+ *
+ * `v` is read into locals first, so it may be a view overlapping `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param v - The scale along x, y and z.
+ * @returns `out`.
+ */
+export function fromScale(out: Mat4, v: ReadonlyVec3): Mat4 {
+  // biome-ignore format: packed component reads
+  const x = v[0], y = v[1], z = v[2];
+
+  out[0] = x;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+
+  out[4] = 0;
+  out[5] = y;
+  out[6] = 0;
+  out[7] = 0;
+
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = z;
+  out[11] = 0;
+
+  out[12] = 0;
+  out[13] = 0;
+  out[14] = 0;
+  out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Writes the transform `T * R * S` into `out`: a scale by `s`, then the
+ * rotation `r`, then a translation by `t`.
+ *
+ * That is the order a scene-graph node means by its position, rotation and
+ * scale. The scale is along the object's own axes, before it is rotated, so a
+ * non-uniform scale stretches the object rather than shearing it. The result
+ * equals `multiply` of `fromTranslation(t)`, `fromQuat(r)` and `fromScale(s)`
+ * in that order, up to rounding, but is built in one pass: each column of the
+ * rotation is scaled by the matching component of `s`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than adding to the one already in `out`. To apply it to an existing matrix,
+ * `multiply` by the result.
+ *
+ * `r` **must be unit length**, as for `fromQuat`. A zero component in `s`
+ * leaves the matrix without an inverse, and a negative one mirrors it.
+ *
+ * Bad input stays visible: a `NaN` component in any input makes the elements
+ * it reaches `NaN`.
+ *
+ * All three inputs are read into locals first, so each may be a view
+ * overlapping `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param t - The translation, applied last.
+ * @param r - The unit quaternion to rotate by, applied second.
+ * @param s - The scale along x, y and z, applied first.
+ * @returns `out`.
+ */
+export function fromTRS(out: Mat4, t: ReadonlyVec3, r: ReadonlyQuat, s: ReadonlyVec3): Mat4 {
+  // biome-ignore format: packed component reads
+  const tX = t[0], tY = t[1], tZ = t[2];
+  // biome-ignore format: packed component reads
+  const rX = r[0], rY = r[1], rZ = r[2], rW = r[3];
+  // biome-ignore format: packed component reads
+  const sX = s[0], sY = s[1], sZ = s[2];
+
+  // Doubling each component once makes every term below a single multiply.
+  // biome-ignore format: packed quaternion terms
+  const xx = rX + rX, yy = rY + rY, zz = rZ + rZ;
+  // biome-ignore format: packed quaternion terms
+  const xyy = rX * yy, xzz = rX * zz, yzz = rY * zz;
+  // biome-ignore format: packed quaternion terms
+  const wxx = rW * xx, wyy = rW * yy, wzz = rW * zz;
+  // biome-ignore format: packed quaternion terms
+  const xx2 = rX * xx, yy2 = rY * yy, zz2 = rZ * zz;
+
+  // The rotation as a 3×3 matrix, built from the quaternion.
+  const r00 = 1 - (yy2 + zz2);
+  const r01 = xyy - wzz;
+  const r02 = xzz + wyy;
+
+  const r10 = xyy + wzz;
+  const r11 = 1 - (xx2 + zz2);
+  const r12 = yzz - wxx;
+
+  const r20 = xzz - wyy;
+  const r21 = yzz + wxx;
+  const r22 = 1 - (xx2 + yy2);
+
+  out[0] = r00 * sX;
+  out[1] = r10 * sX;
+  out[2] = r20 * sX;
+  out[3] = 0;
+
+  out[4] = r01 * sY;
+  out[5] = r11 * sY;
+  out[6] = r21 * sY;
+  out[7] = 0;
+
+  out[8] = r02 * sZ;
+  out[9] = r12 * sZ;
+  out[10] = r22 * sZ;
+  out[11] = 0;
+
+  out[12] = tX;
+  out[13] = tY;
+  out[14] = tZ;
+  out[15] = 1;
 
   return out;
 }

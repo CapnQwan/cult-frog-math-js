@@ -1,8 +1,15 @@
 // src/matrix/mat3/__tests__/mat3.test.ts
 import { describe, expect, test } from 'vitest';
 
+import * as quat from '../../../quaternion/quat.js';
+import * as vec2 from '../../../vector/vec2/vec2.js';
+import * as vec3 from '../../../vector/vec3/vec3.js';
+import * as mat2 from '../../mat2/mat2.js';
+import * as mat4 from '../../mat4/mat4.js';
 import * as mat3 from '../mat3.js';
 
+import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
+import type { ReadonlyVec2, Vec2 } from '../../../vector/vec2/_types/vec2.js';
 import type { Mat3, ReadonlyMat3 } from '../_types/mat3.js';
 
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
@@ -860,5 +867,452 @@ describe('invert', () => {
     mat3.invert(viewAt(pool, 2), a);
 
     expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(18, 2, inverseStorage));
+  });
+});
+
+/** Test-only cast site: a Vec2 view over element `index` of a shared buffer. */
+function vec2At(buffer: ArrayBuffer, index: number): Vec2 {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 2) as Vec2;
+}
+
+/** Test-only cast site: a Quat view over element `index` of a shared buffer. */
+function quatAt(buffer: ArrayBuffer, index: number): Quat {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 4) as Quat;
+}
+
+/** A buffer of `count` irregular floats, so every slot holds a distinct value. */
+function irregularFloats(count: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(count * FLOAT_BYTES);
+  const floats = new Float32Array(buffer);
+  for (let i = 0; i < count; i++) floats[i] = Math.sin(i + 1);
+  return buffer;
+}
+
+/**
+ * Builds with the input as a view at every offset around `out`, overlapping
+ * it or not, and checks each result against building from an untouched copy.
+ */
+function expectOverlapSafe<T>(
+  size: number,
+  view: (buffer: ArrayBuffer, index: number) => T,
+  build: (out: Mat3, input: T) => Mat3
+): void {
+  const count = ELEMENTS + 8;
+  for (let index = 0; index <= count - size; index++) {
+    const buffer = irregularFloats(count);
+    const expected = build(mat3.create(), view(buffer.slice(0), index));
+
+    build(viewAt(buffer, 4), view(buffer, index));
+
+    expect(storageOf(viewAt(buffer, 4))).toEqual(storageOf(expected));
+  }
+}
+
+/** Checks that building into a pooled view writes its own 9 slots and nothing else. */
+function expectPooledWrite(build: (out: Mat3) => Mat3): void {
+  const pool = sequentialBuffer(24);
+  const expected = storageOf(build(mat3.create()));
+
+  build(viewAt(pool, 2));
+
+  expect(Array.from(new Float32Array(pool))).toEqual(poolAfter(24, 2, expected));
+}
+
+/** Expects every storage element to agree with `expected` to 6 decimal places. */
+function expectStorageNear(m: ReadonlyMat3, expected: readonly number[]): void {
+  storageOf(m).forEach((n, i) => {
+    expect(n).toBeCloseTo(expected[i] as number, 6);
+  });
+}
+
+/** Expects two vectors to agree to 5 decimal places. */
+function expectVec2Near(actual: ReadonlyVec2, expected: ReadonlyVec2): void {
+  expect(actual[0]).toBeCloseTo(expected[0], 5);
+  expect(actual[1]).toBeCloseTo(expected[1], 5);
+}
+
+/** Expects the last row and column to be exactly the identity's. */
+function expectAffineEdges(m: ReadonlyMat3): void {
+  expect([m[2], m[5], m[8]]).toEqual([0, 0, 1]);
+}
+
+const SEVENS = [7, 7, 7, 7, 7, 7, 7, 7, 7] as const;
+const POINT_2D = vec2.create(0.3, -1.2);
+// Float32 rounding in rotation products leaves results a little further from exact.
+const RotationEpsilon = 1e-5;
+
+describe('fromTranslation', () => {
+  const t = vec2.create(5, -3);
+
+  test('writes the translation into the last column and returns out', () => {
+    const out = mat3.create(...SEVENS);
+    const result = mat3.fromTranslation(out, t);
+
+    expect(result).toBe(out);
+    expectStorage(out, [1, 0, 0, 0, 1, 0, 5, -3, 1]);
+  });
+
+  test('matches the translation spelled out in row-major order', () => {
+    const expected = mat3.create(1, 0, 5, 0, 1, -3, 0, 0, 1);
+    expect(mat3.isEqual(mat3.fromTranslation(mat3.create(), t), expected)).toBe(true);
+  });
+
+  test('moves 2D points and leaves 2D directions unchanged', () => {
+    const m = mat3.fromTranslation(mat3.create(), t);
+
+    const moved = vec2.transformMat3(vec2.create(), POINT_2D, m);
+    const turned = vec2.transformDirectionMat3(vec2.create(), POINT_2D, m);
+    expect(vec2.isEqual(moved, vec2.add(vec2.create(), POINT_2D, t))).toBe(true);
+    expect(vec2.isEqual(turned, POINT_2D)).toBe(true);
+  });
+
+  test('the negated translation is its exact inverse', () => {
+    const inverse = mat3.invert(mat3.create(), mat3.fromTranslation(mat3.create(), t));
+    const negated = mat3.fromTranslation(mat3.create(), vec2.negate(vec2.create(), t));
+
+    expect(inverse).not.toBeNull();
+    expect(mat3.isEqual(inverse ?? mat3.create(), negated)).toBe(true);
+  });
+
+  test('translations compose by adding', () => {
+    const other = vec2.create(-1, 4);
+    const product = mat3.multiply(
+      mat3.create(),
+      mat3.fromTranslation(mat3.create(), t),
+      mat3.fromTranslation(mat3.create(), other)
+    );
+    const sum = mat3.fromTranslation(mat3.create(), vec2.add(vec2.create(), t, other));
+
+    expect(mat3.isEqual(product, sum)).toBe(true);
+  });
+
+  test('never writes to the input', () => {
+    mat3.fromTranslation(mat3.create(), t);
+    expect(vec2.isEqualXY(t, 5, -3)).toBe(true);
+  });
+
+  test('the input may overlap out', () => {
+    expectOverlapSafe(2, vec2At, mat3.fromTranslation);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => mat3.fromTranslation(out, t));
+  });
+});
+
+describe('fromRotation', () => {
+  test('a quarter turn is written column major and returns out', () => {
+    // Rows:  0 -1 0
+    //        1  0 0
+    //        0  0 1
+    const out = mat3.create(...SEVENS);
+    const result = mat3.fromRotation(out, Math.PI / 2);
+
+    expect(result).toBe(out);
+    expectStorageNear(out, [0, 1, 0, -1, 0, 0, 0, 0, 1]);
+  });
+
+  test('the upper-left 2x2 is exactly Mat2.fromRotation', () => {
+    const m = mat3.fromRotation(mat3.create(), 0.7);
+    const r = mat2.fromRotation(mat2.create(), 0.7);
+
+    expect([m[0], m[1], m[3], m[4]]).toEqual([r[0], r[1], r[2], r[3]]);
+  });
+
+  test('leaves the last row and column exactly as the identity, translating nothing', () => {
+    const m = mat3.fromRotation(mat3.create(...SEVENS), 2.4);
+
+    expectAffineEdges(m);
+    expect([m[6], m[7]]).toEqual([0, 0]);
+  });
+
+  test('a zero angle gives the identity', () => {
+    expect(mat3.isEqual(mat3.fromRotation(mat3.create(...SEVENS), 0), mat3.IDENTITY)).toBe(true);
+  });
+
+  test('a positive angle turns counter-clockwise: RIGHT towards UP', () => {
+    const m = mat3.fromRotation(mat3.create(), Math.PI / 2);
+    expectVec2Near(vec2.transformMat3(vec2.create(), vec2.RIGHT, m), vec2.UP);
+  });
+
+  test('negating the angle gives exactly the transpose', () => {
+    const forward = mat3.fromRotation(mat3.create(), 0.7);
+    const back = mat3.fromRotation(mat3.create(), -0.7);
+
+    expect(mat3.isEqual(back, mat3.transpose(mat3.create(), forward))).toBe(true);
+  });
+
+  test('a NaN angle spreads into the rotation', () => {
+    expect(storageOf(mat3.fromRotation(mat3.create(), Number.NaN)).some(Number.isNaN)).toBe(true);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => mat3.fromRotation(out, 0.7));
+  });
+});
+
+describe('fromScale', () => {
+  const s = vec2.create(2, 0.5);
+
+  test('writes the scale onto the diagonal and returns out', () => {
+    const out = mat3.create(...SEVENS);
+    const result = mat3.fromScale(out, s);
+
+    expect(result).toBe(out);
+    expectStorage(out, [2, 0, 0, 0, 0.5, 0, 0, 0, 1]);
+  });
+
+  test('scales each axis of a 2D point, and translates nothing', () => {
+    const m = mat3.fromScale(mat3.create(), s);
+
+    const scaled = vec2.transformMat3(vec2.create(), POINT_2D, m);
+    expect(vec2.isEqual(scaled, vec2.mul(vec2.create(), POINT_2D, s))).toBe(true);
+    expect(vec2.isEqual(vec2.transformMat3(vec2.create(), vec2.ZERO, m), vec2.ZERO)).toBe(true);
+  });
+
+  test('the reciprocal scale is its exact inverse', () => {
+    const inverse = mat3.invert(mat3.create(), mat3.fromScale(mat3.create(), s));
+    const reciprocal = mat3.fromScale(mat3.create(), vec2.create(0.5, 2));
+
+    expect(inverse).not.toBeNull();
+    expect(mat3.isEqual(inverse ?? mat3.create(), reciprocal)).toBe(true);
+  });
+
+  test('a zero component leaves no inverse', () => {
+    for (let i = 0; i < 2; i++) {
+      const flat = vec2.clone(s);
+      flat[i] = 0;
+      expect(mat3.invert(mat3.create(), mat3.fromScale(mat3.create(), flat))).toBeNull();
+    }
+  });
+
+  test('never writes to the input', () => {
+    mat3.fromScale(mat3.create(), s);
+    expect(vec2.isEqualXY(s, 2, 0.5)).toBe(true);
+  });
+
+  test('the input may overlap out', () => {
+    expectOverlapSafe(2, vec2At, mat3.fromScale);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => mat3.fromScale(out, s));
+  });
+});
+
+describe('fromTRS', () => {
+  const t = vec2.create(4, -6);
+  const angle = 0.7;
+  const s = vec2.create(2, 0.5);
+  const Angles = [0.7, 2.4, -1.1, 4] as const;
+
+  /** `T * R * S`, built from the single-part builders with `multiply`. */
+  function composed(turn: number): Mat3 {
+    const rs = mat3.multiply(
+      mat3.create(),
+      mat3.fromRotation(mat3.create(), turn),
+      mat3.fromScale(mat3.create(), s)
+    );
+    return mat3.multiply(mat3.create(), mat3.fromTranslation(mat3.create(), t), rs);
+  }
+
+  test('returns out and overwrites every element', () => {
+    const out = mat3.create(...SEVENS);
+    const result = mat3.fromTRS(out, vec2.ZERO, 0, vec2.ONE);
+
+    expect(result).toBe(out);
+    expect(mat3.isEqual(out, mat3.IDENTITY)).toBe(true);
+  });
+
+  test('equals T * R * S built with multiply', () => {
+    for (const turn of Angles) {
+      expect(
+        mat3.isEqualEpsilon(
+          mat3.fromTRS(mat3.create(), t, turn, s),
+          composed(turn),
+          RotationEpsilon
+        )
+      ).toBe(true);
+    }
+  });
+
+  test('scales, then rotates, then translates a 2D point', () => {
+    for (const turn of Angles) {
+      const m = mat3.fromTRS(mat3.create(), t, turn, s);
+
+      const scaled = vec2.mul(vec2.create(), POINT_2D, s);
+      const rotated = vec2.transformMat2(
+        vec2.create(),
+        scaled,
+        mat2.fromRotation(mat2.create(), turn)
+      );
+      const expected = vec2.add(vec2.create(), rotated, t);
+      expectVec2Near(vec2.transformMat3(vec2.create(), POINT_2D, m), expected);
+    }
+  });
+
+  test('a non-uniform scale stretches along the object axes, before the rotation', () => {
+    // Stretch x by 2, then turn a quarter: x ends up along y, still doubled.
+    const m = mat3.fromTRS(mat3.create(), vec2.ZERO, Math.PI / 2, vec2.create(2, 1));
+    expectVec2Near(vec2.transformMat3(vec2.create(), vec2.RIGHT, m), vec2.create(0, 2));
+  });
+
+  test('with no translation or scale it is exactly fromRotation', () => {
+    for (const turn of Angles) {
+      const trs = mat3.fromTRS(mat3.create(), vec2.ZERO, turn, vec2.ONE);
+      expect(mat3.isEqual(trs, mat3.fromRotation(mat3.create(), turn))).toBe(true);
+    }
+  });
+
+  test('with no rotation it is exactly the scale with the translation added', () => {
+    const expected = mat3.create(2, 0, 4, 0, 0.5, -6, 0, 0, 1);
+    expect(mat3.isEqual(mat3.fromTRS(mat3.create(), t, 0, s), expected)).toBe(true);
+  });
+
+  test('the translation is written untouched by the rotation and scale', () => {
+    const m = mat3.fromTRS(mat3.create(), t, angle, s);
+
+    expect([m[6], m[7]]).toEqual([4, -6]);
+    expectAffineEdges(m);
+  });
+
+  test('a zero scale component leaves no inverse', () => {
+    for (let i = 0; i < 2; i++) {
+      const flat = vec2.clone(s);
+      flat[i] = 0;
+      expect(mat3.invert(mat3.create(), mat3.fromTRS(mat3.create(), t, angle, flat))).toBeNull();
+    }
+  });
+
+  test('a NaN in any input appears in the result', () => {
+    for (let i = 0; i < 2; i++) {
+      const badT = vec2.clone(t);
+      badT[i] = Number.NaN;
+      const badS = vec2.clone(s);
+      badS[i] = Number.NaN;
+      expect(storageOf(mat3.fromTRS(mat3.create(), badT, angle, s)).some(Number.isNaN)).toBe(true);
+      expect(storageOf(mat3.fromTRS(mat3.create(), t, angle, badS)).some(Number.isNaN)).toBe(true);
+    }
+    expect(storageOf(mat3.fromTRS(mat3.create(), t, Number.NaN, s)).some(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to the inputs', () => {
+    mat3.fromTRS(mat3.create(), t, angle, s);
+
+    expect(vec2.isEqualXY(t, 4, -6)).toBe(true);
+    expect(vec2.isEqualXY(s, 2, 0.5)).toBe(true);
+  });
+
+  test('each input may overlap out', () => {
+    expectOverlapSafe(2, vec2At, (out, translation) => mat3.fromTRS(out, translation, angle, s));
+    expectOverlapSafe(2, vec2At, (out, scale) => mat3.fromTRS(out, t, angle, scale));
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => mat3.fromTRS(out, t, angle, s));
+  });
+});
+
+describe('fromQuat', () => {
+  const Rotations: readonly ReadonlyQuat[] = (
+    [
+      [1, 2, 3, 0.7],
+      [-2, 0.5, 1, 2.4],
+      [0, 0, 1, -1.1],
+      [1, -1, -1, 4],
+    ] as const
+  ).map(([x, y, z, turn]) =>
+    quat.fromAxisAngle(quat.create(), vec3.normalize(vec3.create(), vec3.create(x, y, z)), turn)
+  );
+  const Point3d = vec3.create(0.3, -1.2, 2.5);
+
+  test('the identity quaternion gives the identity matrix and returns out', () => {
+    const out = mat3.create(...SEVENS);
+    const result = mat3.fromQuat(out, quat.IDENTITY);
+
+    expect(result).toBe(out);
+    expect(mat3.isEqual(out, mat3.IDENTITY)).toBe(true);
+  });
+
+  test('a quarter turn about z is written column major', () => {
+    const q = quat.fromAxisAngle(quat.create(), vec3.create(0, 0, 1), Math.PI / 2);
+    expectStorageNear(mat3.fromQuat(mat3.create(), q), [0, 1, 0, -1, 0, 0, 0, 0, 1]);
+  });
+
+  test('is exactly the upper-left 3x3 of Mat4.fromQuat', () => {
+    for (const q of Rotations) {
+      const m3 = mat3.fromQuat(mat3.create(), q);
+      const m4 = mat4.fromQuat(mat4.create(), q);
+      const upperLeft = [m4[0], m4[1], m4[2], m4[4], m4[5], m4[6], m4[8], m4[9], m4[10]];
+
+      expect(storageOf(m3)).toEqual(upperLeft);
+    }
+  });
+
+  test('rotates 3D vectors the same way as Vec3.transformQuat', () => {
+    for (const q of Rotations) {
+      const rotated = vec3.transformMat3(vec3.create(), Point3d, mat3.fromQuat(mat3.create(), q));
+      const expected = vec3.transformQuat(vec3.create(), Point3d, q);
+      for (let i = 0; i < 3; i++) expect(rotated[i]).toBeCloseTo(expected[i] as number, 5);
+    }
+  });
+
+  test('composes in the same order as Quat.multiply', () => {
+    const a = Rotations[0] as ReadonlyQuat;
+    const b = Rotations[1] as ReadonlyQuat;
+
+    const fromProduct = mat3.fromQuat(mat3.create(), quat.multiply(quat.create(), a, b));
+    const product = mat3.multiply(
+      mat3.create(),
+      mat3.fromQuat(mat3.create(), a),
+      mat3.fromQuat(mat3.create(), b)
+    );
+
+    expect(mat3.isEqualEpsilon(fromProduct, product, RotationEpsilon)).toBe(true);
+  });
+
+  test('the transpose is fromQuat of the conjugate', () => {
+    for (const q of Rotations) {
+      const transposed = mat3.transpose(mat3.create(), mat3.fromQuat(mat3.create(), q));
+      const conjugated = mat3.fromQuat(mat3.create(), quat.conjugate(quat.create(), q));
+
+      expect(mat3.isEqualEpsilon(transposed, conjugated, RotationEpsilon)).toBe(true);
+    }
+  });
+
+  test('q and -q give exactly the same matrix', () => {
+    for (const q of Rotations) {
+      const negated = quat.create(
+        -(q[0] as number),
+        -(q[1] as number),
+        -(q[2] as number),
+        -(q[3] as number)
+      );
+      expect(
+        mat3.isEqual(mat3.fromQuat(mat3.create(), q), mat3.fromQuat(mat3.create(), negated))
+      ).toBe(true);
+    }
+  });
+
+  test('a NaN component spreads into the rotation', () => {
+    for (let i = 0; i < 4; i++) {
+      const q = quat.clone(Rotations[0] as ReadonlyQuat);
+      q[i] = Number.NaN;
+      expect(storageOf(mat3.fromQuat(mat3.create(), q)).some(Number.isNaN)).toBe(true);
+    }
+  });
+
+  test('never writes to the input', () => {
+    const q = quat.clone(Rotations[0] as ReadonlyQuat);
+    mat3.fromQuat(mat3.create(), q);
+    expect(quat.isEqual(q, Rotations[0] as ReadonlyQuat)).toBe(true);
+  });
+
+  test('the input may overlap out', () => {
+    expectOverlapSafe(4, quatAt, mat3.fromQuat);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => mat3.fromQuat(out, Rotations[0] as ReadonlyQuat));
   });
 });

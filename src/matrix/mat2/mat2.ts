@@ -20,6 +20,7 @@
 import { EPSILON } from '../../constants.js';
 import { isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
+import type { ReadonlyVec2 } from '../../vector/vec2/_types/vec2.js';
 import type { Mat2, ReadonlyMat2 } from './_types/mat2.js';
 
 /** The number of elements in a `Mat2`. */
@@ -325,6 +326,70 @@ export function invert(out: Mat2, a: ReadonlyMat2): Mat2 | null {
   out[1] = -a10 * invDet;
   out[2] = -a01 * invDet;
   out[3] = a00 * invDet;
+
+  return out;
+}
+
+/**
+ * Writes a 2D rotation of `angle` radians into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than rotating the one already in `out`. To rotate an existing matrix,
+ * `multiply` by the result.
+ *
+ * A positive angle turns counter-clockwise in this package's y-up convention,
+ * taking `Vec2.RIGHT` towards `Vec2.UP`. In screen space, where y grows
+ * downward, the same angle looks clockwise. Negating the angle gives the
+ * inverse, which is also the `transpose`.
+ *
+ * Rotations are only close to exact: `Math.cos(Math.PI / 2)` is about `6e-17`
+ * rather than `0`, so even a quarter turn leaves tiny elements where the
+ * identity has zeros. Compare results with `isEqualEpsilon`.
+ *
+ * @param out - The matrix to write to.
+ * @param angle - The rotation angle in radians.
+ * @returns `out`.
+ */
+export function fromRotation(out: Mat2, angle: number): Mat2 {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  out[0] = cos;
+  out[1] = sin;
+
+  out[2] = -sin;
+  out[3] = cos;
+
+  return out;
+}
+
+/**
+ * Writes a scale by `v` along each axis into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than scaling the one already in `out`. To scale an existing matrix,
+ * `multiply` by the result.
+ *
+ * The scale lands on the diagonal and the rest is zero, so the result is
+ * exact. A negative component mirrors along that axis, which makes the
+ * `determinant` negative, and a zero component flattens it, which leaves the
+ * matrix without an inverse. `fromScale` of the reciprocals is its inverse.
+ *
+ * `v` is read into locals first, so it may be a view overlapping `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param v - The scale along x and y.
+ * @returns `out`.
+ */
+export function fromScale(out: Mat2, v: ReadonlyVec2): Mat2 {
+  // biome-ignore format: packed component reads
+  const x = v[0], y = v[1];
+
+  out[0] = x;
+  out[1] = 0;
+
+  out[2] = 0;
+  out[3] = y;
 
   return out;
 }

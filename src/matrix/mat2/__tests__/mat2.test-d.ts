@@ -5,6 +5,8 @@ import * as mat2 from '../mat2.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { ReadonlyVec2, Vec2 } from '../../../vector/vec2/_types/vec2.js';
+import type { Vec3 } from '../../../vector/vec3/_types/vec3.js';
 import type { Mat3 } from '../../mat3/_types/mat3.js';
 import type { Mat2, ReadonlyMat2 } from '../_types/mat2.js';
 
@@ -12,6 +14,9 @@ declare const live: Mat2;
 declare const frozen: ReadonlyMat2;
 declare const other: Mat3;
 declare const raw: Float32Array<ArrayBuffer>;
+declare const vector: Vec2;
+declare const frozenVector: ReadonlyVec2;
+declare const three: Vec3;
 
 /** A `Mat2` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedMat2 = Brand<FixedFloat32Array<4, SharedArrayBuffer>, BrandOf<Mat2>>;
@@ -224,5 +229,30 @@ describe('invert', () => {
     mat2.invert(live, other);
     // @ts-expect-error unbranded arrays are rejected
     mat2.invert(live, raw);
+  });
+});
+
+describe('builders', () => {
+  test('out is mutable, the inputs are readonly, and out is returned', () => {
+    expectTypeOf(mat2.fromRotation).parameters.toEqualTypeOf<[Mat2, number]>();
+    expectTypeOf(mat2.fromScale).parameters.toEqualTypeOf<[Mat2, ReadonlyVec2]>();
+    expectTypeOf(mat2.fromRotation).returns.toEqualTypeOf<Mat2>();
+    expectTypeOf(mat2.fromScale).returns.toEqualTypeOf<Mat2>();
+  });
+
+  test('call sites', () => {
+    mat2.fromRotation(live, 0.5);
+    mat2.fromScale(shared, frozenVector);
+    mat2.fromScale(live, vector);
+    // @ts-expect-error readonly can never be an out parameter
+    mat2.fromRotation(frozen, 0.5);
+    // @ts-expect-error the shared constant must never be written through
+    mat2.fromScale(mat2.IDENTITY, vector);
+    // @ts-expect-error wrong-dimension out
+    mat2.fromScale(other, vector);
+    // @ts-expect-error wrong-dimension vector
+    mat2.fromScale(live, three);
+    // @ts-expect-error unbranded arrays are rejected
+    mat2.fromScale(live, raw);
   });
 });
