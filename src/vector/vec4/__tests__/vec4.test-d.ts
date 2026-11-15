@@ -5,6 +5,8 @@ import * as vec4 from '../vec4.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Mat3 } from '../../../matrix/mat3/_types/mat3.js';
+import type { Mat4, ReadonlyMat4 } from '../../../matrix/mat4/_types/mat4.js';
 import type { Quat } from '../../../quaternion/_types/quat.js';
 import type { Vec3 } from '../../vec3/_types/vec3.js';
 import type { ReadonlyVec4, Vec4 } from '../_types/vec4.js';
@@ -14,6 +16,9 @@ declare const frozen: ReadonlyVec4;
 declare const other: Vec3;
 declare const rotation: Quat;
 declare const raw: Float32Array<ArrayBuffer>;
+declare const matrix3: Mat3;
+declare const matrix4: Mat4;
+declare const frozenMatrix4: ReadonlyMat4;
 
 /** A `Vec4` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedVec4 = Brand<FixedFloat32Array<4, SharedArrayBuffer>, BrandOf<Vec4>>;
@@ -346,5 +351,30 @@ describe('constants', () => {
     vec4.set(vec4.ZERO, 0, 0, 0, 0);
     // @ts-expect-error readonly can never be an out parameter
     vec4.set(vec4.ONE, 0, 0, 0, 0);
+  });
+});
+
+describe('matrix transforms', () => {
+  test('out is mutable, the inputs are readonly, and out is returned', () => {
+    expectTypeOf(vec4.transformMat4).parameters.toEqualTypeOf<[Vec4, ReadonlyVec4, ReadonlyMat4]>();
+    expectTypeOf(vec4.transformMat4).returns.toEqualTypeOf<Vec4>();
+  });
+
+  test('call sites', () => {
+    vec4.transformMat4(live, frozen, frozenMatrix4);
+    vec4.transformMat4(live, live, matrix4);
+    vec4.transformMat4(shared, vec4.ZERO, matrix4);
+    // @ts-expect-error readonly can never be an out parameter
+    vec4.transformMat4(frozen, live, matrix4);
+    // @ts-expect-error the vector comes before the matrix
+    vec4.transformMat4(live, matrix4, live);
+    // @ts-expect-error wrong-size matrix
+    vec4.transformMat4(live, live, matrix3);
+    // @ts-expect-error wrong-dimension vector
+    vec4.transformMat4(live, other, matrix4);
+    // @ts-expect-error a Quat is not a Vec4, identical layout notwithstanding
+    vec4.transformMat4(live, rotation, matrix4);
+    // @ts-expect-error unbranded arrays are rejected
+    vec4.transformMat4(live, live, raw);
   });
 });

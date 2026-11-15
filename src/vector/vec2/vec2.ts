@@ -11,6 +11,8 @@ import { EPSILON } from '../../constants.js';
 import { lerp as lerpScalar } from '../../interpolation.js';
 import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
+import type { ReadonlyMat2 } from '../../matrix/mat2/_types/mat2.js';
+import type { ReadonlyMat3 } from '../../matrix/mat3/_types/mat3.js';
 import type { ReadonlyVec2, Vec2 } from './_types/vec2.js';
 
 /** The number of elements in a `Vec2`. */
@@ -652,6 +654,133 @@ export function fromPacked(out: Vec2, packed: ArrayLike<number>, index: number):
   const x = packed[from]!, y = packed[from + 1]!;
   out[0] = x;
   out[1] = y;
+  return out;
+}
+
+/**
+ * Transforms `v` by the 2x2 matrix `m` and writes the matrix-vector product
+ * `m * v` into `out`.
+ *
+ * `v` is a column vector, as in `Mat2.multiply`, so transforming by
+ * `multiply(tmp, a, b)` gives the same result as transforming by `b` and then
+ * by `a`. Transforming by `Mat2.invert` of `m` undoes it, up to rounding.
+ *
+ * A 2x2 matrix can rotate, scale, shear and mirror, but it can't translate, so
+ * points and directions transform the same way. For a 2D transform that
+ * includes a translation, use a `Mat3` with `transformMat3` for points and
+ * `transformDirectionMat3` for directions.
+ *
+ * A `NaN` in `v` makes the whole result `NaN`. A `NaN` in `m` spreads only to
+ * the component whose row holds it.
+ *
+ * Both inputs are read into locals first, so `out` may be `v`, or a view
+ * overlapping either `v` or `m`.
+ *
+ * @param out - The vector to write to.
+ * @param v - The vector to transform.
+ * @param m - The matrix to transform by.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transformMat2(out: Vec2, v: ReadonlyVec2, m: ReadonlyMat2): Vec2 {
+  const x = v[0], y = v[1];
+
+  const m00 = m[0], m01 = m[2];
+  const m10 = m[1], m11 = m[3];
+
+  out[0] = x * m00 + y * m01;
+  out[1] = x * m10 + y * m11;
+
+  return out;
+}
+
+/**
+ * Transforms the point `v` by the 3x3 matrix `m` and writes the result into
+ * `out`.
+ *
+ * `v` is treated as the point `(x, y, 1)`, so the translation in the last
+ * column of `m` applies. Use this for positions. For a direction, such as a
+ * velocity or an axis, which a moving frame shouldn't move, use
+ * `transformDirectionMat3`.
+ *
+ * The product is divided by the `w` it produces, its third component, so this
+ * is correct for any `m`. For an affine `m`, whose bottom row is `0 0 1`, that
+ * `w` is exactly `1` and the divide leaves the result unchanged. For a
+ * projective `m`, the divide is what makes the result correct. A point that
+ * lands at `w = 0` gives `Infinity` or `NaN` components, which is not guarded
+ * against, as with `div`.
+ *
+ * `v` is a column vector, as in `Mat3.multiply`, so transforming by
+ * `multiply(tmp, a, b)` gives the same result as transforming by `b` and then
+ * by `a`. Transforming by `Mat3.invert` of `m` undoes it, up to rounding.
+ *
+ * A `NaN` in `v` or in the bottom row of `m` makes the whole result `NaN`,
+ * because both feed the divide. A `NaN` elsewhere in `m` spreads only to the
+ * component whose row holds it.
+ *
+ * Both inputs are read into locals first, so `out` may be `v`, or a view
+ * overlapping either `v` or `m`.
+ *
+ * @param out - The vector to write to.
+ * @param v - The point to transform.
+ * @param m - The matrix to transform by.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transformMat3(out: Vec2, v: ReadonlyVec2, m: ReadonlyMat3): Vec2 {
+  const x = v[0], y = v[1];
+
+  const m00 = m[0], m01 = m[3], m02 = m[6];
+  const m10 = m[1], m11 = m[4], m12 = m[7];
+  const m20 = m[2], m21 = m[5], m22 = m[8];
+
+  const invW = 1 / (x * m20 + y * m21 + m22);
+
+  out[0] = (x * m00 + y * m01 + m02) * invW;
+  out[1] = (x * m10 + y * m11 + m12) * invW;
+
+  return out;
+}
+
+/**
+ * Transforms the direction `v` by the 3x3 matrix `m`, ignoring its
+ * translation, and writes the result into `out`.
+ *
+ * `v` is treated as the direction `(x, y, 0)`, so only the upper-left 2x2 of
+ * `m` applies: its rotation, scale, shear and mirroring. Use this for
+ * velocities, axes and offsets, which a moving frame shouldn't move. For an
+ * affine `m`, the result equals transforming the points `v` and the origin
+ * with `transformMat3` and taking the difference, at a lower cost.
+ *
+ * The bottom row of `m` is ignored and nothing is divided, so the result is
+ * meaningful only for an affine `m`.
+ *
+ * Lengths are not preserved when `m` scales, so normalize the result if a unit
+ * direction is needed. This is not correct for surface normals: under
+ * non-uniform scale or shear, a normal must be transformed by the
+ * inverse-transpose of `m` to stay perpendicular to its surface.
+ *
+ * A `NaN` in `v` makes the whole result `NaN`. A `NaN` in the upper-left 2x2
+ * of `m` spreads only to the component whose row holds it.
+ *
+ * Both inputs are read into locals first, so `out` may be `v`, or a view
+ * overlapping either `v` or `m`.
+ *
+ * @param out - The vector to write to.
+ * @param v - The direction to transform.
+ * @param m - The matrix to transform by. Only its upper-left 2x2 is read.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transformDirectionMat3(out: Vec2, v: ReadonlyVec2, m: ReadonlyMat3): Vec2 {
+  const x = v[0], y = v[1];
+
+  const m00 = m[0], m01 = m[3];
+  const m10 = m[1], m11 = m[4];
+
+  out[0] = x * m00 + y * m01;
+  out[1] = x * m10 + y * m11;
+
   return out;
 }
 

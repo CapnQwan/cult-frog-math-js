@@ -11,6 +11,8 @@ import { EPSILON } from '../../constants.js';
 import { lerp as lerpScalar } from '../../interpolation.js';
 import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
+import type { ReadonlyMat3 } from '../../matrix/mat3/_types/mat3.js';
+import type { ReadonlyMat4 } from '../../matrix/mat4/_types/mat4.js';
 import type { ReadonlyQuat } from '../../quaternion/_types/quat.js';
 import type { ReadonlyVec3, Vec3 } from './_types/vec3.js';
 
@@ -770,6 +772,149 @@ export function transformQuat(out: Vec3, v: ReadonlyVec3, q: ReadonlyQuat): Vec3
   out[0] = vx + qw * tx + (qy * tz - qz * ty);
   out[1] = vy + qw * ty + (qz * tx - qx * tz);
   out[2] = vz + qw * tz + (qx * ty - qy * tx);
+  return out;
+}
+
+/**
+ * Transforms `v` by the 3x3 matrix `m` and writes the matrix-vector product
+ * `m * v` into `out`.
+ *
+ * `v` is a column vector, as in `Mat3.multiply`, so transforming by
+ * `multiply(tmp, a, b)` gives the same result as transforming by `b` and then
+ * by `a`. Transforming by `Mat3.invert` of `m` undoes it, up to rounding.
+ *
+ * A 3x3 matrix can rotate, scale, shear and mirror, but it can't translate, so
+ * points and directions transform the same way. For a 3D transform that
+ * includes a translation, use a `Mat4` with `transformMat4` for points and
+ * `transformDirectionMat4` for directions.
+ *
+ * This is not correct for surface normals unless `m` is a pure rotation or a
+ * uniform scale: under non-uniform scale or shear, a normal must be
+ * transformed by the inverse-transpose of the transform to stay perpendicular
+ * to its surface.
+ *
+ * A `NaN` in `v` makes the whole result `NaN`. A `NaN` in `m` spreads only to
+ * the component whose row holds it.
+ *
+ * Both inputs are read into locals first, so `out` may be `v`, or a view
+ * overlapping either `v` or `m`.
+ *
+ * @param out - The vector to write to.
+ * @param v - The vector to transform.
+ * @param m - The matrix to transform by.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transformMat3(out: Vec3, v: ReadonlyVec3, m: ReadonlyMat3): Vec3 {
+  const x = v[0], y = v[1], z = v[2];
+
+  const m00 = m[0], m01 = m[3], m02 = m[6];
+  const m10 = m[1], m11 = m[4], m12 = m[7];
+  const m20 = m[2], m21 = m[5], m22 = m[8];
+
+  out[0] = x * m00 + y * m01 + z * m02;
+  out[1] = x * m10 + y * m11 + z * m12;
+  out[2] = x * m20 + y * m21 + z * m22;
+
+  return out;
+}
+
+/**
+ * Transforms the point `v` by the 4x4 matrix `m` and writes the result into
+ * `out`.
+ *
+ * `v` is treated as the point `(x, y, z, 1)`, so the translation in the last
+ * column of `m` applies. Use this to move positions between frames, such as
+ * local to world or world to view. For a direction, such as a velocity or an
+ * axis, which a moving frame shouldn't move, use `transformDirectionMat4`.
+ *
+ * The product is divided by the `w` it produces, its fourth component, so this
+ * is correct for any `m`. For an affine `m`, whose bottom row is `0 0 0 1`,
+ * that `w` is exactly `1` and the divide leaves the result unchanged. Under a
+ * projection matrix, the divide is the perspective divide: distant points
+ * shrink toward the centre, and the result is in normalized device
+ * coordinates. For clip space, before the divide, use `Vec4.transformMat4`. A
+ * point that lands at `w = 0`, on the camera plane of a perspective
+ * projection, gives `Infinity` or `NaN` components, which is not guarded
+ * against, as with `div`.
+ *
+ * `v` is a column vector, as in `Mat4.multiply`, so transforming by
+ * `multiply(tmp, a, b)` gives the same result as transforming by `b` and then
+ * by `a`. Transforming by `Mat4.invert` of `m` undoes it, up to rounding.
+ *
+ * A `NaN` in `v` or in the bottom row of `m` makes the whole result `NaN`,
+ * because both feed the divide. A `NaN` elsewhere in `m` spreads only to the
+ * component whose row holds it.
+ *
+ * Both inputs are read into locals first, so `out` may be `v`, or a view
+ * overlapping either `v` or `m`.
+ *
+ * @param out - The vector to write to.
+ * @param v - The point to transform.
+ * @param m - The matrix to transform by.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transformMat4(out: Vec3, v: ReadonlyVec3, m: ReadonlyMat4): Vec3 {
+  const x = v[0], y = v[1], z = v[2];
+
+  const m00 = m[0], m01 = m[4], m02 = m[8], m03 = m[12];
+  const m10 = m[1], m11 = m[5], m12 = m[9], m13 = m[13];
+  const m20 = m[2], m21 = m[6], m22 = m[10], m23 = m[14];
+  const m30 = m[3], m31 = m[7], m32 = m[11], m33 = m[15];
+
+  const invW = 1 / (x * m30 + y * m31 + z * m32 + m33);
+
+  out[0] = (x * m00 + y * m01 + z * m02 + m03) * invW;
+  out[1] = (x * m10 + y * m11 + z * m12 + m13) * invW;
+  out[2] = (x * m20 + y * m21 + z * m22 + m23) * invW;
+
+  return out;
+}
+
+/**
+ * Transforms the direction `v` by the 4x4 matrix `m`, ignoring its
+ * translation, and writes the result into `out`.
+ *
+ * `v` is treated as the direction `(x, y, z, 0)`, so only the upper-left 3x3
+ * of `m` applies: its rotation, scale, shear and mirroring. Use this for
+ * velocities, axes and offsets, which a moving frame shouldn't move, such as
+ * turning a local forward axis into a world-space facing. For an affine `m`,
+ * the result equals transforming the points `v` and the origin with
+ * `transformMat4` and taking the difference, at a lower cost.
+ *
+ * The bottom row of `m` is ignored and nothing is divided, so the result is
+ * meaningful only for an affine `m`.
+ *
+ * Lengths are not preserved when `m` scales, so normalize the result if a unit
+ * direction is needed. This is not correct for surface normals: under
+ * non-uniform scale or shear, a normal must be transformed by the
+ * inverse-transpose of the upper-left 3x3 to stay perpendicular to its
+ * surface.
+ *
+ * A `NaN` in `v` makes the whole result `NaN`. A `NaN` in the upper-left 3x3
+ * of `m` spreads only to the component whose row holds it.
+ *
+ * Both inputs are read into locals first, so `out` may be `v`, or a view
+ * overlapping either `v` or `m`.
+ *
+ * @param out - The vector to write to.
+ * @param v - The direction to transform.
+ * @param m - The matrix to transform by. Only its upper-left 3x3 is read.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transformDirectionMat4(out: Vec3, v: ReadonlyVec3, m: ReadonlyMat4): Vec3 {
+  const x = v[0], y = v[1], z = v[2];
+
+  const m00 = m[0], m01 = m[4], m02 = m[8];
+  const m10 = m[1], m11 = m[5], m12 = m[9];
+  const m20 = m[2], m21 = m[6], m22 = m[10];
+
+  out[0] = x * m00 + y * m01 + z * m02;
+  out[1] = x * m10 + y * m11 + z * m12;
+  out[2] = x * m20 + y * m21 + z * m22;
+
   return out;
 }
 

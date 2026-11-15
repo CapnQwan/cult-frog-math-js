@@ -5,6 +5,8 @@ import * as vec3 from '../vec3.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Mat3, ReadonlyMat3 } from '../../../matrix/mat3/_types/mat3.js';
+import type { Mat4, ReadonlyMat4 } from '../../../matrix/mat4/_types/mat4.js';
 import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
 import type { Vec2 } from '../../vec2/_types/vec2.js';
 import type { Vec4 } from '../../vec4/_types/vec4.js';
@@ -17,6 +19,10 @@ declare const raw: Float32Array<ArrayBuffer>;
 declare const rotation: Quat;
 declare const frozenRotation: ReadonlyQuat;
 declare const four: Vec4;
+declare const matrix3: Mat3;
+declare const frozenMatrix3: ReadonlyMat3;
+declare const matrix4: Mat4;
+declare const frozenMatrix4: ReadonlyMat4;
 
 /** A `Vec3` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedVec3 = Brand<FixedFloat32Array<3, SharedArrayBuffer>, BrandOf<Vec3>>;
@@ -373,5 +379,41 @@ describe('transformQuat', () => {
     vec3.transformQuat(live, other, rotation);
     // @ts-expect-error unbranded arrays are rejected
     vec3.transformQuat(live, live, raw);
+  });
+});
+
+describe('matrix transforms', () => {
+  test('out is mutable, the inputs are readonly, and out is returned', () => {
+    expectTypeOf(vec3.transformMat3).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3, ReadonlyMat3]>();
+    expectTypeOf(vec3.transformMat4).parameters.toEqualTypeOf<[Vec3, ReadonlyVec3, ReadonlyMat4]>();
+    expectTypeOf(vec3.transformDirectionMat4).parameters.toEqualTypeOf<
+      [Vec3, ReadonlyVec3, ReadonlyMat4]
+    >();
+    expectTypeOf(vec3.transformMat3).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.transformMat4).returns.toEqualTypeOf<Vec3>();
+    expectTypeOf(vec3.transformDirectionMat4).returns.toEqualTypeOf<Vec3>();
+  });
+
+  test('call sites', () => {
+    vec3.transformMat3(live, frozen, frozenMatrix3);
+    vec3.transformMat3(live, live, matrix3);
+    vec3.transformMat4(shared, vec3.ZERO, matrix4);
+    vec3.transformDirectionMat4(live, vec3.FORWARD, frozenMatrix4);
+    // @ts-expect-error readonly can never be an out parameter
+    vec3.transformMat4(frozen, live, matrix4);
+    // @ts-expect-error the vector comes before the matrix
+    vec3.transformMat4(live, matrix4, live);
+    // @ts-expect-error wrong-size matrix
+    vec3.transformMat3(live, live, matrix4);
+    // @ts-expect-error wrong-size matrix
+    vec3.transformMat4(live, live, matrix3);
+    // @ts-expect-error wrong-size matrix
+    vec3.transformDirectionMat4(live, live, matrix3);
+    // @ts-expect-error wrong-dimension vector
+    vec3.transformMat4(live, four, matrix4);
+    // @ts-expect-error unbranded arrays are rejected
+    vec3.transformMat4(live, live, raw);
+    // @ts-expect-error there is no w parameter; directions go through transformDirectionMat4
+    vec3.transformMat4(live, live, matrix4, 0);
   });
 });

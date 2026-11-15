@@ -11,6 +11,7 @@ import { EPSILON } from '../../constants.js';
 import { lerp as lerpScalar } from '../../interpolation.js';
 import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
 
+import type { ReadonlyMat4 } from '../../matrix/mat4/_types/mat4.js';
 import type { ReadonlyVec4, Vec4 } from './_types/vec4.js';
 
 /** The number of elements in a `Vec4`. */
@@ -751,6 +752,51 @@ export function fromPacked(out: Vec4, packed: ArrayLike<number>, index: number):
   out[1] = y;
   out[2] = z;
   out[3] = w;
+  return out;
+}
+
+/**
+ * Transforms `v` by the 4x4 matrix `m` and writes the matrix-vector product
+ * `m * v` into `out`.
+ *
+ * Every component of `v` is used as given, `w` included: a `w` of `1` makes
+ * `v` a point, which the translation in the last column of `m` moves, and a
+ * `w` of `0` makes it a direction, which translation ignores.
+ *
+ * Nothing is divided, so the result stays in homogeneous coordinates. Under a
+ * projection matrix this is clip space, the position a vertex shader outputs,
+ * and dividing `x`, `y` and `z` by the result's `w` gives normalized device
+ * coordinates. `Vec3.transformMat4` does that divide for a point in one step.
+ *
+ * `v` is a column vector, as in `Mat4.multiply`, so transforming by
+ * `multiply(tmp, a, b)` gives the same result as transforming by `b` and then
+ * by `a`. Transforming by `Mat4.invert` of `m` undoes it, up to rounding.
+ *
+ * A `NaN` in `v` makes the whole result `NaN`. A `NaN` in `m` spreads only to
+ * the component whose row holds it.
+ *
+ * Both inputs are read into locals first, so `out` may be `v`, or a view
+ * overlapping either `v` or `m`.
+ *
+ * @param out - The vector to write to.
+ * @param v - The vector to transform, with its `w` set by the caller.
+ * @param m - The matrix to transform by.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function transformMat4(out: Vec4, v: ReadonlyVec4, m: ReadonlyMat4): Vec4 {
+  const x = v[0], y = v[1], z = v[2], w = v[3];
+
+  const m00 = m[0], m01 = m[4], m02 = m[8], m03 = m[12];
+  const m10 = m[1], m11 = m[5], m12 = m[9], m13 = m[13];
+  const m20 = m[2], m21 = m[6], m22 = m[10], m23 = m[14];
+  const m30 = m[3], m31 = m[7], m32 = m[11], m33 = m[15];
+
+  out[0] = x * m00 + y * m01 + z * m02 + w * m03;
+  out[1] = x * m10 + y * m11 + z * m12 + w * m13;
+  out[2] = x * m20 + y * m21 + z * m22 + w * m23;
+  out[3] = x * m30 + y * m31 + z * m32 + w * m33;
+
   return out;
 }
 

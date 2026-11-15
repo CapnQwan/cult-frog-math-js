@@ -1,10 +1,14 @@
 // src/vector/vec3/__tests__/vec3.test.ts
 import { describe, expect, test } from 'vitest';
 
+import * as mat3 from '../../../matrix/mat3/mat3.js';
+import * as mat4 from '../../../matrix/mat4/mat4.js';
 import * as quat from '../../../quaternion/quat.js';
 import { clamp } from '../../../scalars.js';
 import * as vec3 from '../vec3.js';
 
+import type { Mat3 } from '../../../matrix/mat3/_types/mat3.js';
+import type { Mat4 } from '../../../matrix/mat4/_types/mat4.js';
 import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
 import type { ReadonlyVec3, Vec3 } from '../_types/vec3.js';
 
@@ -33,6 +37,23 @@ function sequentialBuffer(count: number, shared = false): ArrayBufferLike {
   const floats = new Float32Array(buffer);
   for (let i = 0; i < count; i++) floats[i] = i + 1;
   return buffer;
+}
+
+/** Comparison within `digits` decimal places, for results that pass through rounding. */
+function expectNear(v: ReadonlyVec3, x: number, y: number, z: number, digits = 5): void {
+  expect(v[0]).toBeCloseTo(x, digits);
+  expect(v[1]).toBeCloseTo(y, digits);
+  expect(v[2]).toBeCloseTo(z, digits);
+}
+
+/** Test-only cast site: a Mat3 view over element `index` of a shared buffer. */
+function mat3At(buffer: ArrayBufferLike, index: number): Mat3 {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 9) as Mat3;
+}
+
+/** Test-only cast site: a Mat4 view over element `index` of a shared buffer. */
+function mat4At(buffer: ArrayBufferLike, index: number): Mat4 {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 16) as Mat4;
 }
 
 describe('create', () => {
@@ -2879,6 +2900,381 @@ describe('transformQuat', () => {
   test('writes only its own slots when out is a pooled view', () => {
     const pool = sequentialBuffer(5);
     vec3.transformQuat(viewAt(pool, 1), vec3.create(7, 8, 9), quat.IDENTITY);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 7, 8, 9, 5]);
+  });
+});
+
+describe('transformMat3', () => {
+  // Rows: [1 2 3; 4 5 6; 7 8 10]. Dense and not symmetric, so a transposed product gives a different answer.
+  const m = mat3.create(1, 2, 3, 4, 5, 6, 7, 8, 10);
+  // Rows: [0 -1 0; 1 0 0; 0 0 1], a quarter turn about +Z.
+  const quarterTurnZ = mat3.create(0, -1, 0, 1, 0, 0, 0, 0, 1);
+
+  test('writes into out and returns it', () => {
+    const out = vec3.create();
+    expect(vec3.transformMat3(out, vec3.create(1, -1, 2), m)).toBe(out);
+  });
+
+  test('computes m * v, treating v as a column', () => {
+    expectComponents(vec3.transformMat3(vec3.create(), vec3.create(1, -1, 2), m), 5, 11, 19);
+  });
+
+  test('the identity leaves the vector exactly unchanged', () => {
+    const v = vec3.create(1.5, -2, 3);
+    expectComponents(vec3.transformMat3(vec3.create(), v, mat3.IDENTITY), 1.5, -2, 3);
+  });
+
+  test('a positive quarter turn about +Z takes +X to +Y, as transformQuat does', () => {
+    const v = vec3.create(1, 0, 0);
+    expectNear(vec3.transformMat3(vec3.create(), v, quarterTurnZ), 0, 1, 0);
+
+    const q = quat.fromAxisAngle(quat.create(), vec3.create(0, 0, 1), Math.PI / 2);
+    const rotated = vec3.transformQuat(vec3.create(), vec3.create(3, -4, 5), q);
+    const viaMatrix = vec3.transformMat3(vec3.create(), vec3.create(3, -4, 5), quarterTurnZ);
+    expectNear(viaMatrix, rotated[0], rotated[1], rotated[2]);
+  });
+
+  test('transforming by multiply(a, b) is transforming by b, then by a', () => {
+    const v = vec3.create(1, -1, 2);
+    const combined = vec3.transformMat3(
+      vec3.create(),
+      v,
+      mat3.multiply(mat3.create(), m, quarterTurnZ)
+    );
+    const stepwise = vec3.transformMat3(
+      vec3.create(),
+      vec3.transformMat3(vec3.create(), v, quarterTurnZ),
+      m
+    );
+    expectComponents(combined, stepwise[0], stepwise[1], stepwise[2]);
+  });
+
+  test('transforming by the inverse undoes it', () => {
+    const inverse = mat3.invert(mat3.create(), m);
+    if (!inverse) throw new Error('the test matrix is invertible');
+    const there = vec3.transformMat3(vec3.create(), vec3.create(1, -1, 2), m);
+    expectNear(vec3.transformMat3(vec3.create(), there, inverse), 1, -1, 2);
+  });
+
+  test('a NaN in v spreads to every component, one in m only to its row', () => {
+    const fromVector = vec3.transformMat3(vec3.create(), vec3.create(Number.NaN, -1, 2), m);
+    expect(Array.from(fromVector).every(Number.isNaN)).toBe(true);
+
+    const nanMatrix = mat3.create(1, Number.NaN, 3, 4, 5, 6, 7, 8, 10);
+    const fromMatrix = vec3.transformMat3(vec3.create(), vec3.create(1, -1, 2), nanMatrix);
+    expect(fromMatrix[0]).toBeNaN();
+    expect(fromMatrix[1]).toBe(11);
+    expect(fromMatrix[2]).toBe(19);
+  });
+
+  test('never writes to either input', () => {
+    const v = vec3.create(1, -1, 2);
+    vec3.transformMat3(vec3.create(), v, m);
+    expectComponents(v, 1, -1, 2);
+    expect(Array.from(m)).toEqual([1, 4, 7, 2, 5, 8, 3, 6, 10]);
+  });
+
+  test('out may be the same object as v', () => {
+    const v = vec3.create(1, -1, 2);
+    vec3.transformMat3(v, v, m);
+    expectComponents(v, 5, 11, 19);
+  });
+
+  test('out may overlap v', () => {
+    for (let outOffset = 0; outOffset < 3; outOffset++) {
+      for (let vOffset = 0; vOffset < 3; vOffset++) {
+        if (outOffset === vOffset) continue;
+
+        const buffer = sequentialBuffer(6);
+        const v = viewAt(buffer, vOffset);
+        const expected = vec3.transformMat3(vec3.create(), vec3.clone(v), m);
+
+        vec3.transformMat3(viewAt(buffer, outOffset), v, m);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('out may overlap m', () => {
+    for (let outOffset = 0; outOffset < 10; outOffset++) {
+      const buffer = sequentialBuffer(12);
+      const matrix = mat3At(buffer, 0);
+      const v = vec3.create(1, -2, 0.5);
+      const expected = vec3.transformMat3(vec3.create(), v, mat3.clone(matrix));
+
+      vec3.transformMat3(viewAt(buffer, outOffset), v, matrix);
+
+      expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(5);
+    vec3.transformMat3(viewAt(pool, 1), vec3.create(7, 8, 9), mat3.IDENTITY);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 7, 8, 9, 5]);
+  });
+});
+
+describe('transformMat4', () => {
+  // Rows: [1 2 3 10; 4 5 6 20; 7 8 10 30; 0 0 0 1], a dense affine transform moving by (10, 20, 30).
+  const m = mat4.create(1, 2, 3, 10, 4, 5, 6, 20, 7, 8, 10, 30, 0, 0, 0, 1);
+  // A move by (5, -3, 2).
+  const translation = mat4.create(1, 0, 0, 5, 0, 1, 0, -3, 0, 0, 1, 2, 0, 0, 0, 1);
+  // A minimal perspective projection: the bottom row makes the output w equal to -z.
+  const perspective = mat4.create(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, -1, 0);
+
+  test('writes into out and returns it', () => {
+    const out = vec3.create();
+    expect(vec3.transformMat4(out, vec3.create(1, -1, 2), m)).toBe(out);
+  });
+
+  test('computes m * (v, 1), treating v as a column', () => {
+    expectComponents(vec3.transformMat4(vec3.create(), vec3.create(1, -1, 2), m), 15, 31, 49);
+  });
+
+  test('the identity leaves the point exactly unchanged', () => {
+    const v = vec3.create(1.5, -2, 3);
+    expectComponents(vec3.transformMat4(vec3.create(), v, mat4.IDENTITY), 1.5, -2, 3);
+  });
+
+  test('the translation applies, since v is a point', () => {
+    expectComponents(
+      vec3.transformMat4(vec3.create(), vec3.create(1, 2, 3), translation),
+      6,
+      -1,
+      5
+    );
+  });
+
+  test('a uniform homogeneous scale cancels in the divide by w', () => {
+    const doubled = mat4.create(2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2, 0, 0, 0, 0, 2);
+    expectComponents(vec3.transformMat4(vec3.create(), vec3.create(1, -2, 3), doubled), 1, -2, 3);
+  });
+
+  test('the perspective divide shrinks distant points toward the centre', () => {
+    expectComponents(
+      vec3.transformMat4(vec3.create(), vec3.create(2, 4, -2), perspective),
+      1,
+      2,
+      -1
+    );
+    expectComponents(
+      vec3.transformMat4(vec3.create(), vec3.create(2, 4, -4), perspective),
+      0.5,
+      1,
+      -1
+    );
+  });
+
+  test('a point that lands at w = 0 is not guarded against', () => {
+    const r = vec3.transformMat4(vec3.create(), vec3.create(1, 1, 0), perspective);
+    expect(Array.from(r).some(Number.isFinite)).toBe(false);
+  });
+
+  test('transforming by multiply(a, b) is transforming by b, then by a', () => {
+    const v = vec3.create(1, -1, 2);
+    const combined = vec3.transformMat4(
+      vec3.create(),
+      v,
+      mat4.multiply(mat4.create(), m, translation)
+    );
+    const stepwise = vec3.transformMat4(
+      vec3.create(),
+      vec3.transformMat4(vec3.create(), v, translation),
+      m
+    );
+    expectComponents(combined, stepwise[0], stepwise[1], stepwise[2]);
+  });
+
+  test('transforming by the inverse undoes it, translation included', () => {
+    const inverse = mat4.invert(mat4.create(), m);
+    if (!inverse) throw new Error('the test matrix is invertible');
+    const there = vec3.transformMat4(vec3.create(), vec3.create(1, -1, 2), m);
+    expectNear(vec3.transformMat4(vec3.create(), there, inverse), 1, -1, 2, 4);
+  });
+
+  test('a NaN in v or the bottom row of m spreads everywhere, elsewhere only to its row', () => {
+    const fromVector = vec3.transformMat4(vec3.create(), vec3.create(Number.NaN, -1, 2), m);
+    expect(Array.from(fromVector).every(Number.isNaN)).toBe(true);
+
+    const nanBottom = mat4.clone(translation);
+    nanBottom[3] = Number.NaN;
+    const fromBottom = vec3.transformMat4(vec3.create(), vec3.create(1, 2, 3), nanBottom);
+    expect(Array.from(fromBottom).every(Number.isNaN)).toBe(true);
+
+    const nanTop = mat4.clone(translation);
+    nanTop[12] = Number.NaN;
+    const fromTop = vec3.transformMat4(vec3.create(), vec3.create(1, 2, 3), nanTop);
+    expect(fromTop[0]).toBeNaN();
+    expect(fromTop[1]).toBe(-1);
+    expect(fromTop[2]).toBe(5);
+  });
+
+  test('never writes to either input', () => {
+    const v = vec3.create(1, 2, 3);
+    vec3.transformMat4(vec3.create(), v, translation);
+    expectComponents(v, 1, 2, 3);
+    expect(Array.from(translation)).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, -3, 2, 1]);
+  });
+
+  test('out may be the same object as v', () => {
+    const v = vec3.create(1, -1, 2);
+    vec3.transformMat4(v, v, m);
+    expectComponents(v, 15, 31, 49);
+  });
+
+  test('out may overlap v', () => {
+    for (let outOffset = 0; outOffset < 3; outOffset++) {
+      for (let vOffset = 0; vOffset < 3; vOffset++) {
+        if (outOffset === vOffset) continue;
+
+        const buffer = sequentialBuffer(6);
+        const v = viewAt(buffer, vOffset);
+        const expected = vec3.transformMat4(vec3.create(), vec3.clone(v), m);
+
+        vec3.transformMat4(viewAt(buffer, outOffset), v, m);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('out may overlap m', () => {
+    for (let outOffset = 0; outOffset < 17; outOffset++) {
+      const buffer = sequentialBuffer(19);
+      const matrix = mat4At(buffer, 0);
+      const v = vec3.create(1, -2, 0.5);
+      const expected = vec3.transformMat4(vec3.create(), v, mat4.clone(matrix));
+
+      vec3.transformMat4(viewAt(buffer, outOffset), v, matrix);
+
+      expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(5);
+    vec3.transformMat4(viewAt(pool, 1), vec3.create(7, 8, 9), mat4.IDENTITY);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 7, 8, 9, 5]);
+  });
+});
+
+describe('transformDirectionMat4', () => {
+  // Rows: [1 2 3 10; 4 5 6 20; 7 8 10 30; 0 0 0 1], a dense affine transform moving by (10, 20, 30).
+  const m = mat4.create(1, 2, 3, 10, 4, 5, 6, 20, 7, 8, 10, 30, 0, 0, 0, 1);
+  // A move by (5, -3, 2).
+  const translation = mat4.create(1, 0, 0, 5, 0, 1, 0, -3, 0, 0, 1, 2, 0, 0, 0, 1);
+
+  test('writes into out and returns it', () => {
+    const out = vec3.create();
+    expect(vec3.transformDirectionMat4(out, vec3.create(1, -1, 2), m)).toBe(out);
+  });
+
+  test('applies only the upper-left 3x3', () => {
+    expectComponents(
+      vec3.transformDirectionMat4(vec3.create(), vec3.create(1, -1, 2), m),
+      5,
+      11,
+      19
+    );
+  });
+
+  test('the identity leaves the direction exactly unchanged', () => {
+    const v = vec3.create(1.5, -2, 3);
+    expectComponents(vec3.transformDirectionMat4(vec3.create(), v, mat4.IDENTITY), 1.5, -2, 3);
+  });
+
+  test('ignores the translation, since v is a direction', () => {
+    expectComponents(
+      vec3.transformDirectionMat4(vec3.create(), vec3.create(1, 2, 3), translation),
+      1,
+      2,
+      3
+    );
+  });
+
+  test('reads nothing outside the upper-left 3x3', () => {
+    const n = Number.NaN;
+    const withJunk = mat4.create(1, 2, 3, n, 4, 5, 6, n, 7, 8, 10, n, n, n, n, n);
+    expectComponents(
+      vec3.transformDirectionMat4(vec3.create(), vec3.create(1, -1, 2), withJunk),
+      5,
+      11,
+      19
+    );
+  });
+
+  test('turns a local forward axis into a world-space facing', () => {
+    // A positive quarter turn about UP, then a move: facing FORWARD becomes facing LEFT.
+    const world = mat4.create(0, 0, 1, 5, 0, 1, 0, 6, -1, 0, 0, 7, 0, 0, 0, 1);
+    expectNear(vec3.transformDirectionMat4(vec3.create(), vec3.FORWARD, world), -1, 0, 0);
+  });
+
+  test('equals the difference of two transformed points under an affine matrix', () => {
+    const affine = mat4.multiply(mat4.create(), m, translation);
+    const v = vec3.create(1, -1, 2);
+    const tip = vec3.transformMat4(vec3.create(), v, affine);
+    const origin = vec3.transformMat4(vec3.create(), vec3.ZERO, affine);
+    const difference = vec3.sub(vec3.create(), tip, origin);
+
+    const direction = vec3.transformDirectionMat4(vec3.create(), v, affine);
+    expectComponents(direction, difference[0], difference[1], difference[2]);
+  });
+
+  test('a NaN in v makes the whole result NaN', () => {
+    const r = vec3.transformDirectionMat4(vec3.create(), vec3.create(Number.NaN, -1, 2), m);
+    expect(Array.from(r).every(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to either input', () => {
+    const v = vec3.create(1, 2, 3);
+    vec3.transformDirectionMat4(vec3.create(), v, translation);
+    expectComponents(v, 1, 2, 3);
+    expect(Array.from(translation)).toEqual([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 5, -3, 2, 1]);
+  });
+
+  test('out may be the same object as v', () => {
+    const v = vec3.create(1, -1, 2);
+    vec3.transformDirectionMat4(v, v, m);
+    expectComponents(v, 5, 11, 19);
+  });
+
+  test('out may overlap v', () => {
+    for (let outOffset = 0; outOffset < 3; outOffset++) {
+      for (let vOffset = 0; vOffset < 3; vOffset++) {
+        if (outOffset === vOffset) continue;
+
+        const buffer = sequentialBuffer(6);
+        const v = viewAt(buffer, vOffset);
+        const expected = vec3.transformDirectionMat4(vec3.create(), vec3.clone(v), m);
+
+        vec3.transformDirectionMat4(viewAt(buffer, outOffset), v, m);
+
+        expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+      }
+    }
+  });
+
+  test('out may overlap m', () => {
+    for (let outOffset = 0; outOffset < 17; outOffset++) {
+      const buffer = sequentialBuffer(19);
+      const matrix = mat4At(buffer, 0);
+      const v = vec3.create(1, -2, 0.5);
+      const expected = vec3.transformDirectionMat4(vec3.create(), v, mat4.clone(matrix));
+
+      vec3.transformDirectionMat4(viewAt(buffer, outOffset), v, matrix);
+
+      expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(5);
+    vec3.transformDirectionMat4(viewAt(pool, 1), vec3.create(7, 8, 9), mat4.IDENTITY);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 7, 8, 9, 5]);
   });

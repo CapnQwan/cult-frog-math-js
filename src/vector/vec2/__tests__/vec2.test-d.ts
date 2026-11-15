@@ -5,6 +5,8 @@ import * as vec2 from '../vec2.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Mat2, ReadonlyMat2 } from '../../../matrix/mat2/_types/mat2.js';
+import type { Mat3, ReadonlyMat3 } from '../../../matrix/mat3/_types/mat3.js';
 import type { Vec3 } from '../../vec3/_types/vec3.js';
 import type { ReadonlyVec2, Vec2 } from '../_types/vec2.js';
 
@@ -12,6 +14,10 @@ declare const live: Vec2;
 declare const frozen: ReadonlyVec2;
 declare const other: Vec3;
 declare const raw: Float32Array<ArrayBuffer>;
+declare const matrix2: Mat2;
+declare const frozenMatrix2: ReadonlyMat2;
+declare const matrix3: Mat3;
+declare const frozenMatrix3: ReadonlyMat3;
 
 /** A `Vec2` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedVec2 = Brand<FixedFloat32Array<2, SharedArrayBuffer>, BrandOf<Vec2>>;
@@ -329,5 +335,41 @@ describe('fromPacked', () => {
     vec2.fromPacked(live, ['1', '2'], 0);
     // @ts-expect-error the row index is required
     vec2.fromPacked(live, raw);
+  });
+});
+
+describe('matrix transforms', () => {
+  test('out is mutable, the inputs are readonly, and out is returned', () => {
+    expectTypeOf(vec2.transformMat2).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyMat2]>();
+    expectTypeOf(vec2.transformMat3).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyMat3]>();
+    expectTypeOf(vec2.transformDirectionMat3).parameters.toEqualTypeOf<
+      [Vec2, ReadonlyVec2, ReadonlyMat3]
+    >();
+    expectTypeOf(vec2.transformMat2).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.transformMat3).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.transformDirectionMat3).returns.toEqualTypeOf<Vec2>();
+  });
+
+  test('call sites', () => {
+    vec2.transformMat2(live, frozen, frozenMatrix2);
+    vec2.transformMat2(live, live, matrix2);
+    vec2.transformMat3(shared, vec2.ZERO, matrix3);
+    vec2.transformDirectionMat3(live, frozen, frozenMatrix3);
+    // @ts-expect-error readonly can never be an out parameter
+    vec2.transformMat2(frozen, live, matrix2);
+    // @ts-expect-error the vector comes before the matrix
+    vec2.transformMat3(live, matrix3, live);
+    // @ts-expect-error wrong-size matrix
+    vec2.transformMat2(live, live, matrix3);
+    // @ts-expect-error wrong-size matrix
+    vec2.transformMat3(live, live, matrix2);
+    // @ts-expect-error wrong-size matrix
+    vec2.transformDirectionMat3(live, live, matrix2);
+    // @ts-expect-error wrong-dimension vector
+    vec2.transformMat3(live, other, matrix3);
+    // @ts-expect-error unbranded arrays are rejected
+    vec2.transformMat3(live, live, raw);
+    // @ts-expect-error there is no w parameter; directions go through transformDirectionMat3
+    vec2.transformMat3(live, live, matrix3, 0);
   });
 });
