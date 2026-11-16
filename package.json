@@ -56,6 +56,10 @@
       "types": "./dist/matrix/mat3/index.d.ts",
       "default": "./dist/matrix/mat3/index.js"
     },
+    "./mat3x2": {
+      "types": "./dist/matrix/mat3x2/index.d.ts",
+      "default": "./dist/matrix/mat3x2/index.js"
+    },
     "./mat4": {
       "types": "./dist/matrix/mat4/index.d.ts",
       "default": "./dist/matrix/mat4/index.js"

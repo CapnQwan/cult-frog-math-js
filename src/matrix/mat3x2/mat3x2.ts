@@ -19,6 +19,11 @@
  * every `Mat3x2` is an affine transform: it can translate, rotate, scale and
  * shear, but not project.
  *
+ * Build one with `fromTranslation`, `fromRotation`, `fromScale` or `fromTRS`,
+ * and combine them with `multiply`. Apply one to a point with
+ * `Vec2.transformMat3x2`, which adds the translation, and to a direction
+ * with `Vec2.transformDirectionMat3x2`, which doesn't.
+ *
  * There is no `transpose`. The transpose of a 3x2 matrix is a 2x3 one, which
  * isn't this type, and the transpose of an affine transform isn't affine.
  *
@@ -34,6 +39,7 @@
 import { EPSILON } from '../../constants.js';
 import * as Scalars from '../../scalars.js';
 
+import type { ReadonlyVec2 } from '../../vector/vec2/_types/vec2.js';
 import type { Mat3x2, ReadonlyMat3x2 } from './_types/index.js';
 
 /** The number of elements in a `Mat3x2`. */
@@ -330,6 +336,167 @@ export function invert(out: Mat3x2, a: ReadonlyMat3x2): Mat3x2 | null {
   // -inverse(linear) * translation, with the 1 / det factored out.
   out[4] = (a01 * a12 - a11 * a02) * invDet;
   out[5] = (a10 * a02 - a00 * a12) * invDet;
+
+  return out;
+}
+
+/**
+ * Writes a translation by `v` into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than moving the one already in `out`. To translate an existing matrix,
+ * `multiply` by the result.
+ *
+ * The translation lands in the last column, at indices 4 and 5, and the
+ * linear part is the identity, so the result is exact. It moves points
+ * (`Vec2.transformMat3x2`) but leaves directions unchanged
+ * (`Vec2.transformDirectionMat3x2`). `fromTranslation` of the negated vector
+ * is its exact inverse. For a 3D translation, use `Mat4.fromTranslation`.
+ *
+ * `v` is read into locals first, so it may be a view overlapping `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param v - The translation.
+ * @returns `out`.
+ */
+export function fromTranslation(out: Mat3x2, v: ReadonlyVec2): Mat3x2 {
+  // biome-ignore format: packed component reads
+  const x = v[0], y = v[1];
+
+  out[0] = 1;
+  out[1] = 0;
+
+  out[2] = 0;
+  out[3] = 1;
+
+  out[4] = x;
+  out[5] = y;
+
+  return out;
+}
+
+/**
+ * Writes a rotation of `angle` radians about the origin into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than rotating the one already in `out`. To rotate an existing matrix,
+ * `multiply` by the result.
+ *
+ * The linear part is the rotation, as `Mat2.fromRotation` writes it, and the
+ * translation is zero. To rotate about another point, translate it to the
+ * origin, rotate, and translate back.
+ *
+ * A positive angle turns counter-clockwise in this package's y-up convention,
+ * taking `Vec2.RIGHT` towards `Vec2.UP`. In screen space, where y grows
+ * downward, the same angle looks clockwise. Negating the angle gives the
+ * inverse.
+ *
+ * Rotations are only close to exact: `Math.cos(Math.PI / 2)` is about `6e-17`
+ * rather than `0`, so even a quarter turn leaves tiny elements where the
+ * identity has zeros. Compare results with `isEqualEpsilon`.
+ *
+ * @param out - The matrix to write to.
+ * @param angle - The rotation angle in radians.
+ * @returns `out`.
+ */
+export function fromRotation(out: Mat3x2, angle: number): Mat3x2 {
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  out[0] = cos;
+  out[1] = sin;
+
+  out[2] = -sin;
+  out[3] = cos;
+
+  out[4] = 0;
+  out[5] = 0;
+
+  return out;
+}
+
+/**
+ * Writes a scale by `v` along each axis, about the origin, into `out`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than scaling the one already in `out`. To scale an existing matrix,
+ * `multiply` by the result.
+ *
+ * The scale lands on the diagonal of the linear part and the translation is
+ * zero, so the result is exact. A negative component mirrors along that axis,
+ * which makes the `determinant` negative, and a zero component flattens it,
+ * which leaves the matrix without an inverse. `fromScale` of the reciprocals
+ * is its inverse.
+ *
+ * `v` is read into locals first, so it may be a view overlapping `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param v - The scale along x and y.
+ * @returns `out`.
+ */
+export function fromScale(out: Mat3x2, v: ReadonlyVec2): Mat3x2 {
+  // biome-ignore format: packed component reads
+  const x = v[0], y = v[1];
+
+  out[0] = x;
+  out[1] = 0;
+
+  out[2] = 0;
+  out[3] = y;
+
+  out[4] = 0;
+  out[5] = 0;
+
+  return out;
+}
+
+/**
+ * Writes the transform `T * R * S` into `out`: a scale by `s`, then a
+ * rotation of `angle` radians, then a translation by `t`.
+ *
+ * That is the order a 2D scene-graph node means by its position, rotation and
+ * scale. The scale is along the object's own axes, before it is rotated, so a
+ * non-uniform scale stretches the object rather than shearing it. The result
+ * equals `multiply` of `fromTranslation(t)`, `fromRotation(angle)` and
+ * `fromScale(s)` in that order, up to rounding, but is built in one pass:
+ * each column of the rotation is scaled by the matching component of `s`.
+ *
+ * Every element of `out` is overwritten: this builds a new transform rather
+ * than adding to the one already in `out`. To apply it to an existing matrix,
+ * `multiply` by the result.
+ *
+ * The rotation follows `fromRotation`: counter-clockwise in this package's
+ * y-up convention. A zero component in `s` leaves the matrix without an
+ * inverse, and a negative one mirrors it.
+ *
+ * Bad input stays visible: a `NaN` component or angle makes the elements it
+ * reaches `NaN`.
+ *
+ * Both vectors are read into locals first, so each may be a view overlapping
+ * `out`.
+ *
+ * @param out - The matrix to write to.
+ * @param t - The translation, applied last.
+ * @param angle - The rotation angle in radians, applied second.
+ * @param s - The scale along x and y, applied first.
+ * @returns `out`.
+ */
+export function fromTRS(out: Mat3x2, t: ReadonlyVec2, angle: number, s: ReadonlyVec2): Mat3x2 {
+  // biome-ignore format: packed component reads
+  const tX = t[0], tY = t[1];
+  // biome-ignore format: packed component reads
+  const sX = s[0], sY = s[1];
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+
+  out[0] = cos * sX;
+  out[1] = sin * sX;
+
+  out[2] = -sin * sY;
+  out[3] = cos * sY;
+
+  out[4] = tX;
+  out[5] = tY;
 
   return out;
 }

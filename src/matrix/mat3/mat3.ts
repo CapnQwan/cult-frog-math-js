@@ -16,22 +16,10 @@
  * and std140 pad each column to 16 bytes. See the `Mat3` type for what that
  * means when uploading one to the GPU.
  *
- * A `Mat3` is read in one of two ways, and the functions that give it meaning
- * each use one of them:
- *
- * - **2D transform:** a 2x2 linear part, the translation in the last column
- *   and a bottom row of `0 0 1`. Built by `fromTranslation`, `fromRotation`,
- *   `fromScale` and `fromTRS`; applied by `Vec2.transformMat3` and
- *   `Vec2.transformDirectionMat3`.
- * - **3D linear transform:** all nine elements act on x, y and z, with no
- *   translation. Built by `fromQuat`; applied by `Vec3.transformMat3`.
- *
- * The type doesn't record which reading a matrix uses, so a 2D transform
- * passed to `Vec3.transformMat3` type-checks, but its translation column is
- * applied as a linear axis scaled by the vector's z rather than added. Keep
- * each matrix with functions of its own reading.
- * `multiply`, `transpose`, `determinant` and `invert` are plain matrix
- * operations and work under either.
+ * A `Mat3` is a 3D linear transform: all nine elements act on x, y and z, so
+ * it can rotate, scale, shear and mirror, but not translate. Build a rotation
+ * with `fromQuat` and apply it with `Vec3.transformMat3`. For a 2D transform
+ * with a translation, use `Mat3x2`; for a 3D one, use `Mat4`.
  *
  * Follows the package conventions: `out` first and returned, inputs are
  * read-only, and `out` may alias any input.
@@ -43,7 +31,6 @@ import { EPSILON } from '../../constants.js';
 import * as Scalars from '../../scalars.js';
 
 import type { ReadonlyQuat } from '../../quaternion/_types/quat.js';
-import type { ReadonlyVec2 } from '../../vector/vec2/_types/vec2.js';
 import type { Mat3, ReadonlyMat3 } from './_types/mat3.js';
 
 /** The number of elements in a `Mat3`. */
@@ -260,9 +247,7 @@ export function multiply(out: Mat3, a: ReadonlyMat3, b: ReadonlyMat3): Mat3 {
  * For a pure rotation, the transpose is also the inverse, and much cheaper to
  * compute. That holds only while the columns are unit length and
  * perpendicular to each other: once the matrix scales or shears, the transpose
- * no longer undoes it. When a `Mat3` holds a 2D transform with a translation
- * in its last column, the transpose moves that translation into the bottom
- * row, so it is not the inverse either.
+ * no longer undoes it.
  *
  * Row-major data viewed as a `Mat3` holds the transpose of the matrix it
  * describes, so transposing it gives that matrix in this package's
@@ -306,10 +291,6 @@ export function transpose(out: Mat3, a: ReadonlyMat3): Mat3 {
  * the triangles it transforms, so back-face culling has to flip for them. A
  * rotation gives `1`, up to rounding.
  *
- * When a `Mat3` holds a 2D transform with a translation in its last column,
- * the bottom row is `0 0 1`, so the determinant is the area scale of its
- * upper-left 2x2; translation does not affect it.
- *
  * Determinants multiply under `multiply`, so a chain of transforms mirrors
  * only if an odd number of them do. Transposing does not change the
  * determinant.
@@ -344,9 +325,7 @@ export function determinant(a: ReadonlyMat3): number {
  * `out * a` are both the identity, up to rounding.
  *
  * The inverse undoes the transform: if `a` takes coordinates from a local
- * frame into its parent, the inverse takes them back. When `a` is a 2D
- * transform with a translation in its last column, the inverse is one too,
- * with the translation undone.
+ * frame into its parent, the inverse takes them back.
  *
  * Returns `null` when `a` is singular, meaning its determinant is exactly
  * zero, as for a matrix that scales an axis to zero. A `NaN` element makes
@@ -356,9 +335,8 @@ export function determinant(a: ReadonlyMat3): number {
  *
  * The check is exact rather than within a tolerance, because a fixed
  * tolerance can't tell a small but valid matrix from a nearly singular one:
- * the determinant shrinks with the cube of a uniform 3D scale, or the square
- * of a 2D one, so a scale of `0.01` gives `1e-6` or `1e-4` and still inverts
- * cleanly. A nearly singular matrix inverts to very large elements, most of
+ * the determinant shrinks with the cube of a uniform scale, so a scale of
+ * `0.01` gives `1e-6` and still inverts cleanly. A nearly singular matrix inverts to very large elements, most of
  * whose precision has been lost to rounding. Infinite elements are not
  * caught: if they make the determinant infinite rather than `NaN`, the result
  * is zeros and `NaN` rather than an inverse.
@@ -405,192 +383,14 @@ export function invert(out: Mat3, a: ReadonlyMat3): Mat3 | null {
 }
 
 /**
- * Writes a 2D translation by `v` into `out`.
- *
- * Every element of `out` is overwritten: this builds a new transform rather
- * than moving the one already in `out`. To translate an existing matrix,
- * `multiply` by the result.
- *
- * This is the 2D affine reading of a `Mat3`, the one `Vec2.transformMat3`
- * uses: the translation lands in the last column, at indices 6 and 7, and the
- * rest is the identity, so the result is exact. It moves points
- * (`Vec2.transformMat3`) but leaves directions unchanged
- * (`Vec2.transformDirectionMat3`). `fromTranslation` of the negated vector is
- * its exact inverse. For a 3D translation, use `Mat4.fromTranslation`.
- *
- * `v` is read into locals first, so it may be a view overlapping `out`.
- *
- * @param out - The matrix to write to.
- * @param v - The translation.
- * @returns `out`.
- */
-export function fromTranslation(out: Mat3, v: ReadonlyVec2): Mat3 {
-  // biome-ignore format: packed component reads
-  const x = v[0], y = v[1];
-
-  out[0] = 1;
-  out[1] = 0;
-  out[2] = 0;
-
-  out[3] = 0;
-  out[4] = 1;
-  out[5] = 0;
-
-  out[6] = x;
-  out[7] = y;
-  out[8] = 1;
-
-  return out;
-}
-
-/**
- * Writes a 2D rotation of `angle` radians into `out`.
- *
- * Every element of `out` is overwritten: this builds a new transform rather
- * than rotating the one already in `out`. To rotate an existing matrix,
- * `multiply` by the result.
- *
- * This is the 2D affine reading of a `Mat3`: the upper-left 2x2 is the
- * rotation, as `Mat2.fromRotation` writes it, and the last row and column are
- * those of the identity. A 3D rotation is a different matrix; build it with
- * `fromQuat`.
- *
- * A positive angle turns counter-clockwise in this package's y-up convention,
- * taking `Vec2.RIGHT` towards `Vec2.UP`. In screen space, where y grows
- * downward, the same angle looks clockwise. Negating the angle gives the
- * inverse, which is also the `transpose`.
- *
- * Rotations are only close to exact: `Math.cos(Math.PI / 2)` is about `6e-17`
- * rather than `0`, so even a quarter turn leaves tiny elements where the
- * identity has zeros. Compare results with `isEqualEpsilon`.
- *
- * @param out - The matrix to write to.
- * @param angle - The rotation angle in radians.
- * @returns `out`.
- */
-export function fromRotation(out: Mat3, angle: number): Mat3 {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-
-  out[0] = cos;
-  out[1] = sin;
-  out[2] = 0;
-
-  out[3] = -sin;
-  out[4] = cos;
-  out[5] = 0;
-
-  out[6] = 0;
-  out[7] = 0;
-  out[8] = 1;
-
-  return out;
-}
-
-/**
- * Writes a 2D scale by `v` along each axis into `out`.
- *
- * Every element of `out` is overwritten: this builds a new transform rather
- * than scaling the one already in `out`. To scale an existing matrix,
- * `multiply` by the result.
- *
- * This is the 2D affine reading of a `Mat3`: x and y are scaled and the last
- * row and column are those of the identity, so the result is exact. For a 3D
- * scale, use `Mat4.fromScale`. A negative component mirrors along that axis,
- * which makes the `determinant` negative, and a zero component flattens it,
- * which leaves the matrix without an inverse. `fromScale` of the reciprocals
- * is its inverse.
- *
- * `v` is read into locals first, so it may be a view overlapping `out`.
- *
- * @param out - The matrix to write to.
- * @param v - The scale along x and y.
- * @returns `out`.
- */
-export function fromScale(out: Mat3, v: ReadonlyVec2): Mat3 {
-  // biome-ignore format: packed component reads
-  const x = v[0], y = v[1];
-
-  out[0] = x;
-  out[1] = 0;
-  out[2] = 0;
-
-  out[3] = 0;
-  out[4] = y;
-  out[5] = 0;
-
-  out[6] = 0;
-  out[7] = 0;
-  out[8] = 1;
-
-  return out;
-}
-
-/**
- * Writes the 2D transform `T * R * S` into `out`: a scale by `s`, then a
- * rotation of `angle` radians, then a translation by `t`.
- *
- * That is the order a 2D scene-graph node means by its position, rotation and
- * scale. The scale is along the object's own axes, before it is rotated, so a
- * non-uniform scale stretches the object rather than shearing it. The result
- * equals `multiply` of `fromTranslation(t)`, `fromRotation(angle)` and
- * `fromScale(s)` in that order, up to rounding, but is built in one pass:
- * each column of the rotation is scaled by the matching component of `s`.
- *
- * Every element of `out` is overwritten: this builds a new transform rather
- * than adding to the one already in `out`. To apply it to an existing matrix,
- * `multiply` by the result.
- *
- * The rotation follows `fromRotation`: counter-clockwise in this package's
- * y-up convention. A zero component in `s` leaves the matrix without an
- * inverse, and a negative one mirrors it.
- *
- * Bad input stays visible: a `NaN` component or angle makes the elements it
- * reaches `NaN`.
- *
- * Both vectors are read into locals first, so each may be a view overlapping
- * `out`.
- *
- * @param out - The matrix to write to.
- * @param t - The translation, applied last.
- * @param angle - The rotation angle in radians, applied second.
- * @param s - The scale along x and y, applied first.
- * @returns `out`.
- */
-export function fromTRS(out: Mat3, t: ReadonlyVec2, angle: number, s: ReadonlyVec2): Mat3 {
-  // biome-ignore format: packed component reads
-  const tX = t[0], tY = t[1];
-  // biome-ignore format: packed component reads
-  const sX = s[0], sY = s[1];
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-
-  out[0] = cos * sX;
-  out[1] = sin * sX;
-  out[2] = 0;
-
-  out[3] = -sin * sY;
-  out[4] = cos * sY;
-  out[5] = 0;
-
-  out[6] = tX;
-  out[7] = tY;
-  out[8] = 1;
-
-  return out;
-}
-
-/**
  * Writes the 3D rotation described by the quaternion `q` into `out`.
  *
  * Every element of `out` is overwritten: this builds a new transform rather
  * than rotating the one already in `out`. To rotate an existing matrix,
  * `multiply` by the result.
  *
- * This is the 3D rotation-only reading of a `Mat3`, the one
- * `Vec3.transformMat3` uses, not the 2D affine one that `fromTranslation`,
- * `fromRotation` and `fromScale` build. The result is the upper-left 3x3 of
- * `Mat4.fromQuat`, element for element, so transforming by it matches
+ * The result is the upper-left 3x3 of `Mat4.fromQuat`, element for element,
+ * and has no translation, as no `Mat3` does. Transforming by it matches
  * `Vec3.transformQuat` with the same `q`, up to rounding. `fromQuat` of
  * `Quat.multiply(tmp, a, b)` equals the `multiply` of `fromQuat(a)` and
  * `fromQuat(b)`, applying `b` first. `q` and `-q` give exactly the same

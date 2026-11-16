@@ -5,6 +5,9 @@ import * as mat3x2 from '../mat3x2.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
+import type { Quat } from '../../../quaternion/_types/quat.js';
+import type { ReadonlyVec2, Vec2 } from '../../../vector/vec2/_types/vec2.js';
+import type { Vec3 } from '../../../vector/vec3/_types/vec3.js';
 import type { Mat2 } from '../../mat2/_types/mat2.js';
 import type { Mat3, ReadonlyMat3 } from '../../mat3/_types/mat3.js';
 import type { Mat3x2, ReadonlyMat3x2 } from '../_types/mat3x2.js';
@@ -15,6 +18,10 @@ declare const square: Mat3;
 declare const frozenSquare: ReadonlyMat3;
 declare const other: Mat2;
 declare const raw: Float32Array<ArrayBuffer>;
+declare const vector: Vec2;
+declare const frozenVector: ReadonlyVec2;
+declare const three: Vec3;
+declare const rotation: Quat;
 
 /** A `Mat3x2` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedMat3x2 = Brand<FixedFloat32Array<6, SharedArrayBuffer>, BrandOf<Mat3x2>>;
@@ -219,5 +226,43 @@ describe('invert', () => {
     mat3x2.invert(live, frozenSquare);
     // @ts-expect-error unbranded arrays are rejected
     mat3x2.invert(live, raw);
+  });
+});
+
+describe('builders', () => {
+  test('out is mutable, the inputs are readonly, and out is returned', () => {
+    expectTypeOf(mat3x2.fromTranslation).parameters.toEqualTypeOf<[Mat3x2, ReadonlyVec2]>();
+    expectTypeOf(mat3x2.fromRotation).parameters.toEqualTypeOf<[Mat3x2, number]>();
+    expectTypeOf(mat3x2.fromScale).parameters.toEqualTypeOf<[Mat3x2, ReadonlyVec2]>();
+    expectTypeOf(mat3x2.fromTRS).parameters.toEqualTypeOf<
+      [Mat3x2, ReadonlyVec2, number, ReadonlyVec2]
+    >();
+    expectTypeOf(mat3x2.fromTranslation).returns.toEqualTypeOf<Mat3x2>();
+    expectTypeOf(mat3x2.fromRotation).returns.toEqualTypeOf<Mat3x2>();
+    expectTypeOf(mat3x2.fromScale).returns.toEqualTypeOf<Mat3x2>();
+    expectTypeOf(mat3x2.fromTRS).returns.toEqualTypeOf<Mat3x2>();
+  });
+
+  test('call sites', () => {
+    mat3x2.fromTranslation(live, frozenVector);
+    mat3x2.fromRotation(shared, 0.5);
+    mat3x2.fromScale(live, vector);
+    mat3x2.fromTRS(live, vector, 0.5, frozenVector);
+    // @ts-expect-error readonly can never be an out parameter
+    mat3x2.fromTranslation(frozen, vector);
+    // @ts-expect-error the shared constant must never be written through
+    mat3x2.fromRotation(mat3x2.IDENTITY, 0.5);
+    // @ts-expect-error a Mat3 is not a 2D affine transform
+    mat3x2.fromScale(square, vector);
+    // @ts-expect-error the builders take a Vec2, not a Vec3
+    mat3x2.fromTranslation(live, three);
+    // @ts-expect-error the builders take a Vec2, not a Vec3
+    mat3x2.fromScale(live, three);
+    // @ts-expect-error the rotation takes an angle, not a quaternion
+    mat3x2.fromRotation(live, rotation);
+    // @ts-expect-error the angle comes between the translation and the scale
+    mat3x2.fromTRS(live, vector, vector, 0.5);
+    // @ts-expect-error unbranded arrays are rejected
+    mat3x2.fromScale(live, raw);
   });
 });

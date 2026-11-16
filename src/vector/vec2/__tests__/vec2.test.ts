@@ -2,12 +2,12 @@
 import { describe, expect, test } from 'vitest';
 
 import * as mat2 from '../../../matrix/mat2/mat2.js';
-import * as mat3 from '../../../matrix/mat3/mat3.js';
+import * as mat3x2 from '../../../matrix/mat3x2/mat3x2.js';
 import { clamp } from '../../../scalars.js';
 import * as vec2 from '../vec2.js';
 
 import type { Mat2 } from '../../../matrix/mat2/_types/mat2.js';
-import type { Mat3 } from '../../../matrix/mat3/_types/mat3.js';
+import type { Mat3x2 } from '../../../matrix/mat3x2/_types/mat3x2.js';
 import type { ReadonlyVec2, Vec2 } from '../_types/vec2.js';
 
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
@@ -47,9 +47,9 @@ function mat2At(buffer: ArrayBuffer, index: number): Mat2 {
   return new Float32Array(buffer, index * FLOAT_BYTES, 4) as Mat2;
 }
 
-/** Test-only cast site: a Mat3 view over element `index` of a shared buffer. */
-function mat3At(buffer: ArrayBuffer, index: number): Mat3 {
-  return new Float32Array(buffer, index * FLOAT_BYTES, 9) as Mat3;
+/** Test-only cast site: a Mat3x2 view over element `index` of a shared buffer. */
+function mat3x2At(buffer: ArrayBuffer, index: number): Mat3x2 {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 6) as Mat3x2;
 }
 
 describe('create', () => {
@@ -2514,92 +2514,75 @@ describe('transformMat2', () => {
   });
 });
 
-describe('transformMat3', () => {
-  // Rows: [0 -1 5; 1 0 -3; 0 0 1], a quarter turn counter-clockwise, then a move by (5, -3).
-  const m = mat3.create(0, -1, 5, 1, 0, -3, 0, 0, 1);
-  // Rows: [2 0 1; 0 3 -1; 0 0 1], a non-uniform scale, then a move by (1, -1).
-  const scaleThenMove = mat3.create(2, 0, 1, 0, 3, -1, 0, 0, 1);
-  // Rows: [1 0 0; 0 1 0; 1 0 1], a projective matrix: the output w is x + 1.
-  const projective = mat3.create(1, 0, 0, 0, 1, 0, 1, 0, 1);
+describe('transformMat3x2', () => {
+  // Rows: [0 -1 5; 1 0 -3], a quarter turn counter-clockwise, then a move by (5, -3).
+  const m = mat3x2.create(0, -1, 5, 1, 0, -3);
+  // Rows: [2 0 1; 0 3 -1], a non-uniform scale, then a move by (1, -1).
+  const scaleThenMove = mat3x2.create(2, 0, 1, 0, 3, -1);
 
   test('writes into out and returns it', () => {
     const out = vec2.create();
-    expect(vec2.transformMat3(out, vec2.create(2, 4), m)).toBe(out);
+    expect(vec2.transformMat3x2(out, vec2.create(2, 4), m)).toBe(out);
   });
 
   test('the identity leaves the point exactly unchanged', () => {
     const v = vec2.create(1.5, -2);
-    expectComponents(vec2.transformMat3(vec2.create(), v, mat3.IDENTITY), 1.5, -2);
+    expectComponents(vec2.transformMat3x2(vec2.create(), v, mat3x2.IDENTITY), 1.5, -2);
   });
 
   test('the translation applies, since v is a point', () => {
-    const translation = mat3.create(1, 0, 5, 0, 1, -3, 0, 0, 1);
-    expectComponents(vec2.transformMat3(vec2.create(), vec2.create(2, 4), translation), 7, 1);
+    const translation = mat3x2.create(1, 0, 5, 0, 1, -3);
+    expectComponents(vec2.transformMat3x2(vec2.create(), vec2.create(2, 4), translation), 7, 1);
   });
 
   test('rotates, then translates', () => {
-    expectComponents(vec2.transformMat3(vec2.create(), vec2.create(2, 4), m), 1, -1);
-  });
-
-  test('a uniform homogeneous scale cancels in the divide by w', () => {
-    const doubled = mat3.create(2, 0, 0, 0, 2, 0, 0, 0, 2);
-    expectComponents(vec2.transformMat3(vec2.create(), vec2.create(2, 4), doubled), 2, 4);
-  });
-
-  test('divides by the w the product produces', () => {
-    expectComponents(vec2.transformMat3(vec2.create(), vec2.create(1, 2), projective), 0.5, 1);
-    expectComponents(vec2.transformMat3(vec2.create(), vec2.create(3, 2), projective), 0.75, 0.5);
-  });
-
-  test('a point that lands at w = 0 is not guarded against', () => {
-    const r = vec2.transformMat3(vec2.create(), vec2.create(-1, 2), projective);
-    expect(Number.isFinite(r[0])).toBe(false);
-    expect(Number.isFinite(r[1])).toBe(false);
+    expectComponents(vec2.transformMat3x2(vec2.create(), vec2.create(2, 4), m), 1, -1);
   });
 
   test('transforming by multiply(a, b) is transforming by b, then by a', () => {
     const v = vec2.create(2, 4);
-    const product = mat3.multiply(mat3.create(), m, scaleThenMove);
-    const combined = vec2.transformMat3(vec2.create(), v, product);
-    const stepwise = vec2.transformMat3(
+    const product = mat3x2.multiply(mat3x2.create(), m, scaleThenMove);
+    const combined = vec2.transformMat3x2(vec2.create(), v, product);
+    const stepwise = vec2.transformMat3x2(
       vec2.create(),
-      vec2.transformMat3(vec2.create(), v, scaleThenMove),
+      vec2.transformMat3x2(vec2.create(), v, scaleThenMove),
       m
     );
     expectComponents(combined, stepwise[0], stepwise[1]);
   });
 
   test('transforming by the inverse undoes it, translation included', () => {
-    const inverse = mat3.invert(mat3.create(), m);
+    const inverse = mat3x2.invert(mat3x2.create(), m);
     if (!inverse) throw new Error('the test matrix is invertible');
-    const there = vec2.transformMat3(vec2.create(), vec2.create(2, 4), m);
-    expectNear(vec2.transformMat3(vec2.create(), there, inverse), 2, 4);
+    const there = vec2.transformMat3x2(vec2.create(), vec2.create(2, 4), m);
+    expectNear(vec2.transformMat3x2(vec2.create(), there, inverse), 2, 4);
   });
 
-  test('a NaN in v or the bottom row of m spreads everywhere, elsewhere only to its row', () => {
-    const fromVector = vec2.transformMat3(vec2.create(), vec2.create(Number.NaN, 4), m);
+  test('a NaN in v spreads everywhere, a NaN in m only to its row', () => {
+    const fromVector = vec2.transformMat3x2(vec2.create(), vec2.create(Number.NaN, 4), m);
     expect(Array.from(fromVector).every(Number.isNaN)).toBe(true);
 
-    const nanBottom = mat3.create(1, 0, 0, 0, 1, 0, Number.NaN, 0, 1);
-    const fromBottom = vec2.transformMat3(vec2.create(), vec2.create(2, 4), nanBottom);
-    expect(Array.from(fromBottom).every(Number.isNaN)).toBe(true);
+    const nanLinear = mat3x2.create(1, Number.NaN, 0, 0, 1, 0);
+    const fromLinear = vec2.transformMat3x2(vec2.create(), vec2.create(2, 4), nanLinear);
+    expect(fromLinear[0]).toBeNaN();
+    expect(fromLinear[1]).toBe(4);
 
-    const nanTop = mat3.create(1, Number.NaN, 0, 0, 1, 0, 0, 0, 1);
-    const fromTop = vec2.transformMat3(vec2.create(), vec2.create(2, 4), nanTop);
-    expect(fromTop[0]).toBeNaN();
-    expect(fromTop[1]).toBe(4);
+    const nanTranslation = mat3x2.create(1, 0, Number.NaN, 0, 1, 0);
+    const fromTranslation = vec2.transformMat3x2(vec2.create(), vec2.create(2, 4), nanTranslation);
+    expect(fromTranslation[0]).toBeNaN();
+    expect(fromTranslation[1]).toBe(4);
   });
 
   test('never writes to either input', () => {
     const v = vec2.create(2, 4);
-    vec2.transformMat3(vec2.create(), v, m);
+    vec2.transformMat3x2(vec2.create(), v, m);
     expectComponents(v, 2, 4);
-    expect(Array.from(m)).toEqual([0, 1, 0, -1, 0, 0, 5, -3, 1]);
+    expect(Array.from(m)).toEqual([0, 1, -1, 0, 5, -3]);
   });
 
   test('out may be the same object as v', () => {
     const v = vec2.create(2, 4);
-    vec2.transformMat3(v, v, m);
+    vec2.transformMat3x2(v, v, m);
     expectComponents(v, 1, -1);
   });
 
@@ -2607,22 +2590,22 @@ describe('transformMat3', () => {
     for (let outOffset = 0; outOffset < 2; outOffset++) {
       const buffer = sequentialBuffer(3);
       const v = viewAt(buffer, 1 - outOffset);
-      const expected = vec2.transformMat3(vec2.create(), vec2.clone(v), m);
+      const expected = vec2.transformMat3x2(vec2.create(), vec2.clone(v), m);
 
-      vec2.transformMat3(viewAt(buffer, outOffset), v, m);
+      vec2.transformMat3x2(viewAt(buffer, outOffset), v, m);
 
       expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
     }
   });
 
   test('out may overlap m', () => {
-    for (let outOffset = 0; outOffset < 10; outOffset++) {
-      const buffer = sequentialBuffer(11);
-      const matrix = mat3At(buffer, 0);
+    for (let outOffset = 0; outOffset < 7; outOffset++) {
+      const buffer = sequentialBuffer(8);
+      const matrix = mat3x2At(buffer, 0);
       const v = vec2.create(1, 2);
-      const expected = vec2.transformMat3(vec2.create(), v, mat3.clone(matrix));
+      const expected = vec2.transformMat3x2(vec2.create(), v, mat3x2.clone(matrix));
 
-      vec2.transformMat3(viewAt(buffer, outOffset), v, matrix);
+      vec2.transformMat3x2(viewAt(buffer, outOffset), v, matrix);
 
       expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
     }
@@ -2630,81 +2613,81 @@ describe('transformMat3', () => {
 
   test('writes only its own slots when out is a pooled view', () => {
     const pool = sequentialBuffer(4);
-    vec2.transformMat3(viewAt(pool, 1), vec2.create(7, 8), mat3.IDENTITY);
+    vec2.transformMat3x2(viewAt(pool, 1), vec2.create(7, 8), mat3x2.IDENTITY);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 7, 8, 4]);
   });
 });
 
-describe('transformDirectionMat3', () => {
-  // Rows: [0 -1 5; 1 0 -3; 0 0 1], a quarter turn counter-clockwise, then a move by (5, -3).
-  const m = mat3.create(0, -1, 5, 1, 0, -3, 0, 0, 1);
+// biome-ignore lint/security/noSecrets: a function name, not a secret
+describe('transformDirectionMat3x2', () => {
+  // Rows: [0 -1 5; 1 0 -3], a quarter turn counter-clockwise, then a move by (5, -3).
+  const m = mat3x2.create(0, -1, 5, 1, 0, -3);
 
   test('writes into out and returns it', () => {
     const out = vec2.create();
-    expect(vec2.transformDirectionMat3(out, vec2.create(2, 4), m)).toBe(out);
+    expect(vec2.transformDirectionMat3x2(out, vec2.create(2, 4), m)).toBe(out);
   });
 
   test('the identity leaves the direction exactly unchanged', () => {
     const v = vec2.create(1.5, -2);
-    expectComponents(vec2.transformDirectionMat3(vec2.create(), v, mat3.IDENTITY), 1.5, -2);
+    expectComponents(vec2.transformDirectionMat3x2(vec2.create(), v, mat3x2.IDENTITY), 1.5, -2);
   });
 
   test('ignores the translation, since v is a direction', () => {
-    const translation = mat3.create(1, 0, 5, 0, 1, -3, 0, 0, 1);
+    const translation = mat3x2.create(1, 0, 5, 0, 1, -3);
     expectComponents(
-      vec2.transformDirectionMat3(vec2.create(), vec2.create(2, 4), translation),
+      vec2.transformDirectionMat3x2(vec2.create(), vec2.create(2, 4), translation),
       2,
       4
     );
   });
 
   test('applies the rotation', () => {
-    expectComponents(vec2.transformDirectionMat3(vec2.create(), vec2.create(2, 4), m), -4, 2);
+    expectComponents(vec2.transformDirectionMat3x2(vec2.create(), vec2.create(2, 4), m), -4, 2);
   });
 
-  test('reads only the upper-left 2x2', () => {
-    const n = Number.NaN;
-    const scaleWithJunk = mat3.create(2, 0, n, 0, 3, n, n, n, n);
+  test('reads only the linear part', () => {
+    const scaleWithJunk = mat3x2.create(2, 0, Number.NaN, 0, 3, Number.NaN);
     expectComponents(
-      vec2.transformDirectionMat3(vec2.create(), vec2.create(2, 4), scaleWithJunk),
+      vec2.transformDirectionMat3x2(vec2.create(), vec2.create(2, 4), scaleWithJunk),
       4,
       12
     );
   });
 
-  test('equals the difference of two transformed points under an affine matrix', () => {
-    const affine = mat3.multiply(mat3.create(), m, mat3.create(2, 0, 1, 0, 3, -1, 0, 0, 1));
+  test('equals the difference of two transformed points', () => {
+    const affine = mat3x2.multiply(mat3x2.create(), m, mat3x2.create(2, 0, 1, 0, 3, -1));
     const v = vec2.create(2, 4);
-    const tip = vec2.transformMat3(vec2.create(), v, affine);
-    const origin = vec2.transformMat3(vec2.create(), vec2.ZERO, affine);
+    const tip = vec2.transformMat3x2(vec2.create(), v, affine);
+    const origin = vec2.transformMat3x2(vec2.create(), vec2.ZERO, affine);
     const difference = vec2.sub(vec2.create(), tip, origin);
 
-    const direction = vec2.transformDirectionMat3(vec2.create(), v, affine);
+    const direction = vec2.transformDirectionMat3x2(vec2.create(), v, affine);
     expectComponents(direction, difference[0], difference[1]);
   });
 
   test('does not preserve length under a scale', () => {
-    const tripled = mat3.create(3, 0, 0, 0, 3, 0, 0, 0, 1);
-    const r = vec2.transformDirectionMat3(vec2.create(), vec2.create(1, 0), tripled);
+    const tripled = mat3x2.create(3, 0, 0, 0, 3, 0);
+    const r = vec2.transformDirectionMat3x2(vec2.create(), vec2.create(1, 0), tripled);
     expect(vec2.magnitude(r)).toBe(3);
   });
 
   test('a NaN in v makes the whole result NaN', () => {
-    const r = vec2.transformDirectionMat3(vec2.create(), vec2.create(Number.NaN, 4), m);
+    const r = vec2.transformDirectionMat3x2(vec2.create(), vec2.create(Number.NaN, 4), m);
     expect(Array.from(r).every(Number.isNaN)).toBe(true);
   });
 
   test('never writes to either input', () => {
     const v = vec2.create(2, 4);
-    vec2.transformDirectionMat3(vec2.create(), v, m);
+    vec2.transformDirectionMat3x2(vec2.create(), v, m);
     expectComponents(v, 2, 4);
-    expect(Array.from(m)).toEqual([0, 1, 0, -1, 0, 0, 5, -3, 1]);
+    expect(Array.from(m)).toEqual([0, 1, -1, 0, 5, -3]);
   });
 
   test('out may be the same object as v', () => {
     const v = vec2.create(2, 4);
-    vec2.transformDirectionMat3(v, v, m);
+    vec2.transformDirectionMat3x2(v, v, m);
     expectComponents(v, -4, 2);
   });
 
@@ -2712,22 +2695,22 @@ describe('transformDirectionMat3', () => {
     for (let outOffset = 0; outOffset < 2; outOffset++) {
       const buffer = sequentialBuffer(3);
       const v = viewAt(buffer, 1 - outOffset);
-      const expected = vec2.transformDirectionMat3(vec2.create(), vec2.clone(v), m);
+      const expected = vec2.transformDirectionMat3x2(vec2.create(), vec2.clone(v), m);
 
-      vec2.transformDirectionMat3(viewAt(buffer, outOffset), v, m);
+      vec2.transformDirectionMat3x2(viewAt(buffer, outOffset), v, m);
 
       expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
     }
   });
 
   test('out may overlap m', () => {
-    for (let outOffset = 0; outOffset < 10; outOffset++) {
-      const buffer = sequentialBuffer(11);
-      const matrix = mat3At(buffer, 0);
+    for (let outOffset = 0; outOffset < 7; outOffset++) {
+      const buffer = sequentialBuffer(8);
+      const matrix = mat3x2At(buffer, 0);
       const v = vec2.create(1, -2);
-      const expected = vec2.transformDirectionMat3(vec2.create(), v, mat3.clone(matrix));
+      const expected = vec2.transformDirectionMat3x2(vec2.create(), v, mat3x2.clone(matrix));
 
-      vec2.transformDirectionMat3(viewAt(buffer, outOffset), v, matrix);
+      vec2.transformDirectionMat3x2(viewAt(buffer, outOffset), v, matrix);
 
       expect(Array.from(viewAt(buffer, outOffset))).toEqual(Array.from(expected));
     }
@@ -2735,7 +2718,7 @@ describe('transformDirectionMat3', () => {
 
   test('writes only its own slots when out is a pooled view', () => {
     const pool = sequentialBuffer(4);
-    vec2.transformDirectionMat3(viewAt(pool, 1), vec2.create(7, 8), mat3.IDENTITY);
+    vec2.transformDirectionMat3x2(viewAt(pool, 1), vec2.create(7, 8), mat3x2.IDENTITY);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 7, 8, 4]);
   });

@@ -6,7 +6,8 @@ import * as vec2 from '../vec2.js';
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
 import type { Mat2, ReadonlyMat2 } from '../../../matrix/mat2/_types/mat2.js';
-import type { Mat3, ReadonlyMat3 } from '../../../matrix/mat3/_types/mat3.js';
+import type { Mat3 } from '../../../matrix/mat3/_types/mat3.js';
+import type { Mat3x2, ReadonlyMat3x2 } from '../../../matrix/mat3x2/_types/mat3x2.js';
 import type { Vec3 } from '../../vec3/_types/vec3.js';
 import type { ReadonlyVec2, Vec2 } from '../_types/vec2.js';
 
@@ -17,7 +18,8 @@ declare const raw: Float32Array<ArrayBuffer>;
 declare const matrix2: Mat2;
 declare const frozenMatrix2: ReadonlyMat2;
 declare const matrix3: Mat3;
-declare const frozenMatrix3: ReadonlyMat3;
+declare const affine: Mat3x2;
+declare const frozenAffine: ReadonlyMat3x2;
 
 /** A `Vec2` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedVec2 = Brand<FixedFloat32Array<2, SharedArrayBuffer>, BrandOf<Vec2>>;
@@ -341,35 +343,39 @@ describe('fromPacked', () => {
 describe('matrix transforms', () => {
   test('out is mutable, the inputs are readonly, and out is returned', () => {
     expectTypeOf(vec2.transformMat2).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyMat2]>();
-    expectTypeOf(vec2.transformMat3).parameters.toEqualTypeOf<[Vec2, ReadonlyVec2, ReadonlyMat3]>();
-    expectTypeOf(vec2.transformDirectionMat3).parameters.toEqualTypeOf<
-      [Vec2, ReadonlyVec2, ReadonlyMat3]
+    expectTypeOf(vec2.transformMat3x2).parameters.toEqualTypeOf<
+      [Vec2, ReadonlyVec2, ReadonlyMat3x2]
+    >();
+    expectTypeOf(vec2.transformDirectionMat3x2).parameters.toEqualTypeOf<
+      [Vec2, ReadonlyVec2, ReadonlyMat3x2]
     >();
     expectTypeOf(vec2.transformMat2).returns.toEqualTypeOf<Vec2>();
-    expectTypeOf(vec2.transformMat3).returns.toEqualTypeOf<Vec2>();
-    expectTypeOf(vec2.transformDirectionMat3).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.transformMat3x2).returns.toEqualTypeOf<Vec2>();
+    expectTypeOf(vec2.transformDirectionMat3x2).returns.toEqualTypeOf<Vec2>();
   });
 
   test('call sites', () => {
     vec2.transformMat2(live, frozen, frozenMatrix2);
     vec2.transformMat2(live, live, matrix2);
-    vec2.transformMat3(shared, vec2.ZERO, matrix3);
-    vec2.transformDirectionMat3(live, frozen, frozenMatrix3);
+    vec2.transformMat3x2(shared, vec2.ZERO, affine);
+    vec2.transformDirectionMat3x2(live, frozen, frozenAffine);
     // @ts-expect-error readonly can never be an out parameter
     vec2.transformMat2(frozen, live, matrix2);
     // @ts-expect-error the vector comes before the matrix
-    vec2.transformMat3(live, matrix3, live);
+    vec2.transformMat3x2(live, affine, live);
     // @ts-expect-error wrong-size matrix
-    vec2.transformMat2(live, live, matrix3);
+    vec2.transformMat2(live, live, affine);
+    // @ts-expect-error a Mat3 is not a 2D affine transform
+    vec2.transformMat3x2(live, live, matrix3);
+    // @ts-expect-error a Mat3 is not a 2D affine transform
+    vec2.transformDirectionMat3x2(live, live, matrix3);
     // @ts-expect-error wrong-size matrix
-    vec2.transformMat3(live, live, matrix2);
-    // @ts-expect-error wrong-size matrix
-    vec2.transformDirectionMat3(live, live, matrix2);
+    vec2.transformMat3x2(live, live, matrix2);
     // @ts-expect-error wrong-dimension vector
-    vec2.transformMat3(live, other, matrix3);
+    vec2.transformMat3x2(live, other, affine);
     // @ts-expect-error unbranded arrays are rejected
-    vec2.transformMat3(live, live, raw);
-    // @ts-expect-error there is no w parameter; directions go through transformDirectionMat3
-    vec2.transformMat3(live, live, matrix3, 0);
+    vec2.transformMat3x2(live, live, raw);
+    // @ts-expect-error there is no w parameter; directions go through transformDirectionMat3x2
+    vec2.transformMat3x2(live, live, affine, 0);
   });
 });

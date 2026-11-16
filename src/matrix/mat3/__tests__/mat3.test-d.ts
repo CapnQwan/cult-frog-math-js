@@ -6,8 +6,7 @@ import * as mat3 from '../mat3.js';
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../../_types/fixedFloat32Array.js';
 import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
-import type { ReadonlyVec2, Vec2 } from '../../../vector/vec2/_types/vec2.js';
-import type { Vec3 } from '../../../vector/vec3/_types/vec3.js';
+import type { Vec2 } from '../../../vector/vec2/_types/vec2.js';
 import type { Vec4 } from '../../../vector/vec4/_types/vec4.js';
 import type { Mat2 } from '../../mat2/_types/mat2.js';
 import type { Mat3, ReadonlyMat3 } from '../_types/mat3.js';
@@ -17,8 +16,6 @@ declare const frozen: ReadonlyMat3;
 declare const other: Mat2;
 declare const raw: Float32Array<ArrayBuffer>;
 declare const vector: Vec2;
-declare const frozenVector: ReadonlyVec2;
-declare const three: Vec3;
 declare const four: Vec4;
 declare const rotation: Quat;
 declare const frozenRotation: ReadonlyQuat;
@@ -238,45 +235,30 @@ describe('invert', () => {
 });
 
 describe('builders', () => {
-  test('out is mutable, the inputs are readonly, and out is returned', () => {
-    expectTypeOf(mat3.fromTranslation).parameters.toEqualTypeOf<[Mat3, ReadonlyVec2]>();
-    expectTypeOf(mat3.fromRotation).parameters.toEqualTypeOf<[Mat3, number]>();
-    expectTypeOf(mat3.fromScale).parameters.toEqualTypeOf<[Mat3, ReadonlyVec2]>();
-    expectTypeOf(mat3.fromTRS).parameters.toEqualTypeOf<
-      [Mat3, ReadonlyVec2, number, ReadonlyVec2]
-    >();
+  test('out is mutable, the input is readonly, and out is returned', () => {
     expectTypeOf(mat3.fromQuat).parameters.toEqualTypeOf<[Mat3, ReadonlyQuat]>();
-    expectTypeOf(mat3.fromTranslation).returns.toEqualTypeOf<Mat3>();
-    expectTypeOf(mat3.fromRotation).returns.toEqualTypeOf<Mat3>();
-    expectTypeOf(mat3.fromScale).returns.toEqualTypeOf<Mat3>();
-    expectTypeOf(mat3.fromTRS).returns.toEqualTypeOf<Mat3>();
     expectTypeOf(mat3.fromQuat).returns.toEqualTypeOf<Mat3>();
   });
 
   test('call sites', () => {
-    mat3.fromTranslation(live, frozenVector);
-    mat3.fromRotation(shared, 0.5);
-    mat3.fromScale(live, vector);
-    mat3.fromTRS(live, vector, 0.5, frozenVector);
     mat3.fromQuat(live, frozenRotation);
-    mat3.fromQuat(live, rotation);
+    mat3.fromQuat(shared, rotation);
     // @ts-expect-error readonly can never be an out parameter
-    mat3.fromTranslation(frozen, vector);
+    mat3.fromQuat(frozen, rotation);
     // @ts-expect-error the shared constant must never be written through
-    mat3.fromRotation(mat3.IDENTITY, 0.5);
+    mat3.fromQuat(mat3.IDENTITY, rotation);
     // @ts-expect-error wrong-dimension out
-    mat3.fromScale(other, vector);
-    // @ts-expect-error the 2D builders take a Vec2, not a Vec3
-    mat3.fromTranslation(live, three);
-    // @ts-expect-error the 2D builders take a Vec2, not a Vec3
-    mat3.fromScale(live, three);
-    // @ts-expect-error the 2D rotation takes an angle, not a quaternion
-    mat3.fromRotation(live, rotation);
-    // @ts-expect-error the angle comes between the translation and the scale
-    mat3.fromTRS(live, vector, vector, 0.5);
+    mat3.fromQuat(other, rotation);
     // @ts-expect-error a vector is not a quaternion
     mat3.fromQuat(live, four);
     // @ts-expect-error unbranded arrays are rejected
-    mat3.fromScale(live, raw);
+    mat3.fromQuat(live, raw);
+  });
+
+  test('the 2D builders live on Mat3x2', () => {
+    // @ts-expect-error 2D transforms with a translation are Mat3x2s
+    mat3.fromTranslation(live, vector);
+    // @ts-expect-error 2D transforms with a translation are Mat3x2s
+    mat3.fromTRS(live, vector, 0.5, vector);
   });
 });
