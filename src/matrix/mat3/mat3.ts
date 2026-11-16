@@ -16,6 +16,23 @@
  * and std140 pad each column to 16 bytes. See the `Mat3` type for what that
  * means when uploading one to the GPU.
  *
+ * A `Mat3` is read in one of two ways, and the functions that give it meaning
+ * each use one of them:
+ *
+ * - **2D transform:** a 2x2 linear part, the translation in the last column
+ *   and a bottom row of `0 0 1`. Built by `fromTranslation`, `fromRotation`,
+ *   `fromScale` and `fromTRS`; applied by `Vec2.transformMat3` and
+ *   `Vec2.transformDirectionMat3`.
+ * - **3D linear transform:** all nine elements act on x, y and z, with no
+ *   translation. Built by `fromQuat`; applied by `Vec3.transformMat3`.
+ *
+ * The type doesn't record which reading a matrix uses, so a 2D transform
+ * passed to `Vec3.transformMat3` type-checks, but its translation column is
+ * applied as a linear axis scaled by the vector's z rather than added. Keep
+ * each matrix with functions of its own reading.
+ * `multiply`, `transpose`, `determinant` and `invert` are plain matrix
+ * operations and work under either.
+ *
  * Follows the package conventions: `out` first and returned, inputs are
  * read-only, and `out` may alias any input.
  *
@@ -23,7 +40,7 @@
  */
 
 import { EPSILON } from '../../constants.js';
-import { isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
+import * as Scalars from '../../scalars.js';
 
 import type { ReadonlyQuat } from '../../quaternion/_types/quat.js';
 import type { ReadonlyVec2 } from '../../vector/vec2/_types/vec2.js';
@@ -122,7 +139,7 @@ export function copy(out: Mat3, a: ReadonlyMat3): Mat3 {
   out[0] = a00; out[3] = a01; out[6] = a02;
   out[1] = a10; out[4] = a11; out[7] = a12;
   out[2] = a20; out[5] = a21; out[8] = a22;
-  
+
   return out;
 }
 
@@ -179,7 +196,7 @@ export function isEqual(a: ReadonlyMat3, b: ReadonlyMat3): boolean {
  */
 export function isEqualEpsilon(a: ReadonlyMat3, b: ReadonlyMat3, eps = EPSILON): boolean {
   // biome-ignore lint/style/noNonNullAssertion: i < SIZE, so the index is always in bounds
-  for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
+  for (let i = 0; i < SIZE; i++) if (!Scalars.isEqualEpsilon(a[i]!, b[i]!, eps)) return false;
   return true;
 }
 
@@ -339,12 +356,12 @@ export function determinant(a: ReadonlyMat3): number {
  *
  * The check is exact rather than within a tolerance, because a fixed
  * tolerance can't tell a small but valid matrix from a nearly singular one:
- * the determinant shrinks with the cube of a uniform scale, so a scale of
- * `0.01` gives `1e-6` and still inverts cleanly. A nearly singular matrix
- * inverts to very large elements, most of whose precision has been lost to
- * rounding. Infinite elements are not caught: if they make the determinant
- * infinite rather than `NaN`, the result is zeros and `NaN` rather than an
- * inverse.
+ * the determinant shrinks with the cube of a uniform 3D scale, or the square
+ * of a 2D one, so a scale of `0.01` gives `1e-6` or `1e-4` and still inverts
+ * cleanly. A nearly singular matrix inverts to very large elements, most of
+ * whose precision has been lost to rounding. Infinite elements are not
+ * caught: if they make the determinant infinite rather than `NaN`, the result
+ * is zeros and `NaN` rather than an inverse.
  *
  * For a pure rotation, `transpose` gives the same result, exactly and more
  * cheaply.

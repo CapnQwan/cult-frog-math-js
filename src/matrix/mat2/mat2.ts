@@ -18,7 +18,7 @@
  */
 
 import { EPSILON } from '../../constants.js';
-import { isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
+import * as Scalars from '../../scalars.js';
 
 import type { ReadonlyVec2 } from '../../vector/vec2/_types/vec2.js';
 import type { Mat2, ReadonlyMat2 } from './_types/mat2.js';
@@ -165,7 +165,7 @@ export function isEqual(a: ReadonlyMat2, b: ReadonlyMat2): boolean {
  */
 export function isEqualEpsilon(a: ReadonlyMat2, b: ReadonlyMat2, eps = EPSILON): boolean {
   // biome-ignore lint/style/noNonNullAssertion: i < SIZE, so the index is always in bounds
-  for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
+  for (let i = 0; i < SIZE; i++) if (!Scalars.isEqualEpsilon(a[i]!, b[i]!, eps)) return false;
   return true;
 }
 

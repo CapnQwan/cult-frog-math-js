@@ -24,7 +24,7 @@
  */
 
 import { EPSILON } from '../../constants.js';
-import { isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
+import * as Scalars from '../../scalars.js';
 
 import type { ReadonlyQuat } from '../../quaternion/_types/quat.js';
 import type { ReadonlyVec3 } from '../../vector/vec3/_types/vec3.js';
@@ -132,7 +132,7 @@ export function copy(out: Mat4, a: ReadonlyMat4): Mat4 {
   out[1] = a10; out[5] = a11; out[9]  = a12; out[13] = a13;
   out[2] = a20; out[6] = a21; out[10] = a22; out[14] = a23;
   out[3] = a30; out[7] = a31; out[11] = a32; out[15] = a33;
-  
+
   return out;
 }
 
@@ -190,7 +190,7 @@ export function isEqual(a: ReadonlyMat4, b: ReadonlyMat4): boolean {
  */
 export function isEqualEpsilon(a: ReadonlyMat4, b: ReadonlyMat4, eps = EPSILON): boolean {
   // biome-ignore lint/style/noNonNullAssertion: i < SIZE, so the index is always in bounds
-  for (let i = 0; i < SIZE; i++) if (!isEqualEpsilonScalar(a[i]!, b[i]!, eps)) return false;
+  for (let i = 0; i < SIZE; i++) if (!Scalars.isEqualEpsilon(a[i]!, b[i]!, eps)) return false;
   return true;
 }
 
@@ -349,7 +349,7 @@ export function determinant(a: ReadonlyMat4): number {
   const a20 = a[2], a21 = a[6], a22 = a[10], a23 = a[14];
   const a30 = a[3], a31 = a[7], a32 = a[11], a33 = a[15];
 
-  const d23 = a22 * a33 - a23 * a32; 
+  const d23 = a22 * a33 - a23 * a32;
   const d13 = a21 * a33 - a23 * a31;
   const d12 = a21 * a32 - a22 * a31;
   const d03 = a20 * a33 - a23 * a30;
