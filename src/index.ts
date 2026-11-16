@@ -53,10 +53,14 @@
  * `vec4<f32>`, and the two share a layout with the rest of the ecosystem
  * (gl-matrix, three.js, glTF).
  *
- * The one value that isn't a straight `writeBuffer` / `bufferSubData` is
- * `Mat3`: it's stored tightly packed as 9 floats, while WGSL's `mat3x3<f32>`
- * and std140 pad every column out to 16 bytes. Upload a `Mat3` column by
- * column, or promote it to a `Mat4`.
+ * The exceptions are padded GPU layouts, which a tightly packed value can't
+ * be copied into verbatim. WGSL's `mat3x3<f32>` pads every column to 16
+ * bytes, so a `Mat3`, stored as 9 floats, isn't a straight `writeBuffer`:
+ * upload it column by column, or promote it to a `Mat4`. std140, the layout
+ * of a WebGL2 uniform block, pads every matrix column to 16 bytes, so only a
+ * `Mat4` copies into one with `bufferSubData` as-is; the uniform setters such
+ * as `uniformMatrix3fv` take every matrix unpadded. Each matrix type's doc
+ * says what its layout needs.
  *
  * **Matrices read as rows and store as columns.** `create` and `set` take
  * their arguments in row-major order — `a01` is row 0, column 1 — so a matrix

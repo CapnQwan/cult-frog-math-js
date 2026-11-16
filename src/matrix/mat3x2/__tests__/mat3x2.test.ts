@@ -1,8 +1,10 @@
 // src/matrix/mat3x2/__tests__/mat3x2.test.ts
 import { describe, expect, test } from 'vitest';
 
+import * as mat3 from '../../mat3/mat3.js';
 import * as mat3x2 from '../mat3x2.js';
 
+import type { Mat3 } from '../../mat3/_types/mat3.js';
 import type { Mat3x2, ReadonlyMat3x2 } from '../_types/mat3x2.js';
 
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
@@ -365,5 +367,372 @@ describe('isEqualEpsilon', () => {
   test('NaN is never equal', () => {
     const m = mat3x2.create(Number.NaN, 0, 0, 0, 1, 0);
     expect(mat3x2.isEqualEpsilon(m, m)).toBe(false);
+  });
+});
+
+/** The full 3x3 matrix `m` stands for, with its implied `0 0 1` bottom row written out. */
+// biome-ignore format: visual alignment with the matrix
+function toMat3(m: ReadonlyMat3x2): Mat3 {
+  return mat3.create(
+    m[0], m[2], m[4],
+    m[1], m[3], m[5],
+    0,    0,    1,
+  );
+}
+
+/** A buffer of `count` irregular floats, so no view over it is singular. */
+function irregularBuffer(count: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(count * FLOAT_BYTES);
+  const floats = new Float32Array(buffer);
+  for (let i = 0; i < count; i++) floats[i] = Math.sin(i + 1);
+  return buffer;
+}
+
+describe('multiply', () => {
+  // Rows:  1 2 3      7  8  9
+  //        4 5 6     10 11 12
+  const a = mat3x2.create(1, 2, 3, 4, 5, 6);
+  const b = mat3x2.create(7, 8, 9, 10, 11, 12);
+
+  test('writes a * b and returns out', () => {
+    const out = mat3x2.create();
+    const result = mat3x2.multiply(out, a, b);
+
+    expect(result).toBe(out);
+    // Rows: 27 30  36
+    //       78 87 102
+    expectStorage(out, [27, 78, 30, 87, 36, 102]);
+  });
+
+  test('order matters: b * a is a different matrix', () => {
+    // Rows: 39 54  78
+    //       54 75 108
+    expectStorage(mat3x2.multiply(mat3x2.create(), b, a), [39, 54, 54, 75, 78, 108]);
+  });
+
+  test('matches the 3x3 product with the implied bottom row, exactly', () => {
+    const pairs: [ReadonlyMat3x2, ReadonlyMat3x2][] = [
+      [a, b],
+      [b, a],
+      [mat3x2.create(0.5, -1.25, 3, 2, 0.75, -8), mat3x2.create(-3, 0.1, 40, 0.2, 7, -0.3)],
+    ];
+
+    for (const [left, right] of pairs) {
+      const product = mat3x2.multiply(mat3x2.create(), left, right);
+      const full = mat3.multiply(mat3.create(), toMat3(left), toMat3(right));
+      expect(mat3.isEqual(toMat3(product), full)).toBe(true);
+    }
+  });
+
+  test('carries the right translation through the left linear part, then adds the left translation', () => {
+    // Rows:  2 0 10       1 0 3
+    //        0 3 20       0 1 4
+    const scaleThenMove = mat3x2.create(2, 0, 10, 0, 3, 20);
+    const move = mat3x2.create(1, 0, 3, 0, 1, 4);
+
+    // The move happens first, so it is scaled: (2 * 3 + 10, 3 * 4 + 20).
+    expectStorage(mat3x2.multiply(mat3x2.create(), scaleThenMove, move), [2, 0, 0, 3, 16, 32]);
+    // The move happens last, so it is added as-is: (10 + 3, 20 + 4).
+    expectStorage(mat3x2.multiply(mat3x2.create(), move, scaleThenMove), [2, 0, 0, 3, 13, 24]);
+  });
+
+  test('IDENTITY leaves the other input unchanged on either side', () => {
+    expectStorage(mat3x2.multiply(mat3x2.create(), mat3x2.IDENTITY, a), [1, 4, 2, 5, 3, 6]);
+    expectStorage(mat3x2.multiply(mat3x2.create(), a, mat3x2.IDENTITY), [1, 4, 2, 5, 3, 6]);
+  });
+
+  test('never writes to the inputs', () => {
+    mat3x2.multiply(mat3x2.create(), a, b);
+    expectStorage(a, [1, 4, 2, 5, 3, 6]);
+    expectStorage(b, [7, 10, 8, 11, 9, 12]);
+  });
+
+  test('out === a', () => {
+    const m = mat3x2.clone(a);
+    mat3x2.multiply(m, m, b);
+    expectStorage(m, [27, 78, 30, 87, 36, 102]);
+  });
+
+  test('out === b', () => {
+    const m = mat3x2.clone(b);
+    mat3x2.multiply(m, a, m);
+    expectStorage(m, [27, 78, 30, 87, 36, 102]);
+  });
+
+  test('out === a === b squares in place', () => {
+    const m = mat3x2.clone(a);
+    mat3x2.multiply(m, m, m);
+    // Rows:  9 12 18
+    //       24 33 48
+    expectStorage(m, [9, 24, 12, 33, 18, 48]);
+  });
+
+  test('every overlap of out with either input is exact', () => {
+    for (let outOffset = 0; outOffset < 6; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 6; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const leftBuffer = sequentialBuffer(12);
+        const left = viewAt(leftBuffer, inputOffset);
+        const leftExpected = mat3x2.multiply(mat3x2.create(), mat3x2.clone(left), b);
+        mat3x2.multiply(viewAt(leftBuffer, outOffset), left, b);
+        expect(mat3x2.isEqual(viewAt(leftBuffer, outOffset), leftExpected)).toBe(true);
+
+        const rightBuffer = sequentialBuffer(12);
+        const right = viewAt(rightBuffer, inputOffset);
+        const rightExpected = mat3x2.multiply(mat3x2.create(), a, mat3x2.clone(right));
+        mat3x2.multiply(viewAt(rightBuffer, outOffset), a, right);
+        expect(mat3x2.isEqual(viewAt(rightBuffer, outOffset), rightExpected)).toBe(true);
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(10);
+    mat3x2.multiply(viewAt(pool, 2), a, b);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 27, 78, 30, 87, 36, 102, 9, 10]);
+  });
+});
+
+describe('determinant', () => {
+  test('is the determinant of the linear part, a00 * a11 - a01 * a10', () => {
+    // Rows:  1 2 3
+    //        4 5 6
+    expect(mat3x2.determinant(mat3x2.create(1, 2, 3, 4, 5, 6))).toBe(-3);
+  });
+
+  test('matches the 3x3 determinant with the implied bottom row', () => {
+    const m = mat3x2.create(0.5, -1.25, 3, 2, 0.75, -8);
+    expect(mat3x2.determinant(m)).toBe(mat3.determinant(toMat3(m)));
+  });
+
+  test('the translation never affects it', () => {
+    const linear = mat3x2.create(2, -3, 0, 5, 7, 0);
+    const moved = mat3x2.create(2, -3, 1e6, 5, 7, -4e5);
+
+    expect(mat3x2.determinant(linear)).toBe(29);
+    expect(mat3x2.determinant(moved)).toBe(29);
+  });
+
+  test('IDENTITY gives 1 and a zero linear part gives 0', () => {
+    expect(mat3x2.determinant(mat3x2.IDENTITY)).toBe(1);
+    expect(mat3x2.determinant(mat3x2.create(0, 0, 5, 0, 0, 5))).toBe(0);
+  });
+
+  test('is the area scale', () => {
+    expect(mat3x2.determinant(mat3x2.create(3, 0, 1, 0, 3, 1))).toBe(9);
+    expect(mat3x2.determinant(mat3x2.create(2, 0, 1, 0, 5, 1))).toBe(10);
+  });
+
+  test('a rotation gives 1, up to rounding', () => {
+    const c = Math.cos(0.7);
+    const s = Math.sin(0.7);
+    expect(mat3x2.determinant(mat3x2.create(c, -s, 4, s, c, -2))).toBeCloseTo(1, 6);
+  });
+
+  test('a mirror gives a negative determinant', () => {
+    expect(mat3x2.determinant(mat3x2.create(-1, 0, 0, 0, 1, 0))).toBe(-1);
+    expect(mat3x2.determinant(mat3x2.create(1, 0, 0, 0, -1, 0))).toBe(-1);
+  });
+
+  test('the determinant of a product is the product of the determinants', () => {
+    const a = mat3x2.create(1, 2, 3, 4, 5, 6);
+    const b = mat3x2.create(7, 8, 9, 10, 11, 12);
+    const product = mat3x2.multiply(mat3x2.create(), a, b);
+
+    expect(mat3x2.determinant(product)).toBe(mat3x2.determinant(a) * mat3x2.determinant(b));
+  });
+
+  test('is computed in float64, not rounded to float32', () => {
+    const f = Math.fround(0.1);
+
+    expect(mat3x2.determinant(mat3x2.create(0.1, 0, 0, 0, 0.1, 0))).toBe(f * f);
+    expect(Math.fround(f * f)).not.toBe(f * f);
+  });
+
+  test('a NaN in the linear part gives NaN', () => {
+    for (const i of [0, 1, 2, 3]) {
+      const m = mat3x2.create();
+      m[i] = Number.NaN;
+      expect(mat3x2.determinant(m)).toBeNaN();
+    }
+  });
+
+  test('a NaN translation does not reach it', () => {
+    expect(mat3x2.determinant(mat3x2.create(1, 0, Number.NaN, 0, 1, Number.NaN))).toBe(1);
+  });
+
+  test('reads only its own slots from a pooled view', () => {
+    const pool = sequentialBuffer(10);
+    const view = viewAt(pool, 2);
+    mat3x2.set(view, 1, 2, 3, 4, 5, 6);
+
+    expect(mat3x2.determinant(view)).toBe(-3);
+  });
+});
+
+describe('invert', () => {
+  // Rows:  2 3  5
+  //        1 2 -4
+  const a = mat3x2.create(2, 3, 5, 1, 2, -4);
+  // Rows:  2 -3 -22
+  //       -1  2  13
+  const inverseStorage = [2, -1, -3, 2, -22, 13] as const;
+  // Rows:  4 7  3
+  //        2 6 -1
+  const dense = mat3x2.create(4, 7, 3, 2, 6, -1);
+  // Float32 rounding in the inverse leaves products a little further from exact.
+  const ProductEpsilon = 1e-5;
+
+  /** `expectStorage`, counting `-0` as `0`: a zero cofactor term can come out as `-0`. */
+  function expectInverseStorage(m: ReadonlyMat3x2, expected: readonly number[]): void {
+    expect([m[0], m[1], m[2], m[3], m[4], m[5]].map((n) => n + 0)).toEqual(
+      expected.map((n) => Math.fround(n))
+    );
+  }
+
+  /** The inverse of a matrix the test knows is invertible. */
+  function inverseOf(m: ReadonlyMat3x2): Mat3x2 {
+    const inverse = mat3x2.invert(mat3x2.create(), m);
+    if (!inverse) throw new Error('expected an invertible matrix');
+    return inverse;
+  }
+
+  test('writes the inverse and returns out', () => {
+    const out = mat3x2.create();
+    const result = mat3x2.invert(out, a);
+
+    expect(result).toBe(out);
+    expectInverseStorage(out, inverseStorage);
+  });
+
+  test('a * inverse and inverse * a both give the identity', () => {
+    const inverse = inverseOf(dense);
+
+    const after = mat3x2.multiply(mat3x2.create(), dense, inverse);
+    const before = mat3x2.multiply(mat3x2.create(), inverse, dense);
+    expect(mat3x2.isEqualEpsilon(after, mat3x2.IDENTITY, ProductEpsilon)).toBe(true);
+    expect(mat3x2.isEqualEpsilon(before, mat3x2.IDENTITY, ProductEpsilon)).toBe(true);
+  });
+
+  test('matches the 3x3 inverse with the implied bottom row', () => {
+    const full = mat3.invert(mat3.create(), toMat3(dense));
+    if (!full) throw new Error('expected an invertible matrix');
+
+    expect(mat3.isEqualEpsilon(toMat3(inverseOf(dense)), full)).toBe(true);
+  });
+
+  test('IDENTITY inverts to itself', () => {
+    expectInverseStorage(inverseOf(mat3x2.IDENTITY), [1, 0, 0, 1, 0, 0]);
+  });
+
+  test('a pure translation inverts exactly, to its negation', () => {
+    // Rows:  1 0  5.5
+    //        0 1 -3.25
+    const translation = mat3x2.create(1, 0, 5.5, 0, 1, -3.25);
+    expectInverseStorage(inverseOf(translation), [1, 0, 0, 1, -5.5, 3.25]);
+  });
+
+  test('removes the translation, then undoes the linear part', () => {
+    // Scale by 2, then move by (10, 20): the inverse moves by (-10, -20), then halves.
+    const scaleThenMove = mat3x2.create(2, 0, 10, 0, 2, 20);
+    expectInverseStorage(inverseOf(scaleThenMove), [0.5, 0, 0, 0.5, -5, -10]);
+  });
+
+  test('inverting twice gives back the original', () => {
+    expect(mat3x2.isEqualEpsilon(inverseOf(inverseOf(dense)), dense)).toBe(true);
+  });
+
+  test('the determinant of the inverse is the reciprocal', () => {
+    expect(mat3x2.determinant(inverseOf(dense))).toBeCloseTo(1 / mat3x2.determinant(dense), 7);
+  });
+
+  test('a small uniform scale still inverts', () => {
+    // The determinant is 1e-4, far below any fixed tolerance, yet the inverse is exact enough.
+    const inverse = inverseOf(mat3x2.create(0.01, 0, 0, 0, 0.01, 0));
+    expect(mat3x2.isEqualEpsilon(inverse, mat3x2.create(100, 0, 0, 0, 100, 0))).toBe(true);
+  });
+
+  test('returns null and leaves out untouched for a singular linear part, whatever the translation', () => {
+    const singular = [
+      mat3x2.create(0, 0, 0, 0, 0, 0),
+      // A translation alone can't make the matrix invertible.
+      mat3x2.create(0, 0, 5, 0, 0, -5),
+      // Dependent rows.
+      mat3x2.create(1, 2, 3, 2, 4, 6),
+      // One axis scaled to zero.
+      mat3x2.create(1, 0, 7, 0, 0, 7),
+    ];
+
+    for (const m of singular) {
+      const out = mat3x2.create(7, 7, 7, 7, 7, 7);
+      expect(mat3x2.invert(out, m)).toBeNull();
+      expectStorage(out, [7, 7, 7, 7, 7, 7]);
+    }
+  });
+
+  test('returns null and leaves out untouched when the linear part has a NaN', () => {
+    for (const i of [0, 1, 2, 3]) {
+      const m = mat3x2.clone(a);
+      m[i] = Number.NaN;
+      const out = mat3x2.create(7, 7, 7, 7, 7, 7);
+      expect(mat3x2.invert(out, m)).toBeNull();
+      expectStorage(out, [7, 7, 7, 7, 7, 7]);
+    }
+  });
+
+  test('a NaN translation inverts to a NaN translation, not null', () => {
+    for (const i of [4, 5]) {
+      const m = mat3x2.clone(a);
+      m[i] = Number.NaN;
+      const inverse = mat3x2.invert(mat3x2.create(), m);
+
+      expect(inverse).not.toBeNull();
+      expect([inverse?.[0], inverse?.[1], inverse?.[2], inverse?.[3]]).toEqual([2, -1, -3, 2]);
+      expect(inverse?.[4]).toBeNaN();
+      expect(inverse?.[5]).toBeNaN();
+    }
+  });
+
+  test('an infinite determinant is not caught', () => {
+    const infinite = mat3x2.create(Number.POSITIVE_INFINITY, 0, 0, 0, 1, 0);
+    const inverse = mat3x2.invert(mat3x2.create(), infinite);
+    expect(inverse).not.toBeNull();
+    expect(Array.from(inverse ?? []).some(Number.isNaN)).toBe(true);
+  });
+
+  test('never writes to the input', () => {
+    mat3x2.invert(mat3x2.create(), a);
+    expectStorage(a, [2, 1, 3, 2, 5, -4]);
+  });
+
+  test('out === a inverts in place', () => {
+    const m = mat3x2.clone(a);
+    mat3x2.invert(m, m);
+    expectInverseStorage(m, inverseStorage);
+  });
+
+  test('every overlap of out with the input is exact', () => {
+    for (let outOffset = 0; outOffset < 6; outOffset++) {
+      for (let inputOffset = 0; inputOffset < 6; inputOffset++) {
+        if (outOffset === inputOffset) continue;
+
+        const buffer = irregularBuffer(12);
+        const input = viewAt(buffer, inputOffset);
+        const expected = inverseOf(mat3x2.clone(input));
+
+        mat3x2.invert(viewAt(buffer, outOffset), input);
+
+        expect(mat3x2.isEqual(viewAt(buffer, outOffset), expected)).toBe(true);
+      }
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(10);
+    mat3x2.invert(viewAt(pool, 2), a);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 2, -1, -3, 2, -22, 13, 9, 10]);
   });
 });

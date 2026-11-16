@@ -19,12 +19,20 @@ import type { ReadonlyFixedFloat32Array } from '../../../_types/readonlyFixedFlo
  * row that would make it otherwise.
  *
  * This is the layout of WGSL's `mat3x2<f32>` (three 8-byte `vec2` columns, 24
- * bytes) and of WebGL2's `uniformMatrix3x2fv`, so the buffer uploads as-is.
+ * bytes) and of WebGL2's `uniformMatrix3x2fv`, so it uploads as-is to either.
  * In WGSL, `m * vec3(p, 1.0)` transforms a point and `m * vec3(d, 0.0)` a
- * direction. One trap: unless the device supports WGSL's
- * `uniform_buffer_standard_layout` feature, arrays in a uniform buffer need a
- * stride that is a multiple of 16 bytes, so `array<mat3x2<f32>, N>` won't
- * compile there. Pad each element to 32 bytes, or use a storage buffer.
+ * direction.
+ *
+ * Two layouts pad it, so it isn't a straight copy into them:
+ *
+ * - **std140**, the layout of a WebGL2 uniform block, pads every column to 16
+ *   bytes, so a `mat3x2` there takes 48 bytes. Write it one column at a time.
+ * - **Arrays in a WGSL uniform buffer** need an element stride that is a
+ *   multiple of 16 bytes, so `array<mat3x2<f32>, N>` won't compile there.
+ *   Pad each element to 32 bytes, use a storage buffer, or enable the
+ *   `uniform_buffer_standard_layout` language extension, which lifts that
+ *   rule: check `navigator.gpu.wgslLanguageFeatures` for it and declare
+ *   `requires uniform_buffer_standard_layout;` in the shader.
  *
  * Elements are float32, so values are rounded on write
  * (`0.1` reads back as `0.10000000149011612`).

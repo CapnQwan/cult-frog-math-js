@@ -6,8 +6,11 @@ import type { ReadonlyFixedFloat32Array } from '../../../_types/readonlyFixedFlo
  * A 2x2 matrix stored as a `Float32Array` of length 4, in column-major order:
  * `[a00, a10, a01, a11]`. The first two elements are column 0.
  *
- * This is the layout GLSL/WGSL `mat2x2<f32>` expects, so the buffer can be
- * uploaded to the GPU as-is, with no transpose step.
+ * This is the layout of WGSL's `mat2x2<f32>` and of WebGL's
+ * `uniformMatrix2fv`, so the buffer can be uploaded to the GPU as-is, with no
+ * transpose step. The exception is std140, the layout of a WebGL2 uniform
+ * block, which pads every column to 16 bytes, so a `mat2` there takes 32
+ * bytes. Write it into a uniform block one column at a time.
  *
  * Elements are float32, so values are rounded on write
  * (`0.1` reads back as `0.10000000149011612`).

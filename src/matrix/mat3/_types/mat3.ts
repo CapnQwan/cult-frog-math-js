@@ -7,10 +7,11 @@ import type { ReadonlyFixedFloat32Array } from '../../../_types/readonlyFixedFlo
  * `[a00, a10, a20, a01, a11, a21, a02, a12, a22]`. Each run of three elements
  * is one column.
  *
- * Unlike the other types in this package, a `Mat3` is *not* a straight GPU
- * upload: it's packed tightly as 9 floats, while WGSL's `mat3x3<f32>` and
- * std140 pad every column out to 16 bytes (48 bytes total). Write it into a
- * uniform block one column at a time, or promote it to a `Mat4`.
+ * It's packed tightly as 9 floats, which is what WebGL's `uniformMatrix3fv`
+ * takes, but it is *not* a straight copy into a GPU buffer: WGSL's
+ * `mat3x3<f32>`, in every address space, and std140 both pad every column
+ * out to 16 bytes (48 bytes total). Write it into a buffer one column at a
+ * time, or promote it to a `Mat4`.
  *
  * Elements are float32, so values are rounded on write
  * (`0.1` reads back as `0.10000000149011612`).

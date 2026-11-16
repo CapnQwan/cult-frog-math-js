@@ -145,3 +145,79 @@ describe('equality', () => {
     mat3x2.isEqualEpsilon(live, raw);
   });
 });
+
+describe('multiply', () => {
+  test('out is mutable, inputs are readonly, and out is returned', () => {
+    expectTypeOf(mat3x2.multiply).parameters.toEqualTypeOf<
+      [Mat3x2, ReadonlyMat3x2, ReadonlyMat3x2]
+    >();
+    expectTypeOf(mat3x2.multiply).returns.toEqualTypeOf<Mat3x2>();
+  });
+
+  test('call sites', () => {
+    mat3x2.multiply(live, frozen, mat3x2.IDENTITY);
+    mat3x2.multiply(live, live, live);
+    mat3x2.multiply(shared, shared, frozen);
+    // @ts-expect-error readonly can never be an out parameter
+    mat3x2.multiply(frozen, live, live);
+    // @ts-expect-error the shared constant must never be written through
+    mat3x2.multiply(mat3x2.IDENTITY, live, live);
+    // @ts-expect-error a Mat3 is not a 2D affine transform
+    mat3x2.multiply(live, live, frozenSquare);
+    // @ts-expect-error a Mat3 can't be written as one either
+    mat3x2.multiply(square, live, live);
+    // @ts-expect-error unbranded arrays are rejected
+    mat3x2.multiply(live, raw, live);
+  });
+});
+
+describe('determinant', () => {
+  test('takes a readonly matrix and returns a number', () => {
+    expectTypeOf(mat3x2.determinant).parameters.toEqualTypeOf<[ReadonlyMat3x2]>();
+    expectTypeOf(mat3x2.determinant).returns.toEqualTypeOf<number>();
+  });
+
+  test('call sites', () => {
+    mat3x2.determinant(live);
+    mat3x2.determinant(frozen);
+    mat3x2.determinant(shared);
+    mat3x2.determinant(mat3x2.IDENTITY);
+    // @ts-expect-error a Mat3 is not a 2D affine transform
+    mat3x2.determinant(frozenSquare);
+    // @ts-expect-error wrong-dimension input
+    mat3x2.determinant(other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat3x2.determinant(raw);
+  });
+});
+
+describe('invert', () => {
+  test('out is mutable, the input is readonly, and out or null is returned', () => {
+    expectTypeOf(mat3x2.invert).parameters.toEqualTypeOf<[Mat3x2, ReadonlyMat3x2]>();
+    expectTypeOf(mat3x2.invert).returns.toEqualTypeOf<Mat3x2 | null>();
+  });
+
+  test('the result must be checked before it is used', () => {
+    // @ts-expect-error the inverse is null for a singular matrix
+    mat3x2.multiply(live, mat3x2.invert(live, frozen), frozen);
+
+    const inverse = mat3x2.invert(live, frozen);
+    if (inverse) mat3x2.multiply(live, inverse, frozen);
+  });
+
+  test('call sites', () => {
+    mat3x2.invert(live, frozen);
+    mat3x2.invert(live, live);
+    mat3x2.invert(shared, mat3x2.IDENTITY);
+    // @ts-expect-error readonly can never be an out parameter
+    mat3x2.invert(frozen, live);
+    // @ts-expect-error the shared constant must never be written through
+    mat3x2.invert(mat3x2.IDENTITY, live);
+    // @ts-expect-error a Mat3 can't be written as one
+    mat3x2.invert(square, live);
+    // @ts-expect-error a Mat3 is not a 2D affine transform
+    mat3x2.invert(live, frozenSquare);
+    // @ts-expect-error unbranded arrays are rejected
+    mat3x2.invert(live, raw);
+  });
+});
