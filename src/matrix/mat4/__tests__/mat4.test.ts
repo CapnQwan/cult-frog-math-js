@@ -1510,6 +1510,230 @@ describe('fromTRS', () => {
   });
 });
 
+describe('decompose', () => {
+  const t = vec3.create(4, 5, -6);
+  const s = vec3.create(2, 3, 0.5);
+
+  interface Parts {
+    readonly t: Vec3;
+    readonly r: Quat;
+    readonly s: Vec3;
+  }
+
+  /** Outputs filled with 7s, so an untouched output is recognisable. */
+  function sevens(): Parts {
+    return { t: vec3.create(7, 7, 7), r: quat.create(7, 7, 7, 7), s: vec3.create(7, 7, 7) };
+  }
+
+  /** The parts of a matrix the test knows is non-singular. */
+  function partsOf(m: ReadonlyMat4): Parts {
+    const parts = sevens();
+    if (!mat4.decompose(parts.t, parts.r, parts.s, m)) {
+      throw new Error('expected a non-singular matrix');
+    }
+    return parts;
+  }
+
+  /** `fromTRS` of the parts `m` decomposes to. */
+  function rebuilt(m: ReadonlyMat4): Mat4 {
+    const parts = partsOf(m);
+    return mat4.fromTRS(mat4.create(), parts.t, parts.r, parts.s);
+  }
+
+  function expectUntouched(parts: Parts): void {
+    expect(vec3.isEqualXYZ(parts.t, 7, 7, 7)).toBe(true);
+    expect(quat.isEqualXYZW(parts.r, 7, 7, 7, 7)).toBe(true);
+    expect(vec3.isEqualXYZ(parts.s, 7, 7, 7)).toBe(true);
+  }
+
+  test('returns true and recovers the parts fromTRS was given', () => {
+    for (const q of ROTATIONS) {
+      const parts = sevens();
+      const m = mat4.fromTRS(mat4.create(), t, q, s);
+
+      expect(mat4.decompose(parts.t, parts.r, parts.s, m)).toBe(true);
+      expect(vec3.isEqual(parts.t, t)).toBe(true);
+      expectVec3Near(parts.s, s);
+      expect(quat.isEqualRotation(parts.r, q, RotationEpsilon)).toBe(true);
+    }
+  });
+
+  test('the identity decomposes exactly', () => {
+    const parts = partsOf(mat4.IDENTITY);
+
+    expect(vec3.isEqual(parts.t, vec3.ZERO)).toBe(true);
+    expect(quat.isEqual(parts.r, quat.IDENTITY)).toBe(true);
+    expect(vec3.isEqual(parts.s, vec3.ONE)).toBe(true);
+  });
+
+  test('rebuilds the matrix through fromTRS, mirrors included', () => {
+    const scales = [s, vec3.create(-2, 3, 0.5), vec3.create(2, -3, -0.5), vec3.create(-1, -1, -1)];
+    for (const q of ROTATIONS) {
+      for (const scale of scales) {
+        const m = mat4.fromTRS(mat4.create(), t, q, scale);
+        expect(mat4.isEqualEpsilon(rebuilt(m), m, RotationEpsilon)).toBe(true);
+      }
+    }
+  });
+
+  test('a mirror lands on the x scale, whichever axis it was on', () => {
+    const q = ROTATIONS[1] as ReadonlyQuat;
+
+    expectVec3Near(
+      partsOf(mat4.fromTRS(mat4.create(), t, q, vec3.create(1, -2, 1))).s,
+      vec3.create(-1, 2, 1)
+    );
+    expectVec3Near(
+      partsOf(mat4.fromTRS(mat4.create(), t, q, vec3.create(1, 2, -3))).s,
+      vec3.create(-1, 2, 3)
+    );
+  });
+
+  test('two negative scales come back positive, as a half turn', () => {
+    const parts = partsOf(mat4.fromScale(mat4.create(), vec3.create(-1, -1, 1)));
+    const halfTurnZ = quat.fromAxisAngle(quat.create(), vec3.create(0, 0, 1), Math.PI);
+
+    expect(vec3.isEqual(parts.s, vec3.ONE)).toBe(true);
+    expect(quat.isEqualRotation(parts.r, halfTurnZ, RotationEpsilon)).toBe(true);
+  });
+
+  test('stays accurate at and near half turns about any axis', () => {
+    // Half turns have a negative trace, which recovers x, y or z before w.
+    const axes = [
+      unitAxis(1, 0, 0),
+      unitAxis(0, 1, 0),
+      unitAxis(0, 0, 1),
+      unitAxis(1, 1, 0),
+      unitAxis(-1, 2, -3),
+    ];
+    for (const axis of axes) {
+      for (const angle of [Math.PI, Math.PI - 1e-3, -Math.PI + 1e-3]) {
+        const q = quat.fromAxisAngle(quat.create(), axis, angle);
+        const r = partsOf(mat4.fromQuat(mat4.create(), q)).r;
+
+        expect(quat.isEqualRotation(r, q, RotationEpsilon)).toBe(true);
+        expect(quat.magnitude(r)).toBeCloseTo(1, 6);
+      }
+    }
+  });
+
+  test('the rotation is unit length even when a shear leaves no exact TRS', () => {
+    // A rotated child of a non-uniformly scaled parent is sheared.
+    const sheared = mat4.multiply(
+      mat4.create(),
+      mat4.fromScale(mat4.create(), vec3.create(2, 1, 1)),
+      mat4.fromAxisAngle(mat4.create(), vec3.create(0, 0, 1), 0.6)
+    );
+
+    expect(quat.magnitude(partsOf(sheared).r)).toBeCloseTo(1, 6);
+    expect(mat4.isEqualEpsilon(rebuilt(sheared), sheared, RotationEpsilon)).toBe(false);
+  });
+
+  test('ignores the bottom row', () => {
+    const m = mat4.fromTRS(mat4.create(), t, ROTATIONS[0] as ReadonlyQuat, s);
+    const junk = mat4.clone(m);
+    junk[3] = Number.NaN;
+    junk[7] = 5;
+    junk[11] = -2;
+    junk[15] = 0;
+
+    const clean = partsOf(m);
+    const fromJunk = partsOf(junk);
+    expect(vec3.isEqual(fromJunk.t, clean.t)).toBe(true);
+    expect(quat.isEqual(fromJunk.r, clean.r)).toBe(true);
+    expect(vec3.isEqual(fromJunk.s, clean.s)).toBe(true);
+  });
+
+  test('copies a NaN translation without affecting the rotation or scale', () => {
+    const m = mat4.fromTRS(mat4.create(), t, ROTATIONS[0] as ReadonlyQuat, s);
+    const clean = partsOf(m);
+    m[13] = Number.NaN;
+    const parts = partsOf(m);
+
+    expect(parts.t[1]).toBeNaN();
+    expect([parts.t[0], parts.t[2]]).toEqual([4, -6]);
+    expect(quat.isEqual(parts.r, clean.r)).toBe(true);
+    expect(vec3.isEqual(parts.s, clean.s)).toBe(true);
+  });
+
+  test('returns false and leaves the outputs untouched when the 3x3 is singular', () => {
+    const singular = [
+      mat4.fromTRS(mat4.create(), t, ROTATIONS[0] as ReadonlyQuat, vec3.create(0, 3, 0.5)),
+      mat4.fromTRS(mat4.create(), t, ROTATIONS[1] as ReadonlyQuat, vec3.create(2, 0, 0.5)),
+      mat4.fromTRS(mat4.create(), t, ROTATIONS[2] as ReadonlyQuat, vec3.create(2, 3, 0)),
+      mat4.create(0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 1),
+    ];
+
+    for (const m of singular) {
+      const parts = sevens();
+      expect(mat4.decompose(parts.t, parts.r, parts.s, m)).toBe(false);
+      expectUntouched(parts);
+    }
+  });
+
+  test('returns false and leaves the outputs untouched for a NaN in the 3x3', () => {
+    for (const i of [0, 1, 2, 4, 5, 6, 8, 9, 10]) {
+      const m = mat4.fromTRS(mat4.create(), t, ROTATIONS[0] as ReadonlyQuat, s);
+      m[i] = Number.NaN;
+      const parts = sevens();
+
+      expect(mat4.decompose(parts.t, parts.r, parts.s, m)).toBe(false);
+      expectUntouched(parts);
+    }
+  });
+
+  test('never writes to the input', () => {
+    const m = mat4.fromTRS(mat4.create(), t, ROTATIONS[0] as ReadonlyQuat, s);
+    const copy = mat4.clone(m);
+    partsOf(m);
+
+    expect(mat4.isEqual(m, copy)).toBe(true);
+  });
+
+  test('each output may overlap the input', () => {
+    const layouts = [
+      // Translation over the translation, rotation over the first column.
+      { t: 12, r: 0, s: 5 },
+      { t: 8, r: 13, s: 1 },
+      { t: 2, r: 9, s: 14 },
+    ];
+
+    for (const layout of layouts) {
+      const buffer = irregularFloats(32);
+      const expected = partsOf(mat4.clone(viewAt(buffer, 0)));
+      const parts = {
+        t: vec3At(buffer, layout.t),
+        r: quatAt(buffer, layout.r),
+        s: vec3At(buffer, layout.s),
+      };
+
+      expect(mat4.decompose(parts.t, parts.r, parts.s, viewAt(buffer, 0))).toBe(true);
+      expect(vec3.isEqual(parts.t, expected.t)).toBe(true);
+      expect(quat.isEqual(parts.r, expected.r)).toBe(true);
+      expect(vec3.isEqual(parts.s, expected.s)).toBe(true);
+    }
+  });
+
+  test('writes only its own slots when the outputs are pooled views', () => {
+    const m = mat4.fromTRS(mat4.create(), t, ROTATIONS[0] as ReadonlyQuat, s);
+    const expected = partsOf(m);
+    const pool = sequentialBuffer(32);
+
+    mat4.decompose(vec3At(pool, 2), quatAt(pool, 10), vec3At(pool, 20), m);
+
+    const after = poolAfter(32, 2, Array.from(expected.t));
+    for (const [offset, values] of [
+      [10, Array.from(expected.r)],
+      [20, Array.from(expected.s)],
+    ] as const) {
+      values.forEach((value, i) => {
+        after[offset + i] = value;
+      });
+    }
+    expect(Array.from(new Float32Array(pool))).toEqual(after);
+  });
+});
+
 /** Where `projection` puts the view-space point `(x, y, z)`, in normalised device coordinates. */
 function ndcOf(projection: ReadonlyMat4, x: number, y: number, z: number): Vec3 {
   return vec3.transformMat4(vec3.create(), vec3.create(x, y, z), projection);

@@ -335,3 +335,25 @@ describe('lookAt', () => {
     mat4.lookAt(live, vector, vector, raw);
   });
 });
+
+describe('decompose', () => {
+  test('the outputs are mutable, the matrix is readonly, and a boolean is returned', () => {
+    expectTypeOf(mat4.decompose).parameters.toEqualTypeOf<[Vec3, Quat, Vec3, ReadonlyMat4]>();
+    expectTypeOf(mat4.decompose).returns.toEqualTypeOf<boolean>();
+  });
+
+  test('call sites', () => {
+    mat4.decompose(vector, rotation, vector, frozen);
+    mat4.decompose(vector, rotation, vector, live);
+    // @ts-expect-error a readonly vector can never be an output
+    mat4.decompose(frozenVector, rotation, vector, frozen);
+    // @ts-expect-error a readonly quaternion can never be an output
+    mat4.decompose(vector, frozenRotation, vector, frozen);
+    // @ts-expect-error the rotation comes between the translation and the scale
+    mat4.decompose(vector, vector, rotation, frozen);
+    // @ts-expect-error wrong-dimension input
+    mat4.decompose(vector, rotation, vector, other);
+    // @ts-expect-error unbranded arrays are rejected
+    mat4.decompose(vector, rotation, vector, raw);
+  });
+});
