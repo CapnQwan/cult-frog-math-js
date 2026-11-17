@@ -18,8 +18,10 @@
  *
  * A `Mat3` is a 3D linear transform: all nine elements act on x, y and z, so
  * it can rotate, scale, shear and mirror, but not translate. Build a rotation
- * with `fromQuat` and apply it with `Vec3.transformMat3`. For a 2D transform
- * with a translation, use `Mat3x2`; for a 3D one, use `Mat4`.
+ * with `fromQuat`, take the linear part of a `Mat4` with `fromMat4` or its
+ * normal matrix with `normalFromMat4`, and apply the result with
+ * `Vec3.transformMat3`. For a 2D transform with a translation, use `Mat3x2`;
+ * for a 3D one, use `Mat4`.
  *
  * Follows the package conventions: `out` first and returned, inputs are
  * read-only, and `out` may alias any input.
@@ -31,6 +33,7 @@ import { EPSILON } from '../../constants.js';
 import * as Scalars from '../../scalars.js';
 
 import type { ReadonlyQuat } from '../../quaternion/_types/quat.js';
+import type { ReadonlyMat4 } from '../mat4/_types/mat4.js';
 import type { Mat3, ReadonlyMat3 } from './_types/mat3.js';
 
 /** The number of elements in a `Mat3`. */
@@ -438,6 +441,109 @@ export function fromQuat(out: Mat3, q: ReadonlyQuat): Mat3 {
   out[6] = xzz + wyy;
   out[7] = yzz - wxx;
   out[8] = 1 - (xx2 + yy2);
+
+  return out;
+}
+
+/**
+ * Writes the upper-left 3x3 of `a` into `out`: its rotation, scale and shear,
+ * without the translation or the bottom row.
+ *
+ * Every element of `out` is overwritten. The elements are copied bit for bit,
+ * including `NaN`, `-0` and infinities, so the result is exact.
+ *
+ * For an affine `a`, such as a model matrix from `Mat4.fromTRS`, this is its
+ * linear part: the part that acts on directions, so `Vec3.transformMat3` by
+ * the result matches `Vec3.transformDirectionMat4` by `a`. For a projective
+ * `a`, the dropped bottom row is what made it a projection, so the result
+ * describes only part of it.
+ *
+ * This doubles as the normal matrix while `a` only rotates, translates and
+ * scales uniformly: the normals it gives point the same way as
+ * `normalFromMat4`'s and differ only in length, so after normalizing they
+ * match, more cheaply. Under a non-uniform scale or shear it tilts normals off
+ * their surfaces; use `normalFromMat4` there.
+ *
+ * `a` is read into locals first, so `out` may be a view overlapping it.
+ *
+ * @param out - The matrix to write to.
+ * @param a - The matrix to take the upper-left 3x3 of.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function fromMat4(out: Mat3, a: ReadonlyMat4): Mat3 {
+  const a00 = a[0], a01 = a[4], a02 = a[8];
+  const a10 = a[1], a11 = a[5], a12 = a[9];
+  const a20 = a[2], a21 = a[6], a22 = a[10];
+
+  out[0] = a00; out[3] = a01; out[6] = a02;
+  out[1] = a10; out[4] = a11; out[7] = a12;
+  out[2] = a20; out[5] = a21; out[8] = a22;
+
+  return out;
+}
+
+/**
+ * Writes the normal matrix of `a` into `out`: the inverse-transpose of its
+ * upper-left 3x3.
+ *
+ * A normal has to stay perpendicular to its surface. The surface's tangents
+ * transform by the upper-left 3x3, `M`, and a non-uniform scale or a shear in
+ * `M` stretches them unevenly, so transforming the normal by `M` too would
+ * tilt it off the surface, which shows up as wrong lighting. The
+ * inverse-transpose is the matrix that keeps every transformed normal
+ * perpendicular to every transformed tangent. Under a pure rotation it equals
+ * `M`, and under a uniform scale it differs only in length, so `fromMat4` is
+ * the cheaper choice for those.
+ *
+ * Apply the result with `Vec3.transformMat3`, then normalize: it isn't unit
+ * length once `a` scales. The translation and the bottom row of `a` are
+ * ignored, as they are for any direction.
+ *
+ * Returns `null` when the upper-left 3x3 is singular, meaning its determinant
+ * is exactly zero, as for a model matrix that scales an axis to zero. A `NaN`
+ * in the upper-left 3x3 makes the determinant `NaN`, which returns `null` the
+ * same way. There is no normal matrix to write, so `out` is left untouched.
+ * Check the result before using it. As with `invert`, the check is exact
+ * rather than within a tolerance, so a nearly singular matrix gives very
+ * large elements.
+ *
+ * The result equals `transpose` of `invert` of `fromMat4(a)`, up to rounding,
+ * but is built in one pass without a scratch matrix.
+ *
+ * `a` is read into locals first, so `out` may be a view overlapping it.
+ *
+ * @param out - The matrix to write to. Untouched when `null` is returned.
+ * @param a - The matrix to take the normal matrix of, usually a model matrix.
+ * @returns `out`, or `null` if the upper-left 3x3 of `a` has no inverse.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function normalFromMat4(out: Mat3, a: ReadonlyMat4): Mat3 | null {
+  const a00 = a[0], a01 = a[4], a02 = a[8];
+  const a10 = a[1], a11 = a[5], a12 = a[9];
+  const a20 = a[2], a21 = a[6], a22 = a[10];
+
+  const m00 = a11 * a22 - a12 * a21;
+  const m01 = a10 * a22 - a12 * a20;
+  const m02 = a10 * a21 - a11 * a20;
+
+  const det = a00 * m00 - a01 * m01 + a02 * m02;
+
+  if (!det) return null;
+
+  const invDet = 1 / det;
+
+  out[0] = m00 * invDet;
+  out[1] = (a02 * a21 - a01 * a22) * invDet;
+  out[2] = (a01 * a12 - a02 * a11) * invDet;
+
+  out[3] = (a12 * a20 - a10 * a22) * invDet;
+  out[4] = (a00 * a22 - a02 * a20) * invDet;
+  out[5] = (a02 * a10 - a00 * a12) * invDet;
+
+  out[6] = m02 * invDet;
+  out[7] = (a01 * a20 - a00 * a21) * invDet;
+  out[8] = (a00 * a11 - a01 * a10) * invDet;
 
   return out;
 }

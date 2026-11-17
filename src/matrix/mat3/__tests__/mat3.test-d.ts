@@ -9,6 +9,7 @@ import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
 import type { Vec2 } from '../../../vector/vec2/_types/vec2.js';
 import type { Vec4 } from '../../../vector/vec4/_types/vec4.js';
 import type { Mat2 } from '../../mat2/_types/mat2.js';
+import type { Mat4, ReadonlyMat4 } from '../../mat4/_types/mat4.js';
 import type { Mat3, ReadonlyMat3 } from '../_types/mat3.js';
 
 declare const live: Mat3;
@@ -19,6 +20,8 @@ declare const vector: Vec2;
 declare const four: Vec4;
 declare const rotation: Quat;
 declare const frozenRotation: ReadonlyQuat;
+declare const model: Mat4;
+declare const frozenModel: ReadonlyMat4;
 
 /** A `Mat3` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedMat3 = Brand<FixedFloat32Array<9, SharedArrayBuffer>, BrandOf<Mat3>>;
@@ -253,6 +256,38 @@ describe('builders', () => {
     mat3.fromQuat(live, four);
     // @ts-expect-error unbranded arrays are rejected
     mat3.fromQuat(live, raw);
+  });
+
+  test('fromMat4 and normalFromMat4 take a readonly Mat4', () => {
+    expectTypeOf(mat3.fromMat4).parameters.toEqualTypeOf<[Mat3, ReadonlyMat4]>();
+    expectTypeOf(mat3.fromMat4).returns.toEqualTypeOf<Mat3>();
+    expectTypeOf(mat3.normalFromMat4).parameters.toEqualTypeOf<[Mat3, ReadonlyMat4]>();
+    expectTypeOf(mat3.normalFromMat4).returns.toEqualTypeOf<Mat3 | null>();
+  });
+
+  test('fromMat4 and normalFromMat4 call sites', () => {
+    mat3.fromMat4(live, frozenModel);
+    mat3.fromMat4(shared, model);
+    mat3.normalFromMat4(live, model);
+    mat3.normalFromMat4(shared, frozenModel);
+    // @ts-expect-error readonly can never be an out parameter
+    mat3.fromMat4(frozen, model);
+    // @ts-expect-error the shared constant must never be written through
+    mat3.normalFromMat4(mat3.IDENTITY, model);
+    // @ts-expect-error a Mat3 is not a Mat4
+    mat3.fromMat4(live, frozen);
+    // @ts-expect-error a Mat3 is not a Mat4
+    mat3.normalFromMat4(live, live);
+    // @ts-expect-error unbranded arrays are rejected
+    mat3.normalFromMat4(live, raw);
+  });
+
+  test('the normal matrix must be checked before it is used', () => {
+    // @ts-expect-error the normal matrix is null for a singular model matrix
+    mat3.multiply(live, mat3.normalFromMat4(live, frozenModel), frozen);
+
+    const normal = mat3.normalFromMat4(live, frozenModel);
+    if (normal) mat3.multiply(live, normal, frozen);
   });
 
   test('the 2D builders live on Mat3x2', () => {

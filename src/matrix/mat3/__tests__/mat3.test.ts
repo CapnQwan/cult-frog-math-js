@@ -7,6 +7,7 @@ import * as mat4 from '../../mat4/mat4.js';
 import * as mat3 from '../mat3.js';
 
 import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
+import type { Mat4, ReadonlyMat4 } from '../../mat4/_types/mat4.js';
 import type { Mat3, ReadonlyMat3 } from '../_types/mat3.js';
 
 const FLOAT_BYTES = Float32Array.BYTES_PER_ELEMENT;
@@ -992,5 +993,240 @@ describe('fromQuat', () => {
 
   test('writes only its own slots when out is a pooled view', () => {
     expectPooledWrite((out) => mat3.fromQuat(out, Rotations[0] as ReadonlyQuat));
+  });
+});
+
+/** Test-only cast site: a Mat4 view over element `index` of a shared buffer. */
+function mat4At(buffer: ArrayBuffer, index: number): Mat4 {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 16) as Mat4;
+}
+
+/** The upper-left 3x3 of `m`, in `Mat3` storage order. */
+function upperLeftOf(m: ReadonlyMat4): number[] {
+  return [m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]];
+}
+
+/** Model matrices covering rotation, non-uniform and mirroring scales, and translation. */
+const Models: readonly ReadonlyMat4[] = (
+  [
+    [[1, 2, 3], 0.7, [2, 0.5, 3]],
+    [[0, 1, 0], 2.4, [-1, 4, 0.25]],
+    [[1, -1, -1], 4, [1, 1, 1]],
+    [[0, 0, 1], -1.1, [3, 3, 3]],
+  ] as const
+).map(([axis, turn, [sx, sy, sz]]) =>
+  mat4.fromTRS(
+    mat4.create(),
+    vec3.create(10, -20, 30),
+    quat.fromAxisAngle(quat.create(), vec3.normalize(vec3.create(), vec3.create(...axis)), turn),
+    vec3.create(sx, sy, sz)
+  )
+);
+const Model = Models[0] as ReadonlyMat4;
+// Rows:  1  2  3  4
+//        5  6  7  8
+//        9 10 11 12
+//       13 14 15 16
+const Sequential4 = mat4.create(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+
+describe('fromMat4', () => {
+  test('writes the upper-left 3x3 and returns out', () => {
+    const out = mat3.create(...SEVENS);
+    const result = mat3.fromMat4(out, Sequential4);
+
+    expect(result).toBe(out);
+    // Rows:  1  2  3
+    //        5  6  7
+    //        9 10 11
+    expectStorage(out, [1, 5, 9, 2, 6, 10, 3, 7, 11]);
+  });
+
+  test('drops the translation and the bottom row', () => {
+    const moved = mat4.fromTranslation(mat4.create(), vec3.create(5, -3, 8));
+    moved[3] = 0.25;
+    moved[7] = -4;
+    moved[11] = 9;
+
+    expect(mat3.isEqual(mat3.fromMat4(mat3.create(), moved), mat3.IDENTITY)).toBe(true);
+  });
+
+  test('of Mat4.fromQuat is exactly Mat3.fromQuat', () => {
+    const q = quat.fromAxisAngle(
+      quat.create(),
+      vec3.normalize(vec3.create(), vec3.create(1, 2, 3)),
+      0.7
+    );
+    const fromMatrix = mat3.fromMat4(mat3.create(), mat4.fromQuat(mat4.create(), q));
+
+    expect(mat3.isEqual(fromMatrix, mat3.fromQuat(mat3.create(), q))).toBe(true);
+  });
+
+  test('transforms directions the way Vec3.transformDirectionMat4 does', () => {
+    const direction = vec3.create(0.3, -1.2, 2.5);
+    for (const model of Models) {
+      const linear = mat3.fromMat4(mat3.create(), model);
+      const viaMat3 = vec3.transformMat3(vec3.create(), direction, linear);
+      const viaMat4 = vec3.transformDirectionMat4(vec3.create(), direction, model);
+
+      expect(Array.from(viaMat3)).toEqual(Array.from(viaMat4));
+    }
+  });
+
+  test('copies every element bit for bit, including NaN, -0 and infinities', () => {
+    const m = mat4.create();
+    m[4] = Number.NaN;
+    m[1] = -0;
+    m[10] = Number.POSITIVE_INFINITY;
+    const out = mat3.fromMat4(mat3.create(), m);
+
+    expect(out[3]).toBeNaN();
+    expect(Object.is(out[1], -0)).toBe(true);
+    expect(out[8]).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  test('never writes to the input', () => {
+    const m = mat4.clone(Sequential4);
+    mat3.fromMat4(mat3.create(), m);
+    expect(mat4.isEqual(m, Sequential4)).toBe(true);
+  });
+
+  test('the input may overlap out', () => {
+    expectOverlapSafe(16, mat4At, mat3.fromMat4);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => mat3.fromMat4(out, Sequential4));
+  });
+});
+
+describe('normalFromMat4', () => {
+  /** The normal matrix of a model the test knows is invertible. */
+  function normalOf(model: ReadonlyMat4): Mat3 {
+    const normal = mat3.normalFromMat4(mat3.create(), model);
+    if (!normal) throw new Error('expected an invertible upper-left 3x3');
+    return normal;
+  }
+
+  test('writes the inverse-transpose of the upper-left 3x3 and returns out', () => {
+    for (const model of Models) {
+      const out = mat3.create(...SEVENS);
+      const result = mat3.normalFromMat4(out, model);
+
+      const inverse = mat3.invert(mat3.create(), mat3.fromMat4(mat3.create(), model));
+      if (!inverse) throw new Error('expected an invertible upper-left 3x3');
+      const expected = mat3.transpose(mat3.create(), inverse);
+
+      expect(result).toBe(out);
+      expect(mat3.isEqualEpsilon(out, expected, RotationEpsilon)).toBe(true);
+    }
+  });
+
+  test('keeps a normal perpendicular to its surface under a non-uniform scale', () => {
+    // A surface containing the tangent (1, 1, 0) has the normal (1, -1, 0).
+    const tangent = vec3.create(1, 1, 0);
+    const normal = vec3.create(1, -1, 0);
+    const stretch = mat4.fromScale(mat4.create(), vec3.create(2, 1, 1));
+
+    const movedTangent = vec3.transformMat3(
+      vec3.create(),
+      tangent,
+      mat3.fromMat4(mat3.create(), stretch)
+    );
+    const viaNormalMatrix = vec3.transformMat3(vec3.create(), normal, normalOf(stretch));
+    const viaLinearPart = vec3.transformMat3(
+      vec3.create(),
+      normal,
+      mat3.fromMat4(mat3.create(), stretch)
+    );
+
+    expect(vec3.dot(viaNormalMatrix, movedTangent)).toBe(0);
+    // The linear part tilts the normal off the surface.
+    expect(vec3.dot(viaLinearPart, movedTangent)).toBe(3);
+  });
+
+  test('a pure rotation gives the linear part back', () => {
+    const rotation = mat4.fromAxisAngle(mat4.create(), vec3.create(0, 1, 0), 2.4);
+    const linear = mat3.fromMat4(mat3.create(), rotation);
+
+    expect(mat3.isEqualEpsilon(normalOf(rotation), linear, RotationEpsilon)).toBe(true);
+  });
+
+  test('a uniform scale changes only the length of the normals', () => {
+    // The linear part is 3R, so the inverse-transpose is R / 3: the linear part over 9.
+    const model = Models[3] as ReadonlyMat4;
+    const linear = storageOf(mat3.fromMat4(mat3.create(), model));
+    const scaledDown = mat3.create();
+    for (let i = 0; i < 9; i++) scaledDown[i] = (linear[i] as number) / 9;
+
+    expect(mat3.isEqualEpsilon(normalOf(model), scaledDown, RotationEpsilon)).toBe(true);
+  });
+
+  test('ignores the translation and the bottom row', () => {
+    const junk = mat4.clone(Model);
+    junk[3] = Number.NaN;
+    junk[7] = 5;
+    junk[11] = -2;
+    junk[12] = Number.NaN;
+    junk[13] = 1e9;
+    junk[15] = 0;
+
+    expect(mat3.isEqual(normalOf(junk), normalOf(Model))).toBe(true);
+  });
+
+  test('returns null and leaves out untouched when the upper-left 3x3 is singular', () => {
+    const singular = [
+      mat4.fromScale(mat4.create(), vec3.create(1, 0, 1)),
+      mat4.create(0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 5, 0, 0, 0, 1),
+      // Dependent rows.
+      mat4.create(1, 2, 3, 0, 2, 4, 6, 0, 0, 1, 1, 0, 0, 0, 0, 1),
+    ];
+
+    for (const model of singular) {
+      const out = mat3.create(...SEVENS);
+      expect(mat3.normalFromMat4(out, model)).toBeNull();
+      expectStorage(out, SEVENS);
+    }
+  });
+
+  test('returns null and leaves out untouched when the upper-left 3x3 has a NaN', () => {
+    for (const i of [0, 1, 2, 4, 5, 6, 8, 9, 10]) {
+      const model = mat4.clone(Model);
+      model[i] = Number.NaN;
+      const out = mat3.create(...SEVENS);
+
+      expect(mat3.normalFromMat4(out, model)).toBeNull();
+      expectStorage(out, SEVENS);
+    }
+  });
+
+  test('never writes to the input', () => {
+    const model = mat4.clone(Model);
+    mat3.normalFromMat4(mat3.create(), model);
+    expect(mat4.isEqual(model, Model)).toBe(true);
+  });
+
+  test('the input may overlap out', () => {
+    expectOverlapSafe(16, mat4At, (out, model) => {
+      const normal = mat3.normalFromMat4(out, model);
+      if (!normal) throw new Error('expected an invertible upper-left 3x3');
+      return normal;
+    });
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => {
+      const normal = mat3.normalFromMat4(out, Model);
+      if (!normal) throw new Error('expected an invertible upper-left 3x3');
+      return normal;
+    });
+  });
+
+  test('reads only the upper-left 3x3 from a pooled view', () => {
+    const pool = sequentialBuffer(20);
+    const view = mat4At(pool, 2);
+    mat4.copy(view, Model);
+
+    expect(mat3.isEqual(normalOf(view), normalOf(Model))).toBe(true);
+    expect(upperLeftOf(view)).toEqual(upperLeftOf(Model));
   });
 });
