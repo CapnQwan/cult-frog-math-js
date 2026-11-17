@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 
 import * as quat from '../../../quaternion/quat.js';
 import * as vec3 from '../../../vector/vec3/vec3.js';
+import * as vec4 from '../../../vector/vec4/vec4.js';
 import * as mat4 from '../mat4.js';
 
 import type { Quat, ReadonlyQuat } from '../../../quaternion/_types/quat.js';
@@ -1506,5 +1507,313 @@ describe('fromTRS', () => {
 
   test('writes only its own slots when out is a pooled view', () => {
     expectPooledWrite((out) => mat4.fromTRS(out, t, r, s));
+  });
+});
+
+/** Where `projection` puts the view-space point `(x, y, z)`, in normalised device coordinates. */
+function ndcOf(projection: ReadonlyMat4, x: number, y: number, z: number): Vec3 {
+  return vec3.transformMat4(vec3.create(), vec3.create(x, y, z), projection);
+}
+
+/** The clip-space `w` that `matrix` gives the point `(x, y, z)`. */
+function clipWOf(matrix: ReadonlyMat4, x: number, y: number, z: number): number {
+  return vec4.transformMat4(vec4.create(), vec4.create(x, y, z, 1), matrix)[3] as number;
+}
+
+/** The depth `projection` gives a point straight ahead of the camera at `distance`. */
+function depthAt(projection: ReadonlyMat4, distance: number): number {
+  return ndcOf(projection, 0, 0, -distance)[2] as number;
+}
+
+const PERSPECTIVES = [
+  { name: 'perspectiveNO', build: mat4.perspectiveNO, nearDepth: -1 },
+  { name: 'perspectiveZO', build: mat4.perspectiveZO, nearDepth: 0 },
+] as const;
+
+describe.each(PERSPECTIVES)('$name', ({ build, nearDepth }) => {
+  const fovY = 1.1;
+  const aspect = 16 / 9;
+  const near = 0.5;
+  const far = 200;
+  const projection = build(mat4.create(), fovY, aspect, near, far);
+
+  test('returns out and overwrites every element', () => {
+    const out = mat4.create(...SEVENS);
+    const result = build(out, Math.PI / 2, 2, 1, 3);
+
+    expect(result).toBe(out);
+    // A quarter-turn field of view gives a focal length of 1. With near 1 and
+    // far 3, the depth elements are -2 and -3 for NO, and -1.5 twice for ZO.
+    const [depthScale, depthOffset] = nearDepth === -1 ? [-2, -3] : [-1.5, -1.5];
+    expectStorageNear(out, [0.5, 0, 0, 0, 0, 1, 0, 0, 0, 0, depthScale, -1, 0, 0, depthOffset, 0]);
+  });
+
+  test('maps the near plane to its near depth and the far plane to 1', () => {
+    expect(depthAt(projection, near)).toBeCloseTo(nearDepth, 5);
+    expect(depthAt(projection, far)).toBeCloseTo(1, 5);
+  });
+
+  test('depth increases with distance, fastest close to the camera', () => {
+    const distances = [near, 1, 2, 10, 50, far];
+    const depths = distances.map((d) => depthAt(projection, d));
+    for (let i = 1; i < depths.length; i++) {
+      expect(depths[i] as number).toBeGreaterThan(depths[i - 1] as number);
+    }
+    // Most of the depth range is spent within a few times `near`.
+    expect(depthAt(projection, 4 * near)).toBeGreaterThan((nearDepth + 1) / 2);
+  });
+
+  test('w is the distance in front of the camera, and negative behind it', () => {
+    expect(clipWOf(projection, 0.2, -0.3, -7)).toBeCloseTo(7, 5);
+    expect(clipWOf(projection, 0.2, -0.3, 7)).toBeCloseTo(-7, 5);
+  });
+
+  test('the edges of the field of view land on the edges of clip space', () => {
+    const distance = 10;
+    const halfHeight = distance * Math.tan(fovY / 2);
+    const halfWidth = halfHeight * aspect;
+    const corner = ndcOf(projection, halfWidth, -halfHeight, -distance);
+
+    expect(corner[0]).toBeCloseTo(1, 5);
+    expect(corner[1]).toBeCloseTo(-1, 5);
+  });
+
+  test('an infinite far plane uses the limit rather than NaN', () => {
+    const infinite = build(mat4.create(), fovY, aspect, near, Number.POSITIVE_INFINITY);
+
+    expect(storageOf(infinite).some(Number.isNaN)).toBe(false);
+    expect(infinite[10]).toBe(-1);
+    expect(depthAt(infinite, near)).toBeCloseTo(nearDepth, 5);
+    expect(depthAt(infinite, 1e4)).toBeLessThan(1);
+    // A far plane a billion times further than the near one is the same matrix in float32.
+    const huge = build(mat4.create(), fovY, aspect, near, near * 1e9);
+    expect(mat4.isEqualEpsilon(infinite, huge)).toBe(true);
+  });
+
+  test('the near and far planes do not change x, y or w', () => {
+    const other = build(mat4.create(), fovY, aspect, 3, 40);
+    for (const i of [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 15]) {
+      expect(other[i]).toBe(projection[i]);
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => build(out, fovY, aspect, near, far));
+  });
+});
+
+describe('perspectiveNO and perspectiveZO', () => {
+  test('differ only in the two elements that set depth', () => {
+    const no = mat4.perspectiveNO(mat4.create(), 0.9, 1.5, 0.1, 100);
+    const zo = mat4.perspectiveZO(mat4.create(), 0.9, 1.5, 0.1, 100);
+    for (let i = 0; i < ELEMENTS; i++) {
+      if (i === 10 || i === 14) expect(zo[i]).not.toBe(no[i]);
+      else expect(zo[i]).toBe(no[i]);
+    }
+  });
+
+  test('the ZO depth is the NO depth moved from -1..1 to 0..1', () => {
+    const no = mat4.perspectiveNO(mat4.create(), 0.9, 1.5, 0.1, 100);
+    const zo = mat4.perspectiveZO(mat4.create(), 0.9, 1.5, 0.1, 100);
+    for (const d of [0.1, 0.3, 2, 40, 100]) {
+      expect(depthAt(zo, d)).toBeCloseTo((depthAt(no, d) + 1) / 2, 5);
+    }
+  });
+});
+
+const ORTHOGRAPHICS = [
+  { name: 'orthographicNO', build: mat4.orthographicNO, nearDepth: -1 },
+  { name: 'orthographicZO', build: mat4.orthographicZO, nearDepth: 0 },
+] as const;
+
+describe.each(ORTHOGRAPHICS)('$name', ({ build, nearDepth }) => {
+  const box = [-2, 4, -1, 3, 1, 5] as const;
+  const projection = build(mat4.create(), ...box);
+
+  test('returns out and overwrites every element', () => {
+    const out = mat4.create(...SEVENS);
+    const result = build(out, ...box);
+
+    expect(result).toBe(out);
+    // x: 2 / 6 and -(4 - 2) / 6. y: 2 / 4 and -(3 - 1) / 4.
+    const [depthScale, depthOffset] = nearDepth === -1 ? [-0.5, -1.5] : [-0.25, -0.25];
+    expectStorageNear(out, [
+      1 / 3,
+      0,
+      0,
+      0,
+      0,
+      0.5,
+      0,
+      0,
+      0,
+      0,
+      depthScale,
+      0,
+      -1 / 3,
+      -0.5,
+      depthOffset,
+      1,
+    ]);
+  });
+
+  test('maps the corners of the box onto the corners of clip space', () => {
+    expectVec3Near(ndcOf(projection, -2, -1, -1), vec3.create(-1, -1, nearDepth));
+    expectVec3Near(ndcOf(projection, 4, 3, -5), vec3.create(1, 1, 1));
+  });
+
+  test('depth is linear in distance', () => {
+    expect(depthAt(projection, 3)).toBeCloseTo((nearDepth + 1) / 2, 5);
+  });
+
+  test('w stays 1, so nothing shrinks with distance', () => {
+    expect(clipWOf(projection, 1, 2, -1)).toBe(1);
+    expect(clipWOf(projection, 1, 2, -5)).toBe(1);
+    expect(ndcOf(projection, 1, 2, -1)[0]).toBe(ndcOf(projection, 1, 2, -5)[0]);
+  });
+
+  test('a near plane behind the camera is allowed', () => {
+    const shadow = build(mat4.create(), -1, 1, -1, 1, -10, 10);
+    expect(depthAt(shadow, -10)).toBeCloseTo(nearDepth, 5);
+    expect(depthAt(shadow, 10)).toBeCloseTo(1, 5);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => build(out, ...box));
+  });
+});
+
+describe('lookAt', () => {
+  const eye = vec3.create(3, 4, 5);
+  const center = vec3.create(1, 1, 1);
+
+  /** The view matrix of a camera the test knows is valid. */
+  function viewOf(
+    from: ReadonlyVec3,
+    to: ReadonlyVec3,
+    up: ReadonlyVec3 = vec3.UP,
+    out: Mat4 = mat4.create()
+  ): Mat4 {
+    const view = mat4.lookAt(out, from, to, up);
+    if (!view) throw new Error('expected a valid camera');
+    return view;
+  }
+
+  test('a camera at the origin looking down negative z is exactly the identity', () => {
+    const out = mat4.create(...SEVENS);
+    const result = mat4.lookAt(out, vec3.ZERO, vec3.FORWARD, vec3.UP);
+
+    expect(result).toBe(out);
+    expect(storageOf(out).map((n) => n + 0)).toEqual(storageOf(mat4.IDENTITY));
+  });
+
+  test('puts the eye at the origin and the center straight ahead', () => {
+    const view = viewOf(eye, center);
+    const distance = vec3.distance(eye, center);
+
+    expectVec3Near(vec3.transformMat4(vec3.create(), eye, view), vec3.ZERO);
+    expectVec3Near(vec3.transformMat4(vec3.create(), center, view), vec3.create(0, 0, -distance));
+  });
+
+  test('world right and up stay right and up for a camera looking down negative z', () => {
+    const view = viewOf(vec3.create(0, 0, 5), vec3.ZERO);
+
+    expectVec3Near(vec3.transformMat4(vec3.create(), vec3.RIGHT, view), vec3.create(1, 0, -5));
+    expectVec3Near(vec3.transformMat4(vec3.create(), vec3.UP, view), vec3.create(0, 1, -5));
+  });
+
+  test('is rigid, and inverting it gives the camera placement', () => {
+    for (const [from, to] of [
+      [eye, center],
+      [vec3.create(-7, 2, 0.5), vec3.create(3, -1, 4)],
+      [vec3.create(0, 10, 0.1), vec3.ZERO],
+    ] as const) {
+      const view = viewOf(from, to);
+      const placement = mat4.invert(mat4.create(), view);
+      if (!placement) throw new Error('expected an invertible view');
+
+      expect(mat4.determinant(view)).toBeCloseTo(1, 5);
+      expectVec3Near(vec3.transformMat4(vec3.create(), vec3.ZERO, placement), from);
+      // The camera looks down its own negative z.
+      const forward = vec3.transformDirectionMat4(vec3.create(), vec3.FORWARD, placement);
+      const expected = vec3.normalize(vec3.create(), vec3.sub(vec3.create(), to, from));
+      expectVec3Near(forward, expected);
+    }
+  });
+
+  test('up needs neither unit length nor to be perpendicular to the view direction', () => {
+    const from = vec3.create(0, 0, 5);
+    const tilted = viewOf(from, vec3.ZERO, vec3.create(0, 2, 0.5));
+
+    expect(mat4.isEqualEpsilon(tilted, viewOf(from, vec3.ZERO), RotationEpsilon)).toBe(true);
+  });
+
+  test('with a perspective projection, the center is visible and points behind are not', () => {
+    const viewProjection = mat4.multiply(
+      mat4.create(),
+      mat4.perspectiveZO(mat4.create(), 1, 1, 0.1, 100),
+      viewOf(eye, center)
+    );
+    const behind = vec3.sub(vec3.create(), vec3.scale(vec3.create(), eye, 2), center);
+
+    expect(clipWOf(viewProjection, center[0], center[1], center[2])).toBeGreaterThan(0);
+    expect(clipWOf(viewProjection, behind[0], behind[1], behind[2])).toBeLessThan(0);
+    const ndc = vec3.transformMat4(vec3.create(), center, viewProjection);
+    expectVec3Near(vec3.create(ndc[0], ndc[1], 0), vec3.ZERO);
+    expect(ndc[2]).toBeGreaterThan(0);
+    expect(ndc[2]).toBeLessThan(1);
+  });
+
+  test('returns null and leaves out untouched when the camera is degenerate', () => {
+    const cases: ReadonlyArray<readonly [ReadonlyVec3, ReadonlyVec3, ReadonlyVec3]> = [
+      // No direction to look in.
+      [eye, eye, vec3.UP],
+      // Looking straight up or down with y up.
+      [vec3.ZERO, vec3.create(0, 3, 0), vec3.UP],
+      [vec3.ZERO, vec3.create(0, -3, 0), vec3.UP],
+      // Looking along x with x up.
+      [vec3.ZERO, vec3.create(5, 0, 0), vec3.RIGHT],
+      // No up at all.
+      [eye, center, vec3.ZERO],
+    ];
+
+    for (const [from, to, up] of cases) {
+      const out = mat4.create(...SEVENS);
+      expect(mat4.lookAt(out, from, to, up)).toBeNull();
+      expectStorage(out, SEVENS);
+    }
+  });
+
+  test('returns null and leaves out untouched for a NaN in any input', () => {
+    for (let input = 0; input < 3; input++) {
+      for (let i = 0; i < 3; i++) {
+        const args = [vec3.clone(eye), vec3.clone(center), vec3.clone(vec3.UP)] as const;
+        (args[input] as Vec3)[i] = Number.NaN;
+        const out = mat4.create(...SEVENS);
+
+        expect(mat4.lookAt(out, ...args)).toBeNull();
+        expectStorage(out, SEVENS);
+      }
+    }
+  });
+
+  test('never writes to the inputs', () => {
+    const up = vec3.clone(vec3.UP);
+    mat4.lookAt(mat4.create(), eye, center, up);
+
+    expect(vec3.isEqualXYZ(eye, 3, 4, 5)).toBe(true);
+    expect(vec3.isEqualXYZ(center, 1, 1, 1)).toBe(true);
+    expect(vec3.isEqual(up, vec3.UP)).toBe(true);
+  });
+
+  test('each input may overlap out', () => {
+    const up = vec3.create(0.2, 1, -0.1);
+    expectOverlapSafe(3, vec3At, (out, from) => viewOf(from, center, up, out));
+    expectOverlapSafe(3, vec3At, (out, to) => viewOf(eye, to, up, out));
+    expectOverlapSafe(3, vec3At, (out, roll) => viewOf(eye, center, roll, out));
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    expectPooledWrite((out) => viewOf(eye, center, vec3.UP, out));
   });
 });

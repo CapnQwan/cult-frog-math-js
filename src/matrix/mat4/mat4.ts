@@ -17,6 +17,11 @@
  * `a23`, at indices 12, 13 and 14 — which is what `mat4x4<f32>` and
  * `uniformMatrix4fv` expect, so a `Mat4` uploads to the GPU untouched.
  *
+ * Camera matrices are right-handed, looking down negative z: `lookAt` builds
+ * the view matrix, and the projections come in two depth ranges, named by
+ * suffix. `NO` maps depth from negative one to one, for WebGL; `ZO` maps it
+ * from zero to one, for WebGPU, Vulkan, Metal and Direct3D.
+ *
  * Follows the package conventions: `out` first and returned, inputs are
  * read-only, and `out` may alias any input.
  *
@@ -796,6 +801,405 @@ export function fromTRS(out: Mat4, t: ReadonlyVec3, r: ReadonlyQuat, s: Readonly
   out[12] = tX;
   out[13] = tY;
   out[14] = tZ;
+  out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Writes a perspective projection into `out`, for clip space whose depth runs
+ * from `-1` at the near plane to `1` at the far plane, as WebGL expects. For
+ * WebGPU, Vulkan, Metal or Direct3D, whose depth runs from `0` to `1`, use
+ * `perspectiveZO`.
+ *
+ * The camera looks down negative z, as in a view matrix from `lookAt`, with
+ * `y` up and `x` to the right. The projection copies that distance into `w`
+ * (`w = -z`), so a point in front of the camera has a positive `w` and one
+ * behind it a negative `w`, which the GPU clips. `Vec3.transformMat4` divides
+ * by `w` and gives the normalised device coordinates directly; use
+ * `Vec4.transformMat4` to keep the point in clip space.
+ *
+ * Using the matrix for the other depth range is not an error anywhere, but it
+ * is wrong: in a `0` to `1` clip space, everything closer than about twice
+ * `near` is clipped and half the depth range is lost.
+ *
+ * Depth is not linear in distance. Its precision is set almost entirely by
+ * `near`: a point at distance `d` lands at a depth that changes with
+ * `near / d`, so doubling `near` helps far more than halving `far`.
+ *
+ * `far` may be `Infinity`, which clips nothing beyond the near plane and costs
+ * almost no precision, since `far` barely affects it. The matrix is built from
+ * the limits rather than the finite formula, which would give `NaN`. Very
+ * distant points still round to a depth of exactly `1`, from about `1e7` times
+ * `near` in float32, and fail a `less` depth test against a buffer cleared to
+ * `1`.
+ *
+ * `fovY` **must be** between `0` and `PI`, `aspect` positive and
+ * `0 < near < far`. None of this is checked: anything else gives a matrix that
+ * mirrors, flips depth or divides by zero.
+ *
+ * Every element of `out` is overwritten.
+ *
+ * @param out - The matrix to write to.
+ * @param fovY - The vertical field of view, in radians.
+ * @param aspect - The viewport width divided by its height.
+ * @param near - The distance to the near plane, which maps to a depth of `-1`.
+ * @param far - The distance to the far plane, which maps to a depth of `1`, or `Infinity`.
+ * @returns `out`.
+ */
+export function perspectiveNO(
+  out: Mat4,
+  fovY: number,
+  aspect: number,
+  near: number,
+  far: number
+): Mat4 {
+  const f = 1 / Math.tan(fovY * 0.5);
+
+  out[0] = f / aspect;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+
+  out[4] = 0;
+  out[5] = f;
+  out[6] = 0;
+  out[7] = 0;
+
+  out[8] = 0;
+  out[9] = 0;
+  out[11] = -1;
+
+  out[12] = 0;
+  out[13] = 0;
+  out[15] = 0;
+
+  if (far === Infinity) {
+    out[10] = -1;
+    out[14] = -2 * near;
+  } else {
+    const nf = 1 / (near - far);
+    out[10] = (near + far) * nf;
+    out[14] = 2 * near * far * nf;
+  }
+
+  return out;
+}
+
+/**
+ * Writes a perspective projection into `out`, for clip space whose depth runs
+ * from `0` at the near plane to `1` at the far plane, as WebGPU, Vulkan, Metal
+ * and Direct3D expect. For WebGL, whose depth runs from `-1` to `1`, use
+ * `perspectiveNO`.
+ *
+ * It differs from `perspectiveNO` only in the two elements that set depth, so
+ * everything else carries over: the camera looks down negative z, `w = -z`, a
+ * point behind the camera gets a negative `w`, and `Vec3.transformMat4` gives
+ * normalised device coordinates.
+ *
+ * Using the matrix for the other depth range is not an error anywhere, but it
+ * is wrong: in a `-1` to `1` clip space, geometry closer than `near` is kept
+ * down to about half of `near`, and half the depth range is unused.
+ *
+ * Depth is not linear in distance: a point at distance `d` lands at a depth of
+ * `far / (far - near) * (1 - near / d)`. Its precision is set almost entirely
+ * by `near`, so doubling `near` helps far more than halving `far`.
+ *
+ * `far` may be `Infinity`, which clips nothing beyond the near plane and costs
+ * almost no precision: the depth becomes `1 - near / d`, against a factor of
+ * `1.0001` for a `far` that is `10000` times `near`. The matrix is built from
+ * that limit rather than the finite formula, which would give `NaN`. Very
+ * distant points still round to a depth of exactly `1`, from about `1e7` times
+ * `near` in float32, and fail a `less` depth test against a buffer cleared to
+ * `1`.
+ *
+ * `fovY` **must be** between `0` and `PI`, `aspect` positive and
+ * `0 < near < far`. None of this is checked: anything else gives a matrix that
+ * mirrors, flips depth or divides by zero.
+ *
+ * Every element of `out` is overwritten.
+ *
+ * @param out - The matrix to write to.
+ * @param fovY - The vertical field of view, in radians.
+ * @param aspect - The viewport width divided by its height.
+ * @param near - The distance to the near plane, which maps to a depth of `0`.
+ * @param far - The distance to the far plane, which maps to a depth of `1`, or `Infinity`.
+ * @returns `out`.
+ */
+export function perspectiveZO(
+  out: Mat4,
+  fovY: number,
+  aspect: number,
+  near: number,
+  far: number
+): Mat4 {
+  const f = 1 / Math.tan(fovY * 0.5);
+
+  out[0] = f / aspect;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+
+  out[4] = 0;
+  out[5] = f;
+  out[6] = 0;
+  out[7] = 0;
+
+  out[8] = 0;
+  out[9] = 0;
+  out[11] = -1;
+
+  out[12] = 0;
+  out[13] = 0;
+  out[15] = 0;
+
+  if (far === Infinity) {
+    out[10] = -1;
+    out[14] = -near;
+  } else {
+    const nf = 1 / (near - far);
+    out[10] = far * nf;
+    out[14] = near * far * nf;
+  }
+
+  return out;
+}
+
+/**
+ * Writes an orthographic projection of the box between `left` and `right`,
+ * `bottom` and `top`, and `near` and `far` into `out`, for clip space whose
+ * depth runs from `-1` at the near plane to `1` at the far plane, as WebGL
+ * expects. For WebGPU, Vulkan, Metal or Direct3D, use `orthographicZO`.
+ *
+ * The camera looks down negative z, as in a view matrix from `lookAt`, so the
+ * box spans view-space z from `-near` to `-far`. The box maps onto clip space
+ * with no perspective: `w` stays `1`, sizes don't shrink with distance, and
+ * depth is linear in distance.
+ *
+ * `left` and `right`, and `bottom` and `top`, are view-space coordinates, so a
+ * box centred on the camera is `-halfWidth` to `halfWidth`. `near` may be zero
+ * or negative, which reaches behind the camera, as shadow maps often need.
+ *
+ * `far` **must be finite**: depth is linear in distance, so there is no limit
+ * to take, and an infinite `far` gives zeros or `NaN` in the depth row. `left`, `right` and `bottom`, `top` and
+ * `near`, `far` **must differ**, which isn't checked: equal values divide by
+ * zero.
+ *
+ * Every element of `out` is overwritten.
+ *
+ * @param out - The matrix to write to.
+ * @param left - The view-space x that maps to `-1`.
+ * @param right - The view-space x that maps to `1`.
+ * @param bottom - The view-space y that maps to `-1`.
+ * @param top - The view-space y that maps to `1`.
+ * @param near - The distance to the near plane, which maps to a depth of `-1`.
+ * @param far - The distance to the far plane, which maps to a depth of `1`.
+ * @returns `out`.
+ */
+export function orthographicNO(
+  out: Mat4,
+  left: number,
+  right: number,
+  bottom: number,
+  top: number,
+  near: number,
+  far: number
+): Mat4 {
+  const lr = 1 / (right - left);
+  const bt = 1 / (top - bottom);
+  const nf = 1 / (near - far);
+
+  out[0] = 2 * lr;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+
+  out[4] = 0;
+  out[5] = 2 * bt;
+  out[6] = 0;
+  out[7] = 0;
+
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = 2 * nf;
+  out[11] = 0;
+
+  out[12] = -(right + left) * lr;
+  out[13] = -(top + bottom) * bt;
+  out[14] = (far + near) * nf;
+  out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Writes an orthographic projection of the box between `left` and `right`,
+ * `bottom` and `top`, and `near` and `far` into `out`, for clip space whose
+ * depth runs from `0` at the near plane to `1` at the far plane, as WebGPU,
+ * Vulkan, Metal and Direct3D expect. For WebGL, use `orthographicNO`.
+ *
+ * It differs from `orthographicNO` only in the two elements that set depth,
+ * so everything else carries over: the camera looks down negative z, `w` stays
+ * `1`, and depth is linear in distance.
+ *
+ * `left` and `right`, and `bottom` and `top`, are view-space coordinates, so a
+ * box centred on the camera is `-halfWidth` to `halfWidth`. `near` may be zero
+ * or negative, which reaches behind the camera, as shadow maps often need.
+ *
+ * `far` **must be finite**: depth is linear in distance, so there is no limit
+ * to take, and an infinite `far` gives zeros or `NaN` in the depth row. `left`, `right` and `bottom`, `top` and
+ * `near`, `far` **must differ**, which isn't checked: equal values divide by
+ * zero.
+ *
+ * Every element of `out` is overwritten.
+ *
+ * @param out - The matrix to write to.
+ * @param left - The view-space x that maps to `-1`.
+ * @param right - The view-space x that maps to `1`.
+ * @param bottom - The view-space y that maps to `-1`.
+ * @param top - The view-space y that maps to `1`.
+ * @param near - The distance to the near plane, which maps to a depth of `0`.
+ * @param far - The distance to the far plane, which maps to a depth of `1`.
+ * @returns `out`.
+ */
+export function orthographicZO(
+  out: Mat4,
+  left: number,
+  right: number,
+  bottom: number,
+  top: number,
+  near: number,
+  far: number
+): Mat4 {
+  const lr = 1 / (right - left);
+  const bt = 1 / (top - bottom);
+  const nf = 1 / (near - far);
+
+  out[0] = 2 * lr;
+  out[1] = 0;
+  out[2] = 0;
+  out[3] = 0;
+
+  out[4] = 0;
+  out[5] = 2 * bt;
+  out[6] = 0;
+  out[7] = 0;
+
+  out[8] = 0;
+  out[9] = 0;
+  out[10] = nf;
+  out[11] = 0;
+
+  out[12] = -(right + left) * lr;
+  out[13] = -(top + bottom) * bt;
+  out[14] = near * nf;
+  out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Writes the view matrix of a camera at `eye` looking at `center` into `out`,
+ * or returns `null` when no such camera exists.
+ *
+ * The view matrix takes world coordinates into the camera's: right-handed,
+ * with the camera at the origin looking down negative z, `y` up and `x` to the
+ * right, which is what the perspective and orthographic projections expect.
+ * `center` lands on the negative z axis at its distance from `eye`. It is the
+ * inverse of the camera's world transform: its rotation rows are the camera's
+ * right, up and back directions, and its translation moves `eye` to the
+ * origin. Since it is rigid, it keeps lengths and angles, and its
+ * `determinant` is `1`.
+ *
+ * `up` only picks the roll: it needn't be unit length or perpendicular to the
+ * view direction, since only the plane it shares with that direction is used.
+ * The camera's own up is the part of `up` perpendicular to the view direction,
+ * normalised.
+ *
+ * Returns `null` when `eye` equals `center`, leaving no direction to look in,
+ * or when `up` is zero or parallel to the view direction, leaving no roll to
+ * pick. A `NaN` component in any input returns `null` the same way. `out` is
+ * then left untouched; keeping last frame's view is usually the right
+ * response. Infinite components are not caught, and give `NaN` elements.
+ *
+ * The checks are exact, so an `up` that is *nearly* parallel to the view
+ * direction passes. The result is still a valid view matrix, but its roll is
+ * dominated by rounding: an orbit camera passing over its target spins about
+ * the view axis. Clamp the pitch short of straight up or down, or build the
+ * view from the camera's orientation instead.
+ *
+ * All three inputs are read into locals first, so each may be a view
+ * overlapping `out`.
+ *
+ * @param out - The matrix to write to. Untouched when `null` is returned.
+ * @param eye - The camera's position.
+ * @param center - The point the camera looks at.
+ * @param up - The direction that should appear upward on screen.
+ * @returns `out`, or `null` if the camera is degenerate.
+ */
+export function lookAt(
+  out: Mat4,
+  eye: ReadonlyVec3,
+  center: ReadonlyVec3,
+  up: ReadonlyVec3
+): Mat4 | null {
+  // biome-ignore format: packed component reads
+  const eX = eye[0], eY = eye[1], eZ = eye[2];
+  // biome-ignore format: packed component reads
+  const cX = center[0], cY = center[1], cZ = center[2];
+  // biome-ignore format: packed component reads
+  const uX = up[0], uY = up[1], uZ = up[2];
+
+  // The camera's back direction: it looks down its own negative z.
+  let zx = eX - cX;
+  let zy = eY - cY;
+  let zz = eZ - cZ;
+
+  let len = Math.hypot(zx, zy, zz);
+  if (!len) return null;
+  let invLen = 1 / len;
+
+  zx *= invLen;
+  zy *= invLen;
+  zz *= invLen;
+
+  // The camera's right direction.
+  let xx = uY * zz - uZ * zy;
+  let xy = uZ * zx - uX * zz;
+  let xz = uX * zy - uY * zx;
+
+  len = Math.hypot(xx, xy, xz);
+  if (!len) return null;
+  invLen = 1 / len;
+
+  xx *= invLen;
+  xy *= invLen;
+  xz *= invLen;
+
+  // The camera's up direction, already unit length as the cross of two
+  // perpendicular unit vectors.
+  const yx = zy * xz - zz * xy;
+  const yy = zz * xx - zx * xz;
+  const yz = zx * xy - zy * xx;
+
+  out[0] = xx;
+  out[1] = yx;
+  out[2] = zx;
+  out[3] = 0;
+
+  out[4] = xy;
+  out[5] = yy;
+  out[6] = zy;
+  out[7] = 0;
+
+  out[8] = xz;
+  out[9] = yz;
+  out[10] = zz;
+  out[11] = 0;
+
+  out[12] = -(xx * eX + xy * eY + xz * eZ);
+  out[13] = -(yx * eX + yy * eY + yz * eZ);
+  out[14] = -(zx * eX + zy * eY + zz * eZ);
   out[15] = 1;
 
   return out;

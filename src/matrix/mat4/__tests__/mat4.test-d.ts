@@ -275,3 +275,63 @@ describe('builders', () => {
     mat4.fromScale(live, raw);
   });
 });
+
+describe('projections', () => {
+  test('out is mutable, the planes are numbers, and out is returned', () => {
+    type Perspective = [Mat4, number, number, number, number];
+    type Orthographic = [Mat4, number, number, number, number, number, number];
+    expectTypeOf(mat4.perspectiveNO).parameters.toEqualTypeOf<Perspective>();
+    expectTypeOf(mat4.perspectiveZO).parameters.toEqualTypeOf<Perspective>();
+    expectTypeOf(mat4.orthographicNO).parameters.toEqualTypeOf<Orthographic>();
+    expectTypeOf(mat4.orthographicZO).parameters.toEqualTypeOf<Orthographic>();
+    expectTypeOf(mat4.perspectiveNO).returns.toEqualTypeOf<Mat4>();
+    expectTypeOf(mat4.perspectiveZO).returns.toEqualTypeOf<Mat4>();
+    expectTypeOf(mat4.orthographicNO).returns.toEqualTypeOf<Mat4>();
+    expectTypeOf(mat4.orthographicZO).returns.toEqualTypeOf<Mat4>();
+  });
+
+  test('call sites', () => {
+    mat4.perspectiveZO(live, 1, 16 / 9, 0.1, Number.POSITIVE_INFINITY);
+    mat4.orthographicNO(shared, -1, 1, -1, 1, 0, 10);
+    // @ts-expect-error readonly can never be an out parameter
+    mat4.perspectiveNO(frozen, 1, 1, 0.1, 100);
+    // @ts-expect-error the shared constant must never be written through
+    mat4.orthographicZO(mat4.IDENTITY, -1, 1, -1, 1, 0, 10);
+    // @ts-expect-error wrong-dimension out
+    mat4.perspectiveZO(other, 1, 1, 0.1, 100);
+    // @ts-expect-error every plane is required
+    mat4.orthographicZO(live, -1, 1, -1, 1, 0);
+  });
+});
+
+describe('lookAt', () => {
+  test('out is mutable, the inputs are readonly, and out or null is returned', () => {
+    expectTypeOf(mat4.lookAt).parameters.toEqualTypeOf<
+      [Mat4, ReadonlyVec3, ReadonlyVec3, ReadonlyVec3]
+    >();
+    expectTypeOf(mat4.lookAt).returns.toEqualTypeOf<Mat4 | null>();
+  });
+
+  test('the result must be checked before it is used', () => {
+    // @ts-expect-error the view is null for a degenerate camera
+    mat4.multiply(live, frozen, mat4.lookAt(live, vector, frozenVector, vector));
+
+    const view = mat4.lookAt(live, vector, frozenVector, vector);
+    if (view) mat4.multiply(live, frozen, view);
+  });
+
+  test('call sites', () => {
+    mat4.lookAt(live, frozenVector, vector, frozenVector);
+    mat4.lookAt(shared, vector, vector, vector);
+    // @ts-expect-error readonly can never be an out parameter
+    mat4.lookAt(frozen, vector, vector, vector);
+    // @ts-expect-error the shared constant must never be written through
+    mat4.lookAt(mat4.IDENTITY, vector, vector, vector);
+    // @ts-expect-error a quaternion is not a position
+    mat4.lookAt(live, rotation, vector, vector);
+    // @ts-expect-error a Vec4 is not a position
+    mat4.lookAt(live, vector, four, vector);
+    // @ts-expect-error unbranded arrays are rejected
+    mat4.lookAt(live, vector, vector, raw);
+  });
+});
