@@ -1,6 +1,6 @@
 {
   "name": "@cult-frog/math",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A TypeScript math library for game development: vectors, matrices, quaternions, and numerical utilities.",
   "license": "MIT",
   "author": "Quin Partridge",
