@@ -72,10 +72,6 @@
       "types": "./dist/easing/index.d.ts",
       "default": "./dist/easing/index.js"
     },
-    "./geometry": {
-      "types": "./dist/geometry/index.d.ts",
-      "default": "./dist/geometry/index.js"
-    },
     "./color": {
       "types": "./dist/colors/color/index.d.ts",
       "default": "./dist/colors/color/index.js"
