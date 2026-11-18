@@ -16,7 +16,7 @@ import type { ReadonlyFixedFloat32Array } from '../../../_types/readonlyFixedFlo
  * resolves to about one unit.
  *
  * Branded: a plain `Float32Array` won't type-check. Make one with
- * `mat4.create`, or cast when wrapping existing memory (e.g. a pooled view).
+ * `Mat4.create`, or cast when wrapping existing memory (e.g. a pooled view).
  * Any backing buffer works, including a `SharedArrayBuffer`, but nothing here
  * is atomic: coordinate access across threads yourself.
  */

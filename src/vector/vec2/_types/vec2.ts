@@ -9,7 +9,7 @@ import type { ReadonlyFixedFloat32Array } from '../../../_types/readonlyFixedFlo
  * (`0.1` reads back as `0.10000000149011612`).
  *
  * Branded: a plain `Float32Array` won't type-check. Make one with
- * `vec2.create`, or cast when wrapping existing memory (e.g. a pooled view).
+ * `Vec2.create`, or cast when wrapping existing memory (e.g. a pooled view).
  * Any backing buffer works, including a `SharedArrayBuffer`, but nothing here
  * is atomic: coordinate access across threads yourself.
  */

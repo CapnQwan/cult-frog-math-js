@@ -20,7 +20,7 @@ import type { ReadonlyFixedFloat32Array } from '../../_types/readonlyFixedFloat3
  *
  * Branded, and branded *separately from `Vec4`* despite the identical memory
  * layout: the two mean different things, so the compiler won't let you pass one
- * where the other is expected. Make one with `quat.create`, or cast when
+ * where the other is expected. Make one with `Quat.create`, or cast when
  * wrapping existing memory (e.g. a pooled view). Any backing buffer works,
  * including a `SharedArrayBuffer`, but nothing here is atomic: coordinate
  * access across threads yourself.

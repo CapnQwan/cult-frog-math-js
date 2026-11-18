@@ -998,9 +998,15 @@ export function fromEuler(out: Quat, x: number, y: number, z: number): Quat {
  * within about 0.08° of opposite, it writes a half turn `(n, 0)` instead,
  * where `n` is `Vec3.UP` with its `from` component removed, then normalised.
  * A horizontal `from` therefore spins about `UP` and stays upright, rather than
- * flipping over. If `from` is within about 0.06° of vertical, so that too
- * little of `UP` is left to give a stable axis, `n` is `Vec3.RIGHT`. Inside that band the result turns `from` to exactly
- * `-from`, so it can miss `to` by up to about 0.08°.
+ * flipping over. That axis is perpendicular to `from`, so the half turn takes
+ * `from` to exactly `-from`, up to rounding, and misses `to` by up to about
+ * 0.08°.
+ *
+ * If `from` is within about 0.06° of vertical, too little of `UP` is left to
+ * give a stable axis, and `n` is `Vec3.RIGHT` instead. `RIGHT` is only nearly
+ * perpendicular to such a `from`: the half turn flips its y and z but keeps
+ * its x, so it lands up to about 0.11° from `-from`, and up to about 0.2°
+ * from `to`.
  *
  * Both inputs **must be unit length**, and neither is normalised. The `1` in
  * `1 + dot` doesn't scale with them, so other lengths give the wrong angle,
