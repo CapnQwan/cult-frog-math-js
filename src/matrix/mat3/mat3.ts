@@ -339,10 +339,11 @@ export function determinant(a: ReadonlyMat3): number {
  * The check is exact rather than within a tolerance, because a fixed
  * tolerance can't tell a small but valid matrix from a nearly singular one:
  * the determinant shrinks with the cube of a uniform scale, so a scale of
- * `0.01` gives `1e-6` and still inverts cleanly. A nearly singular matrix inverts to very large elements, most of
- * whose precision has been lost to rounding. Infinite elements are not
- * caught: if they make the determinant infinite rather than `NaN`, the result
- * is zeros and `NaN` rather than an inverse.
+ * `0.01` gives `1e-6` and still inverts cleanly. A nearly singular matrix
+ * inverts to very large elements, most of whose precision has been lost to
+ * rounding. Infinite elements are not caught: if they make the determinant
+ * infinite rather than `NaN`, the result is zeros and `NaN` rather than an
+ * inverse.
  *
  * For a pure rotation, `transpose` gives the same result, exactly and more
  * cheaply.

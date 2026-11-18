@@ -40,7 +40,7 @@ import { EPSILON } from '../../constants.js';
 import * as Scalars from '../../scalars.js';
 
 import type { ReadonlyVec2 } from '../../vector/vec2/_types/vec2.js';
-import type { Mat3x2, ReadonlyMat3x2 } from './_types/index.js';
+import type { Mat3x2, ReadonlyMat3x2 } from './_types/mat3x2.js';
 
 /** The number of elements in a `Mat3x2`. */
 export const SIZE = 6;

@@ -1032,13 +1032,19 @@ export function fromUnitVectors(out: Quat, from: ReadonlyVec3, to: ReadonlyVec3)
  * For the rotation inside a `Mat4`, use `Mat4.decompose`, which divides out
  * the scale first.
  *
- * The result is accurate for every rotation, half turns included: the largest
- * of `|w|`, `|x|`, `|y|` and `|z|` is recovered from the diagonal first, and
- * the rest from the off-diagonal elements divided by it, rather than always
- * starting from `w`, which is near zero for a half turn. The same matrix
- * always gives the same quaternion, but `q` and `-q` give the same matrix, so
- * `fromMat3(out, Mat3.fromQuat(tmp, q))` may be `-q`. Compare it with
- * `isEqualRotation` rather than component by component.
+ * The result is accurate for every rotation, half turns included. One
+ * component of at least `0.5` is recovered from the diagonal first: `w` when
+ * the trace is positive, and otherwise the largest of `x`, `y` and `z`. The
+ * rest come from the off-diagonal elements divided by it, rather than always
+ * starting from `w`, which is near zero for a half turn.
+ *
+ * The same matrix always gives the same quaternion, but `q` and `-q` give the
+ * same matrix, so `fromMat3(out, Mat3.fromQuat(tmp, q))` may be `-q`. Compare
+ * it with `isEqualRotation` rather than component by component. The sign isn't
+ * continuous either: two nearly equal matrices either side of the point where
+ * the recovered component changes can give opposite signs. `slerp` and `nlerp`
+ * take the shorter path regardless, but before blending components yourself,
+ * negate one input when their `dot` is negative.
  *
  * `m` **must be a rotation**: orthonormal columns and a determinant of `1`.
  * The result is normalised, so the slight drift left by accumulated rounding

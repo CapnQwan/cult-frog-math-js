@@ -21,14 +21,23 @@ import type { Quat } from './_types/quat.js';
  * `r<row><col>` into `out`.
  *
  * Every quaternion component can be recovered from the diagonal, but only up
- * to sign, and dividing by a small one amplifies its rounding. So the largest
- * of `|w|`, `|x|`, `|y|` and `|z|` is recovered from the diagonal first, and
- * the others from the sums and differences of opposite off-diagonal elements,
- * divided by it. Using the trace for `w` alone would fail near half turns,
- * where `w` is near zero. Picking the largest makes the result accurate for
- * every rotation, and fixes its sign: the recovered component is positive, so
- * the same matrix always gives the same quaternion, though not necessarily
- * the one it was built from, which may be its negation.
+ * to sign, and dividing by a small one amplifies its rounding. So one
+ * component known to be at least `0.5` is recovered from the diagonal first,
+ * and the others from the sums and differences of opposite off-diagonal
+ * elements, divided by it. When the trace is positive that component is `w`,
+ * since `4w² = 1 + trace`. Otherwise `|w|` is at most `0.5`, and the component
+ * is whichever of `x`, `y` and `z` has the largest diagonal element: it is
+ * then the largest of the four, and the unit length puts it at `0.5` or more.
+ * It is not always the largest overall: a 100° turn has `w ≈ 0.64` and an
+ * axis component of about `0.77`, and still takes the `w` branch. Using the
+ * trace for `w` alone would fail near half turns, where `w` is near zero.
+ *
+ * The divisor is never below `0.5`, so the result is accurate for every
+ * rotation. The recovered component is positive, which fixes the sign: the
+ * same matrix always gives the same quaternion, though not necessarily the
+ * one it was built from, which may be its negation. Nearly equal matrices on
+ * either side of a change of branch can come out with opposite signs, so a
+ * sequence of results isn't sign-continuous.
  *
  * The result is normalised, which is exact for a rotation and keeps the result
  * unit length when the matrix has drifted slightly from one. It doesn't make a

@@ -839,11 +839,10 @@ export function fromTRS(out: Mat4, t: ReadonlyVec3, r: ReadonlyQuat, s: Readonly
  *
  * `m` **must be** a translation, rotation and scale: what `fromTRS` builds,
  * or a product of such matrices in which every scale but the first applied is
- * uniform. None of this is checked.
- * The bottom row is ignored, so a projection decomposes to meaningless parts.
- * A shear, as a rotated child of a non-uniformly scaled parent gets, has no
- * exact TRS: `outR` is still a unit rotation, but `fromTRS`
- * of the parts doesn't rebuild `m`.
+ * uniform. None of this is checked. The bottom row is ignored, so a
+ * projection decomposes to meaningless parts. A shear, as a rotated child of a
+ * non-uniformly scaled parent gets, has no exact TRS: `outR` is still a unit
+ * rotation, but `fromTRS` of the parts doesn't rebuild `m`.
  *
  * Every element of `m` is read into a local before anything is written, so
  * each output may be a view overlapping `m`. The three outputs must not
@@ -1067,9 +1066,9 @@ export function perspectiveZO(
  * or negative, which reaches behind the camera, as shadow maps often need.
  *
  * `far` **must be finite**: depth is linear in distance, so there is no limit
- * to take, and an infinite `far` gives zeros or `NaN` in the depth row. `left`, `right` and `bottom`, `top` and
- * `near`, `far` **must differ**, which isn't checked: equal values divide by
- * zero.
+ * to take, and an infinite `far` gives zeros or `NaN` in the depth row. Each
+ * pair, `left` and `right`, `bottom` and `top`, and `near` and `far`, **must
+ * differ**, which isn't checked: equal values divide by zero.
  *
  * Every element of `out` is overwritten.
  *
@@ -1133,9 +1132,9 @@ export function orthographicNO(
  * or negative, which reaches behind the camera, as shadow maps often need.
  *
  * `far` **must be finite**: depth is linear in distance, so there is no limit
- * to take, and an infinite `far` gives zeros or `NaN` in the depth row. `left`, `right` and `bottom`, `top` and
- * `near`, `far` **must differ**, which isn't checked: equal values divide by
- * zero.
+ * to take, and an infinite `far` gives zeros or `NaN` in the depth row. Each
+ * pair, `left` and `right`, `bottom` and `top`, and `near` and `far`, **must
+ * differ**, which isn't checked: equal values divide by zero.
  *
  * Every element of `out` is overwritten.
  *
