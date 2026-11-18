@@ -168,7 +168,7 @@ export function identity(out: Mat4): Mat4 {
  * Shared instance, readonly at the type level only. Never cast it to `Mat4`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const IDENTITY = identity(create()) as ReadonlyMat4;
+export const IDENTITY = /*#__PURE__*/ create() as ReadonlyMat4;
 
 /**
  * Returns whether two matrices have exactly equal elements.
@@ -868,10 +868,13 @@ export function decompose(outT: Vec3, outR: Quat, outS: Vec3, m: ReadonlyMat4): 
 
   if (!det) return false;
 
+  // Each scale is the length of its column of the 3x3.
+  const lenX = Math.sqrt(a00 * a00 + a10 * a10 + a20 * a20);
+  const sY = Math.sqrt(a01 * a01 + a11 * a11 + a21 * a21);
+  const sZ = Math.sqrt(a02 * a02 + a12 * a12 + a22 * a22);
+
   // A mirror flips one axis; putting it on x leaves the columns a rotation.
-  const sX = det < 0 ? -Math.hypot(a00, a10, a20) : Math.hypot(a00, a10, a20);
-  const sY = Math.hypot(a01, a11, a21);
-  const sZ = Math.hypot(a02, a12, a22);
+  const sX = det < 0 ? -lenX : lenX;
 
   const invX = 1 / sX, invY = 1 / sY, invZ = 1 / sZ;
   const r00 = a00 * invX, r01 = a01 * invY, r02 = a02 * invZ;
@@ -1240,7 +1243,7 @@ export function lookAt(
   let zy = eY - cY;
   let zz = eZ - cZ;
 
-  let len = Math.hypot(zx, zy, zz);
+  let len = Math.sqrt(zx * zx + zy * zy + zz * zz);
   if (!len) return null;
   let invLen = 1 / len;
 
@@ -1253,7 +1256,7 @@ export function lookAt(
   let xy = uZ * zx - uX * zz;
   let xz = uX * zy - uY * zx;
 
-  len = Math.hypot(xx, xy, xz);
+  len = Math.sqrt(xx * xx + xy * xy + xz * xz);
   if (!len) return null;
   invLen = 1 / len;
 
@@ -1286,6 +1289,45 @@ export function lookAt(
   out[13] = -(yx * eX + yy * eY + yz * eZ);
   out[14] = -(zx * eX + zy * eY + zz * eZ);
   out[15] = 1;
+
+  return out;
+}
+
+/**
+ * Copies matrix `index` of a tightly packed array of matrices into `out`,
+ * without making a view. Matrix `i` starts at element `i * SIZE` and is stored
+ * column major, the same layout as a `Mat4` itself, so the elements are copied
+ * as they are: nothing is transposed, and nothing is rounded, since both sides
+ * are float32.
+ *
+ * Bounds aren't checked: an element read from outside `packed` is written to
+ * `out` as `NaN`.
+ *
+ * Every element is read before any is written, so `out` may be a view into
+ * `packed`, including one that overlaps the matrix being read.
+ *
+ * @param out - The matrix to write to.
+ * @param packed - The packed matrices to read from.
+ * @param index - The matrix to read, not an element offset.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function fromPacked(out: Mat4, packed: Float32Array, index: number): Mat4 {
+  const from = index * SIZE;
+
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m00 = packed[from + 0]!, m01 = packed[from + 4]!, m02 = packed[from + 8]!,  m03 = packed[from + 12]!;
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m10 = packed[from + 1]!, m11 = packed[from + 5]!, m12 = packed[from + 9]!,  m13 = packed[from + 13]!;
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m20 = packed[from + 2]!, m21 = packed[from + 6]!, m22 = packed[from + 10]!, m23 = packed[from + 14]!;
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m30 = packed[from + 3]!, m31 = packed[from + 7]!, m32 = packed[from + 11]!, m33 = packed[from + 15]!;
+
+  out[0] = m00; out[4] = m01; out[8]  = m02;  out[12] = m03;
+  out[1] = m10; out[5] = m11; out[9]  = m12;  out[13] = m13;
+  out[2] = m20; out[6] = m21; out[10] = m22; out[14] = m23;
+  out[3] = m30; out[7] = m31; out[11] = m32; out[15] = m33;
 
   return out;
 }

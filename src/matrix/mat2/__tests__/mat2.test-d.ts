@@ -256,3 +256,23 @@ describe('builders', () => {
     mat2.fromScale(live, raw);
   });
 });
+
+describe('fromPacked', () => {
+  test('it writes to a mutable out and returns it', () => {
+    expectTypeOf(mat2.fromPacked).parameters.toEqualTypeOf<[Mat2, Float32Array, number]>();
+    expectTypeOf(mat2.fromPacked).returns.toEqualTypeOf<Mat2>();
+  });
+
+  test('call sites', () => {
+    mat2.fromPacked(live, raw, 0);
+    mat2.fromPacked(shared, rawShared, 0);
+    // @ts-expect-error readonly can never be an out parameter
+    mat2.fromPacked(frozen, raw, 0);
+    // @ts-expect-error unbranded arrays are rejected as out
+    mat2.fromPacked(raw, raw, 0);
+    // @ts-expect-error plain arrays are rejected; pack the values into a Float32Array
+    mat2.fromPacked(live, [1, 2, 3, 4], 0);
+    // @ts-expect-error the row index is required
+    mat2.fromPacked(live, raw);
+  });
+});

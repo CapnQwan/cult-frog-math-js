@@ -266,3 +266,23 @@ describe('builders', () => {
     mat3x2.fromScale(live, raw);
   });
 });
+
+describe('fromPacked', () => {
+  test('it writes to a mutable out and returns it', () => {
+    expectTypeOf(mat3x2.fromPacked).parameters.toEqualTypeOf<[Mat3x2, Float32Array, number]>();
+    expectTypeOf(mat3x2.fromPacked).returns.toEqualTypeOf<Mat3x2>();
+  });
+
+  test('call sites', () => {
+    mat3x2.fromPacked(live, raw, 0);
+    mat3x2.fromPacked(shared, rawShared, 0);
+    // @ts-expect-error readonly can never be an out parameter
+    mat3x2.fromPacked(frozen, raw, 0);
+    // @ts-expect-error unbranded arrays are rejected as out
+    mat3x2.fromPacked(raw, raw, 0);
+    // @ts-expect-error plain arrays are rejected; pack the values into a Float32Array
+    mat3x2.fromPacked(live, [1, 2, 3, 4, 5, 6], 0);
+    // @ts-expect-error the row index is required
+    mat3x2.fromPacked(live, raw);
+  });
+});

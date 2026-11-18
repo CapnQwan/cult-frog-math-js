@@ -297,3 +297,23 @@ describe('builders', () => {
     mat3.fromTRS(live, vector, 0.5, vector);
   });
 });
+
+describe('fromPacked', () => {
+  test('it writes to a mutable out and returns it', () => {
+    expectTypeOf(mat3.fromPacked).parameters.toEqualTypeOf<[Mat3, Float32Array, number]>();
+    expectTypeOf(mat3.fromPacked).returns.toEqualTypeOf<Mat3>();
+  });
+
+  test('call sites', () => {
+    mat3.fromPacked(live, raw, 0);
+    mat3.fromPacked(shared, rawShared, 0);
+    // @ts-expect-error readonly can never be an out parameter
+    mat3.fromPacked(frozen, raw, 0);
+    // @ts-expect-error unbranded arrays are rejected as out
+    mat3.fromPacked(raw, raw, 0);
+    // @ts-expect-error plain arrays are rejected; pack the values into a Float32Array
+    mat3.fromPacked(live, [1, 2, 3, 4, 5, 6, 7, 8, 9], 0);
+    // @ts-expect-error the row index is required
+    mat3.fromPacked(live, raw);
+  });
+});

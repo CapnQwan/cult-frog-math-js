@@ -9,7 +9,7 @@
 
 import { EPSILON } from '../../constants.js';
 import { lerp as lerpScalar } from '../../interpolation.js';
-import { clamp, isEqualEpsilon as isEqualEpsilonScalar } from '../../scalars.js';
+import * as Scalars from '../../scalars.js';
 
 import type { ReadonlyMat3 } from '../../matrix/mat3/_types/mat3.js';
 import type { ReadonlyMat4 } from '../../matrix/mat4/_types/mat4.js';
@@ -110,9 +110,9 @@ export function isEqual(a: ReadonlyVec3, b: ReadonlyVec3): boolean {
  */
 export function isEqualEpsilon(a: ReadonlyVec3, b: ReadonlyVec3, eps = EPSILON): boolean {
   return (
-    isEqualEpsilonScalar(a[0], b[0], eps) &&
-    isEqualEpsilonScalar(a[1], b[1], eps) &&
-    isEqualEpsilonScalar(a[2], b[2], eps)
+    Scalars.isEqualEpsilon(a[0], b[0], eps) &&
+    Scalars.isEqualEpsilon(a[1], b[1], eps) &&
+    Scalars.isEqualEpsilon(a[2], b[2], eps)
   );
 }
 
@@ -673,13 +673,17 @@ export function reflect(out: Vec3, a: ReadonlyVec3, normal: ReadonlyVec3): Vec3 
  * Only an exact zero is treated this way, so very short vectors still give the right
  * angle. To ignore tiny noise, check `magnitudeSq(a) < EPSILON_SQUARED` first.
  *
- * The cosine is clamped before `Math.acos`, so rounding can't produce `NaN`. Rounding
- * can still make parallel vectors come out very slightly apart, at around `5e-8`, so
- * compare the result using a tolerance rather than `=== 0`. Precision also falls away
- * for angles below about `1e-6`.
+ * Calculated with Kahan's formula, `2 * atan2(|a |b| - b |a||, |a |b| + b |a||)`,
+ * which stays accurate across the whole range, including angles next to `0` and `π`
+ * where a cosine-based `acos` loses most of its digits. A vector compared with
+ * itself gives exactly `0`, and exactly parallel vectors of different lengths come
+ * out within about `1e-16` of it. Two vectors that are only parallel in theory,
+ * such as `a` and a float32 `scale` of it, give the small angle that rounding
+ * actually left between them, so compare the result using a tolerance rather than
+ * `=== 0`.
  *
- * To compare against a limit, as in a view cone, you can skip the `Math.acos`: with
- * unit vectors, `dot(a, b) > Math.cos(limit)` gives the same answer.
+ * To compare against a limit, as in a view cone, you can skip the angle entirely:
+ * with unit vectors, `dot(a, b) > Math.cos(limit)` gives the same answer.
  *
  * A `NaN` or infinite component gives `NaN`.
  *
@@ -688,20 +692,38 @@ export function reflect(out: Vec3, a: ReadonlyVec3, normal: ReadonlyVec3): Vec3 
  * @returns The angle in radians, from `0` to `π`.
  */
 export function angle(a: ReadonlyVec3, b: ReadonlyVec3): number {
-  const magSqA = magnitudeSq(a);
-  const magSqB = magnitudeSq(b);
+  // biome-ignore format: packed component reads
+  const ax = a[0], ay = a[1], az = a[2];
+  // biome-ignore format: packed component reads
+  const bx = b[0], by = b[1], bz = b[2];
 
-  if (magSqA === 0 || magSqB === 0) return 0;
+  const lenA = Math.sqrt(ax * ax + ay * ay + az * az);
+  const lenB = Math.sqrt(bx * bx + by * by + bz * bz);
 
-  const denominator = Math.sqrt(magSqA * magSqB);
-  const cos = dot(a, b) / denominator;
+  // Scaling each vector by the other's length gives both the same length, so
+  // their difference and sum are the diagonals of a rhombus: perpendicular, with
+  // lengths proportional to sin(angle / 2) and cos(angle / 2). Neither is formed
+  // by cancelling two nearly equal numbers the way a cosine near 1 is. A zero
+  // vector makes both diagonals zero, and atan2(0, 0) is 0. Any infinite
+  // component meets either 0 * Infinity or Infinity - Infinity in one of them,
+  // so it gives NaN rather than a finite angle.
+  const dx = ax * lenB - bx * lenA;
+  const dy = ay * lenB - by * lenA;
+  const dz = az * lenB - bz * lenA;
 
-  return Math.acos(clamp(cos, -1, 1));
+  const sx = ax * lenB + bx * lenA;
+  const sy = ay * lenB + by * lenA;
+  const sz = az * lenB + bz * lenA;
+
+  return (
+    2 * Math.atan2(Math.sqrt(dx * dx + dy * dy + dz * dz), Math.sqrt(sx * sx + sy * sy + sz * sz))
+  );
 }
 
 /**
  * Copies row `index` of a tightly packed array into `out`, without making a view.
- * Row `i` starts at element `i * SIZE`. Values are rounded to float32.
+ * Row `i` starts at element `i * SIZE`. The components are copied exactly, since
+ * both sides are float32.
  *
  * Bounds aren't checked: a component read from outside `packed` is written to
  * `out` as `NaN`.
@@ -713,7 +735,7 @@ export function angle(a: ReadonlyVec3, b: ReadonlyVec3): number {
  * @param index - The row to read, not an element offset.
  * @returns `out`.
  */
-export function fromPacked(out: Vec3, packed: ArrayLike<number>, index: number): Vec3 {
+export function fromPacked(out: Vec3, packed: Float32Array, index: number): Vec3 {
   const from = index * SIZE;
   // biome-ignore format: packed component reads
   // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
@@ -924,42 +946,42 @@ export function transformDirectionMat4(out: Vec3, v: ReadonlyVec3, m: ReadonlyMa
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const ZERO = create(0, 0, 0) as ReadonlyVec3;
+export const ZERO = /*#__PURE__*/ create(0, 0, 0) as ReadonlyVec3;
 /**
  * `(1, 1, 1)`.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const ONE = create(1, 1, 1) as ReadonlyVec3;
+export const ONE = /*#__PURE__*/ create(1, 1, 1) as ReadonlyVec3;
 /**
  * `(0, 1, 0)`: up in this package's y-up convention.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const UP = create(0, 1, 0) as ReadonlyVec3;
+export const UP = /*#__PURE__*/ create(0, 1, 0) as ReadonlyVec3;
 /**
  * `(0, -1, 0)`: down in this package's y-up convention.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const DOWN = create(0, -1, 0) as ReadonlyVec3;
+export const DOWN = /*#__PURE__*/ create(0, -1, 0) as ReadonlyVec3;
 /**
  * `(-1, 0, 0)`: negative x.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const LEFT = create(-1, 0, 0) as ReadonlyVec3;
+export const LEFT = /*#__PURE__*/ create(-1, 0, 0) as ReadonlyVec3;
 /**
  * `(1, 0, 0)`: positive x.
  *
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const RIGHT = create(1, 0, 0) as ReadonlyVec3;
+export const RIGHT = /*#__PURE__*/ create(1, 0, 0) as ReadonlyVec3;
 /**
  * `(0, 0, -1)`: forward in this package's right-handed, y-up convention, along
  * negative z.
@@ -967,7 +989,7 @@ export const RIGHT = create(1, 0, 0) as ReadonlyVec3;
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const FORWARD = create(0, 0, -1) as ReadonlyVec3;
+export const FORWARD = /*#__PURE__*/ create(0, 0, -1) as ReadonlyVec3;
 /**
  * `(0, 0, 1)`: back in this package's right-handed, y-up convention, along
  * positive z.
@@ -975,4 +997,4 @@ export const FORWARD = create(0, 0, -1) as ReadonlyVec3;
  * Shared instance, readonly at the type level only. Never cast it to `Vec3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const BACK = create(0, 0, 1) as ReadonlyVec3;
+export const BACK = /*#__PURE__*/ create(0, 0, 1) as ReadonlyVec3;

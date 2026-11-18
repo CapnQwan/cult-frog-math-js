@@ -140,7 +140,7 @@ export function identity(out: Quat): Quat {
  * Shared instance, readonly at the type level only. Never cast it to `Quat`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const IDENTITY = create(0, 0, 0, 1) as ReadonlyQuat;
+export const IDENTITY = /*#__PURE__*/ create(0, 0, 0, 1) as ReadonlyQuat;
 
 /**
  * Returns whether two quaternions have exactly equal components.
@@ -429,13 +429,15 @@ export function dot(a: ReadonlyQuat, b: ReadonlyQuat): number {
  * are the same rotation, so they are `0` apart, and the order of the inputs
  * doesn't matter.
  *
- * It is worked out as `2 * atan2(sin, cos)` of the half-angle rather than
+ * It is worked out with Kahan's formula for the angle between two 4D vectors,
+ * after negating `b` if it is on the far side of `a`, rather than as
  * `2 * acos(dot(a, b))`. `acos` is badly conditioned near `1`, so for
  * near-identical rotations the `acos` form is out by up to about `1e-3`
- * radians, enough to break a "have we arrived?" check; this form gives `0`
- * for `angle(q, q)` and stays accurate down to tiny separations. The lengths
- * are divided out, so the inputs don't need to be exactly unit length, and a
- * scaled quaternion gives the same angle as its normalised form.
+ * radians, enough to break a "have we arrived?" check. This form gives `0`
+ * for `angle(q, q)` and stays accurate down to the smallest rotations a
+ * float32 quaternion can hold, such as `1e-9` radians from the identity. The
+ * lengths are divided out, so the inputs don't need to be exactly unit
+ * length, and a scaled quaternion gives the same angle as its normalised form.
  *
  * The zero quaternion is no rotation at all and gives `0` against anything. A
  * `NaN` component in either input gives `NaN`.
@@ -445,10 +447,41 @@ export function dot(a: ReadonlyQuat, b: ReadonlyQuat): number {
  * @returns The angle between them in radians, from `0` to `π`.
  */
 export function angle(a: ReadonlyQuat, b: ReadonlyQuat): number {
-  const aMagSq = magnitudeSq(a);
-  const bMagSq = magnitudeSq(b);
-  const d = dot(a, b);
-  return 2 * Math.atan2(Math.sqrt(Math.max(0, aMagSq * bMagSq - d * d)), Math.abs(d));
+  // biome-ignore format: packed component reads
+  const aX = a[0], aY = a[1], aZ = a[2], aW = a[3];
+  // biome-ignore format: packed component reads
+  const bX = b[0], bY = b[1], bZ = b[2], bW = b[3];
+
+  const lenA = Math.sqrt(aX * aX + aY * aY + aZ * aZ + aW * aW);
+  // `q` and `-q` are the same rotation, so measure against whichever of `b`
+  // and `-b` is on a's side, folding the 4D angle into 0 to π/2.
+  const lenB =
+    aX * bX + aY * bY + aZ * bZ + aW * bW < 0
+      ? -Math.sqrt(bX * bX + bY * bY + bZ * bZ + bW * bW)
+      : Math.sqrt(bX * bX + bY * bY + bZ * bZ + bW * bW);
+
+  // Kahan's formula, as in `Vec4.angle`: scaling each by the other's length
+  // makes the difference and sum perpendicular, with lengths proportional to
+  // the sine and cosine of half the 4D angle. Scaling `a` by a negative `lenB`
+  // is the same as negating `b`. The 4D angle is half the rotation angle,
+  // hence the factor of 4 rather than 2.
+  const dx = aX * lenB - bX * lenA;
+  const dy = aY * lenB - bY * lenA;
+  const dz = aZ * lenB - bZ * lenA;
+  const dw = aW * lenB - bW * lenA;
+
+  const sx = aX * lenB + bX * lenA;
+  const sy = aY * lenB + bY * lenA;
+  const sz = aZ * lenB + bZ * lenA;
+  const sw = aW * lenB + bW * lenA;
+
+  return (
+    4 *
+    Math.atan2(
+      Math.sqrt(dx * dx + dy * dy + dz * dz + dw * dw),
+      Math.sqrt(sx * sx + sy * sy + sz * sz + sw * sw)
+    )
+  );
 }
 
 /**
@@ -1069,4 +1102,34 @@ export function fromMat3(out: Quat, m: ReadonlyMat3): Quat {
     m[1], m[4], m[7],
     m[2], m[5], m[8]
   );
+}
+
+/**
+ * Copies quaternion `index` of a tightly packed array into `out`, without
+ * making a view. Quaternion `i` starts at element `i * SIZE`, in the same
+ * `[x, y, z, w]` order as a `Quat`. The components are copied exactly, since
+ * both sides are float32, and are not normalised: a packed quaternion that has
+ * drifted from unit length stays drifted.
+ *
+ * Bounds aren't checked: a component read from outside `packed` is written to
+ * `out` as `NaN`.
+ *
+ * `out` may be a view into `packed`, including one that overlaps the
+ * quaternion being read.
+ *
+ * @param out - The quaternion to write to.
+ * @param packed - The packed quaternions to read from.
+ * @param index - The quaternion to read, not an element offset.
+ * @returns `out`.
+ */
+export function fromPacked(out: Quat, packed: Float32Array, index: number): Quat {
+  const from = index * SIZE;
+  // biome-ignore format: packed component reads
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const x = packed[from]!, y = packed[from + 1]!, z = packed[from + 2]!, w = packed[from + 3]!;
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  out[3] = w;
+  return out;
 }

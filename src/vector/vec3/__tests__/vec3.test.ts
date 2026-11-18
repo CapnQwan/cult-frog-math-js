@@ -2572,14 +2572,34 @@ describe('angle', () => {
     );
   });
 
-  test('a cosine rounded just above 1 is clamped rather than giving NaN', () => {
+  test('exactly parallel vectors whose cosine rounds above 1 stay within rounding of 0', () => {
+    // 0.1 times each of these components rounds by the same relative amount, so
+    // b is exactly parallel to a, yet the cosine works out above 1.
     const a = vec3.create(1, 2, 8);
     const b = vec3.scale(vec3.create(), a, 0.1);
 
     expect(vec3.dot(a, b) / Math.sqrt(vec3.magnitudeSq(a) * vec3.magnitudeSq(b))).toBeGreaterThan(
       1
     );
-    expect(vec3.angle(a, b)).toBe(0);
+    expect(vec3.angle(a, b)).toBeLessThan(1e-15);
+  });
+
+  test('stays accurate for angles a cosine cannot resolve', () => {
+    const x = vec3.create(1, 0, 0);
+
+    for (const theta of [1e-5, 1e-7, 1e-9]) {
+      const b = vec3.create(Math.cos(theta), Math.sin(theta), 0);
+      const exact = Math.atan2(b[1], b[0]);
+
+      expect(Math.abs(vec3.angle(x, b) - exact) / exact).toBeLessThan(1e-12);
+    }
+  });
+
+  test('stays accurate next to pi', () => {
+    const x = vec3.create(1, 0, 0);
+    const b = vec3.create(-Math.cos(1e-7), Math.sin(1e-7), 0);
+
+    expect(vec3.angle(x, b)).toBeCloseTo(Math.atan2(b[1], b[0]), 15);
   });
 
   test('rounding can leave parallel vectors very slightly apart', () => {
@@ -2607,6 +2627,17 @@ describe('angle', () => {
 
     expect(vec3.angle(vec3.create(Number.NaN, 1, 0), y)).toBeNaN();
     expect(vec3.angle(vec3.create(Number.POSITIVE_INFINITY, 1, 0), y)).toBeNaN();
+
+    // Against a vector with no zero components, a cross-product numerator and the
+    // dot product both come out infinite, and atan2(Infinity, Infinity) is finite.
+    const ones = vec3.create(1, 1, 1);
+    const inf = vec3.create(Number.POSITIVE_INFINITY, 1, 1);
+
+    expect(vec3.angle(inf, ones)).toBeNaN();
+    expect(vec3.angle(ones, inf)).toBeNaN();
+    expect(vec3.angle(vec3.create(Number.NEGATIVE_INFINITY, 1, 1), ones)).toBeNaN();
+    expect(vec3.angle(inf, inf)).toBeNaN();
+    expect(vec3.angle(inf, vec3.create())).toBeNaN();
   });
 
   test('never writes to the inputs', () => {
@@ -2681,16 +2712,6 @@ describe('fromPacked', () => {
     vec3.fromPacked(viewAt(pool, 4), new Float32Array(pool), 1);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 4, 4, 5, 6]);
-  });
-
-  test('reads from a plain array, rounding to float32', () => {
-    expectComponents(vec3.fromPacked(vec3.create(), [0.1, 0.2, 0.3], 0), 0.1, 0.2, 0.3);
-  });
-
-  test('reads from a readonly vector', () => {
-    const source: ReadonlyVec3 = vec3.create(1, 2, 3);
-
-    expectComponents(vec3.fromPacked(vec3.create(), source, 0), 1, 2, 3);
   });
 
   test('reads from a SharedArrayBuffer', () => {

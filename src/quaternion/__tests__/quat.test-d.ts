@@ -444,3 +444,23 @@ describe('fromMat3', () => {
     quat.fromMat3(live, raw);
   });
 });
+
+describe('fromPacked', () => {
+  test('it writes to a mutable out and returns it', () => {
+    expectTypeOf(quat.fromPacked).parameters.toEqualTypeOf<[Quat, Float32Array, number]>();
+    expectTypeOf(quat.fromPacked).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.fromPacked(live, raw, 0);
+    quat.fromPacked(shared, rawShared, 0);
+    // @ts-expect-error readonly can never be an out parameter
+    quat.fromPacked(frozen, raw, 0);
+    // @ts-expect-error unbranded arrays are rejected as out
+    quat.fromPacked(raw, raw, 0);
+    // @ts-expect-error plain arrays are rejected; pack the values into a Float32Array
+    quat.fromPacked(live, [1, 2, 3, 4], 0);
+    // @ts-expect-error the row index is required
+    quat.fromPacked(live, raw);
+  });
+});

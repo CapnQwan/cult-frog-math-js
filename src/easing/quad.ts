@@ -4,8 +4,6 @@
  * @module quad
  */
 
-import * as Base from './base.js';
-
 /**
  * Starts slowly and accelerates: `t²`.
  *
@@ -16,7 +14,9 @@ import * as Base from './base.js';
  * @param t - The progress from `0` to `1`.
  * @returns The eased progress.
  */
-export const easeIn = Base.easeIn(2);
+export function easeIn(t: number): number {
+  return t * t;
+}
 
 /**
  * Starts quickly and decelerates: `1 - (1 - t)²`.
@@ -28,7 +28,10 @@ export const easeIn = Base.easeIn(2);
  * @param t - The progress from `0` to `1`.
  * @returns The eased progress.
  */
-export const easeOut = Base.easeOut(2);
+export function easeOut(t: number): number {
+  const f = 1 - t;
+  return 1 - f * f;
+}
 
 /**
  * Accelerates to the midpoint, then decelerates, and is flat at both ends.
@@ -40,4 +43,11 @@ export const easeOut = Base.easeOut(2);
  * @param t - The progress from `0` to `1`.
  * @returns The eased progress.
  */
-export const easeInOut = Base.easeInOut(2);
+export function easeInOut(t: number): number {
+  if (t < 0.5) {
+    const f = 2 * t;
+    return (f * f) / 2;
+  }
+  const f = 2 - 2 * t;
+  return 1 - (f * f) / 2;
+}

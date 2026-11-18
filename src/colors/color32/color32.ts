@@ -28,7 +28,7 @@
  */
 
 import * as Interpolation from '../../interpolation.js';
-import * as Scalar from '../../scalars.js';
+import * as Scalars from '../../scalars.js';
 import { linearToSrgb } from '../srgb.js';
 
 import type { ReadonlyColor } from '../color/index.js';
@@ -134,7 +134,7 @@ export function alpha(color32: Color32): number {
 
 /** Interpolates one channel and saturates it to the 8-bit range. */
 function lerpChannel(from: number, to: number, t: number): number {
-  return Scalar.clamp(Interpolation.lerp(from, to, t), CHANNEL_MIN, CHANNEL_MAX);
+  return Scalars.clamp(Interpolation.lerp(from, to, t), CHANNEL_MIN, CHANNEL_MAX);
 }
 
 /**
@@ -204,40 +204,40 @@ export function fromColor(color: ReadonlyColor): Color32 {
   // biome-ignore format: packed component reads
   const r = color[0], g = color[1], b = color[2], alpha = color[3];
   return create(
-    linearToSrgb(Scalar.saturate(r)) * CHANNEL_MAX,
-    linearToSrgb(Scalar.saturate(g)) * CHANNEL_MAX,
-    linearToSrgb(Scalar.saturate(b)) * CHANNEL_MAX,
-    Scalar.saturate(alpha) * CHANNEL_MAX
+    linearToSrgb(Scalars.saturate(r)) * CHANNEL_MAX,
+    linearToSrgb(Scalars.saturate(g)) * CHANNEL_MAX,
+    linearToSrgb(Scalars.saturate(b)) * CHANNEL_MAX,
+    Scalars.saturate(alpha) * CHANNEL_MAX
   );
 }
 
 /** Opaque white, `0xffffffff`. */
-export const WHITE = create(255, 255, 255, 255);
+export const WHITE = /*#__PURE__*/ create(255, 255, 255, 255);
 
 /** Opaque black, `0x000000ff`. */
-export const BLACK = create(0, 0, 0, 255);
+export const BLACK = /*#__PURE__*/ create(0, 0, 0, 255);
 
 /** Opaque red, `0xff0000ff`. */
-export const RED = create(255, 0, 0, 255);
+export const RED = /*#__PURE__*/ create(255, 0, 0, 255);
 
 /** Opaque green at full intensity, `0x00ff00ff`. Brighter than CSS `green`, which is `#008000`. */
-export const GREEN = create(0, 255, 0, 255);
+export const GREEN = /*#__PURE__*/ create(0, 255, 0, 255);
 
 /** Opaque blue, `0x0000ffff`. */
-export const BLUE = create(0, 0, 255, 255);
+export const BLUE = /*#__PURE__*/ create(0, 0, 255, 255);
 
 /** Opaque yellow, `0xffff00ff`. */
-export const YELLOW = create(255, 255, 0, 255);
+export const YELLOW = /*#__PURE__*/ create(255, 255, 0, 255);
 
 /** Opaque cyan, `0x00ffffff`. */
-export const CYAN = create(0, 255, 255, 255);
+export const CYAN = /*#__PURE__*/ create(0, 255, 255, 255);
 
 /** Opaque magenta, `0xff00ffff`. */
-export const MAGENTA = create(255, 0, 255, 255);
+export const MAGENTA = /*#__PURE__*/ create(255, 0, 255, 255);
 
 /**
  * Transparent black, `0x00000000`. Also what `create(0, 0, 0, 0)` produces
  * (leaving alpha out gives `BLACK` instead), and what `lerp` produces for a
  * `NaN` factor.
  */
-export const TRANSPARENT = create(0, 0, 0, 0);
+export const TRANSPARENT = /*#__PURE__*/ create(0, 0, 0, 0);

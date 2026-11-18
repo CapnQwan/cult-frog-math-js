@@ -323,14 +323,16 @@ describe('abs, min, max, floor, ceil and round', () => {
 
 describe('fromPacked', () => {
   test('it writes to a mutable out and returns it', () => {
-    expectTypeOf(vec4.fromPacked).parameters.toEqualTypeOf<[Vec4, ArrayLike<number>, number]>();
+    expectTypeOf(vec4.fromPacked).parameters.toEqualTypeOf<[Vec4, Float32Array, number]>();
     expectTypeOf(vec4.fromPacked).returns.toEqualTypeOf<Vec4>();
   });
 
   test('call sites', () => {
     vec4.fromPacked(live, raw, 0);
     vec4.fromPacked(shared, rawShared, 0);
+    // @ts-expect-error readonly views are rejected as the packed source
     vec4.fromPacked(live, frozen, 0);
+    // @ts-expect-error plain arrays are rejected; pack the values into a Float32Array
     vec4.fromPacked(live, [1, 2, 3, 4], 0);
     // @ts-expect-error readonly can never be an out parameter
     vec4.fromPacked(frozen, raw, 0);

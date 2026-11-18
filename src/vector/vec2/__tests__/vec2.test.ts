@@ -2262,14 +2262,45 @@ describe('angle', () => {
     expect(vec2.angle(vec2.create(3e38, 0), vec2.create(3e38, 3e38))).toBeCloseTo(Math.PI / 4, 12);
   });
 
-  test('a cosine rounded just above 1 is clamped rather than giving NaN', () => {
+  test('a cosine rounded above 1 does not hide the angle rounding left behind', () => {
+    // Storing 0.3 * a in float32 rounds its two components differently, so b is
+    // about 2e-9 radians off a, even though the cosine works out above 1.
     const a = vec2.create(1, 20);
     const b = vec2.scale(vec2.create(), a, 0.3);
+    // Each product of two float32 values is exact in float64, so this cross
+    // product is correct to within one rounding.
+    const exact = Math.atan2(Math.abs(a[0] * b[1] - a[1] * b[0]), vec2.dot(a, b));
 
     expect(vec2.dot(a, b) / Math.sqrt(vec2.magnitudeSq(a) * vec2.magnitudeSq(b))).toBeGreaterThan(
       1
     );
-    expect(vec2.angle(a, b)).toBe(0);
+    expect(exact).toBeGreaterThan(1e-9);
+    expect(Math.abs(vec2.angle(a, b) - exact) / exact).toBeLessThan(1e-6);
+  });
+
+  test('exactly parallel vectors of different lengths stay within rounding of 0', () => {
+    // Scaling by a power of two is exact in float32.
+    const a = vec2.create(1, 20);
+
+    expect(vec2.angle(a, vec2.scale(vec2.create(), a, 4))).toBeLessThan(1e-15);
+  });
+
+  test('stays accurate for angles a cosine cannot resolve', () => {
+    const x = vec2.create(1, 0);
+
+    for (const theta of [1e-5, 1e-7, 1e-9]) {
+      const b = vec2.create(Math.cos(theta), Math.sin(theta));
+      const exact = Math.atan2(b[1], b[0]);
+
+      expect(Math.abs(vec2.angle(x, b) - exact) / exact).toBeLessThan(1e-12);
+    }
+  });
+
+  test('stays accurate next to pi', () => {
+    const x = vec2.create(1, 0);
+    const b = vec2.create(-Math.cos(1e-7), Math.sin(1e-7));
+
+    expect(vec2.angle(x, b)).toBeCloseTo(Math.atan2(b[1], b[0]), 15);
   });
 
   test('rounding can leave parallel vectors very slightly apart', () => {
@@ -2297,6 +2328,17 @@ describe('angle', () => {
 
     expect(vec2.angle(vec2.create(Number.NaN, 1), y)).toBeNaN();
     expect(vec2.angle(vec2.create(Number.POSITIVE_INFINITY, 1), y)).toBeNaN();
+
+    // Against a vector with no zero components, a cross-product numerator and the
+    // dot product both come out infinite, and atan2(Infinity, Infinity) is finite.
+    const ones = vec2.create(1, 1);
+    const inf = vec2.create(Number.POSITIVE_INFINITY, 1);
+
+    expect(vec2.angle(inf, ones)).toBeNaN();
+    expect(vec2.angle(ones, inf)).toBeNaN();
+    expect(vec2.angle(vec2.create(Number.NEGATIVE_INFINITY, 1), ones)).toBeNaN();
+    expect(vec2.angle(inf, inf)).toBeNaN();
+    expect(vec2.angle(inf, vec2.create())).toBeNaN();
   });
 
   test('never writes to the inputs', () => {
@@ -2371,16 +2413,6 @@ describe('fromPacked', () => {
     vec2.fromPacked(viewAt(pool, 3), new Float32Array(pool), 1);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 3, 4]);
-  });
-
-  test('reads from a plain array, rounding to float32', () => {
-    expectComponents(vec2.fromPacked(vec2.create(), [0.1, 0.2], 0), 0.1, 0.2);
-  });
-
-  test('reads from a readonly vector', () => {
-    const source: ReadonlyVec2 = vec2.create(1, 2);
-
-    expectComponents(vec2.fromPacked(vec2.create(), source, 0), 1, 2);
   });
 
   test('reads from a SharedArrayBuffer', () => {

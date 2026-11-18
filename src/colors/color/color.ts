@@ -28,7 +28,7 @@
 
 import { EPSILON } from '../../constants.js';
 import * as Interpolation from '../../interpolation.js';
-import * as Scalar from '../../scalars.js';
+import * as Scalars from '../../scalars.js';
 import { Color32 } from '../color32/index.js';
 import { srgbToLinear } from '../srgb.js';
 
@@ -149,10 +149,10 @@ export function isEqual(a: ReadonlyColor, b: ReadonlyColor): boolean {
  */
 export function isEqualEpsilon(a: ReadonlyColor, b: ReadonlyColor, eps = EPSILON): boolean {
   return (
-    Scalar.isEqualEpsilon(a[0], b[0], eps) &&
-    Scalar.isEqualEpsilon(a[1], b[1], eps) &&
-    Scalar.isEqualEpsilon(a[2], b[2], eps) &&
-    Scalar.isEqualEpsilon(a[3], b[3], eps)
+    Scalars.isEqualEpsilon(a[0], b[0], eps) &&
+    Scalars.isEqualEpsilon(a[1], b[1], eps) &&
+    Scalars.isEqualEpsilon(a[2], b[2], eps) &&
+    Scalars.isEqualEpsilon(a[3], b[3], eps)
   );
 }
 
@@ -278,7 +278,7 @@ export function fromColor32(out: Color, color32: Color32): Color {
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const WHITE = create(1, 1, 1, 1) as ReadonlyColor;
+export const WHITE = /*#__PURE__*/ create(1, 1, 1, 1) as ReadonlyColor;
 
 /**
  * Opaque black, `(0, 0, 0, 1)`. Also what `create()` gives with no
@@ -287,7 +287,7 @@ export const WHITE = create(1, 1, 1, 1) as ReadonlyColor;
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const BLACK = create(0, 0, 0, 1) as ReadonlyColor;
+export const BLACK = /*#__PURE__*/ create(0, 0, 0, 1) as ReadonlyColor;
 
 /**
  * Opaque red, `(1, 0, 0, 1)`.
@@ -295,7 +295,7 @@ export const BLACK = create(0, 0, 0, 1) as ReadonlyColor;
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const RED = create(1, 0, 0, 1) as ReadonlyColor;
+export const RED = /*#__PURE__*/ create(1, 0, 0, 1) as ReadonlyColor;
 
 /**
  * Opaque green at full intensity, `(0, 1, 0, 1)`. Brighter than CSS `green`,
@@ -304,7 +304,7 @@ export const RED = create(1, 0, 0, 1) as ReadonlyColor;
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const GREEN = create(0, 1, 0, 1) as ReadonlyColor;
+export const GREEN = /*#__PURE__*/ create(0, 1, 0, 1) as ReadonlyColor;
 
 /**
  * Opaque blue, `(0, 0, 1, 1)`.
@@ -312,7 +312,7 @@ export const GREEN = create(0, 1, 0, 1) as ReadonlyColor;
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const BLUE = create(0, 0, 1, 1) as ReadonlyColor;
+export const BLUE = /*#__PURE__*/ create(0, 0, 1, 1) as ReadonlyColor;
 
 /**
  * Opaque yellow, `(1, 1, 0, 1)`.
@@ -320,7 +320,7 @@ export const BLUE = create(0, 0, 1, 1) as ReadonlyColor;
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const YELLOW = create(1, 1, 0, 1) as ReadonlyColor;
+export const YELLOW = /*#__PURE__*/ create(1, 1, 0, 1) as ReadonlyColor;
 
 /**
  * Opaque cyan, `(0, 1, 1, 1)`.
@@ -328,7 +328,7 @@ export const YELLOW = create(1, 1, 0, 1) as ReadonlyColor;
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const CYAN = create(0, 1, 1, 1) as ReadonlyColor;
+export const CYAN = /*#__PURE__*/ create(0, 1, 1, 1) as ReadonlyColor;
 
 /**
  * Opaque magenta, `(1, 0, 1, 1)`.
@@ -336,7 +336,7 @@ export const CYAN = create(0, 1, 1, 1) as ReadonlyColor;
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const MAGENTA = create(1, 0, 1, 1) as ReadonlyColor;
+export const MAGENTA = /*#__PURE__*/ create(1, 0, 1, 1) as ReadonlyColor;
 
 /**
  * Transparent black, `(0, 0, 0, 0)`.
@@ -344,4 +344,4 @@ export const MAGENTA = create(1, 0, 1, 1) as ReadonlyColor;
  * Shared instance, readonly at the type level only. Never cast it to `Color`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const TRANSPARENT = create(0, 0, 0, 0) as ReadonlyColor;
+export const TRANSPARENT = /*#__PURE__*/ create(0, 0, 0, 0) as ReadonlyColor;

@@ -158,7 +158,7 @@ export function identity(out: Mat3): Mat3 {
  * Shared instance, readonly at the type level only. Never cast it to `Mat3`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const IDENTITY = identity(create()) as ReadonlyMat3;
+export const IDENTITY = /*#__PURE__*/ create() as ReadonlyMat3;
 
 /**
  * Returns whether two matrices have exactly equal elements.
@@ -545,6 +545,42 @@ export function normalFromMat4(out: Mat3, a: ReadonlyMat4): Mat3 | null {
   out[6] = m02 * invDet;
   out[7] = (a01 * a20 - a00 * a21) * invDet;
   out[8] = (a00 * a11 - a01 * a10) * invDet;
+
+  return out;
+}
+
+/**
+ * Copies matrix `index` of a tightly packed array of matrices into `out`,
+ * without making a view. Matrix `i` starts at element `i * SIZE` and is stored
+ * column major, the same layout as a `Mat3` itself, so the elements are copied
+ * as they are: nothing is transposed, and nothing is rounded, since both sides
+ * are float32.
+ *
+ * Bounds aren't checked: an element read from outside `packed` is written to
+ * `out` as `NaN`.
+ *
+ * Every element is read before any is written, so `out` may be a view into
+ * `packed`, including one that overlaps the matrix being read.
+ *
+ * @param out - The matrix to write to.
+ * @param packed - The packed matrices to read from.
+ * @param index - The matrix to read, not an element offset.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function fromPacked(out: Mat3, packed: Float32Array, index: number): Mat3 {
+  const from = index * SIZE;
+
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m00 = packed[from + 0]!, m01 = packed[from + 3]!, m02 = packed[from + 6]!;
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m10 = packed[from + 1]!, m11 = packed[from + 4]!, m12 = packed[from + 7]!;
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m20 = packed[from + 2]!, m21 = packed[from + 5]!, m22 = packed[from + 8]!;
+
+  out[0] = m00; out[3] = m01; out[6] = m02;
+  out[1] = m10; out[4] = m11; out[7] = m12;
+  out[2] = m20; out[5] = m21; out[8] = m22;
 
   return out;
 }

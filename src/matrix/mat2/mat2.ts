@@ -137,7 +137,7 @@ export function identity(out: Mat2): Mat2 {
  * Shared instance, readonly at the type level only. Never cast it to `Mat2`
  * or write to it; `clone` it if you need a mutable copy.
  */
-export const IDENTITY = identity(create()) as ReadonlyMat2;
+export const IDENTITY = /*#__PURE__*/ create() as ReadonlyMat2;
 
 /**
  * Returns whether two matrices have exactly equal elements.
@@ -390,6 +390,39 @@ export function fromScale(out: Mat2, v: ReadonlyVec2): Mat2 {
 
   out[2] = 0;
   out[3] = y;
+
+  return out;
+}
+
+/**
+ * Copies matrix `index` of a tightly packed array of matrices into `out`,
+ * without making a view. Matrix `i` starts at element `i * SIZE` and is stored
+ * column major, the same layout as a `Mat2` itself, so the elements are copied
+ * as they are: nothing is transposed, and nothing is rounded, since both sides
+ * are float32.
+ *
+ * Bounds aren't checked: an element read from outside `packed` is written to
+ * `out` as `NaN`.
+ *
+ * Every element is read before any is written, so `out` may be a view into
+ * `packed`, including one that overlaps the matrix being read.
+ *
+ * @param out - The matrix to write to.
+ * @param packed - The packed matrices to read from.
+ * @param index - The matrix to read, not an element offset.
+ * @returns `out`.
+ */
+// biome-ignore format: visual alignment with the matrix
+export function fromPacked(out: Mat2, packed: Float32Array, index: number): Mat2 {
+  const from = index * SIZE;
+
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m00 = packed[from + 0]!, m01 = packed[from + 2]!;
+  // biome-ignore lint/style/noNonNullAssertion: the caller owns the bounds
+  const m10 = packed[from + 1]!, m11 = packed[from + 3]!;
+
+  out[0] = m00; out[2] = m01;
+  out[1] = m10; out[3] = m11;
 
   return out;
 }

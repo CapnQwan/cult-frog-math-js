@@ -1059,3 +1059,72 @@ describe('fromTRS', () => {
     expectPooledWrite((out) => mat3x2.fromTRS(out, t, angle, s));
   });
 });
+
+describe('fromPacked', () => {
+  const N = mat3x2.SIZE;
+
+  /** `count` rows of N floats, holding 1, 2, 3, ... */
+  function packedRows(count: number): Float32Array {
+    return new Float32Array(sequentialBuffer(count * N));
+  }
+
+  /** The values `packedRows` holds in row `index`. */
+  function rowValues(index: number): number[] {
+    return Array.from({ length: N }, (_, i) => index * N + i + 1);
+  }
+
+  test('copies the requested row element for element, in storage order', () => {
+    const packed = packedRows(3);
+
+    for (let row = 0; row < 3; row++) {
+      expect(Array.from(mat3x2.fromPacked(mat3x2.create(), packed, row))).toEqual(rowValues(row));
+    }
+  });
+
+  test('returns out', () => {
+    const out = mat3x2.create();
+
+    expect(mat3x2.fromPacked(out, new Float32Array(N), 0)).toBe(out);
+  });
+
+  test('never writes to the packed array', () => {
+    const packed = packedRows(2);
+    mat3x2.fromPacked(mat3x2.create(), packed, 1);
+
+    expect(Array.from(packed)).toEqual([...rowValues(0), ...rowValues(1)]);
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(N + 2);
+    const source = packedRows(1).map((n) => n * 10);
+    mat3x2.fromPacked(viewAt(pool, 1), source, 0);
+
+    expect(Array.from(new Float32Array(pool))).toEqual([1, ...source, N + 2]);
+  });
+
+  for (const [side, offset] of [
+    ['behind', N - 1],
+    ['ahead', N + 1],
+  ] as const) {
+    test(`handles out overlapping the row from ${side}`, () => {
+      const pool = sequentialBuffer(3 * N);
+      const expected = Array.from(new Float32Array(pool));
+      expected.splice(offset, N, ...rowValues(1));
+
+      mat3x2.fromPacked(viewAt(pool, offset), new Float32Array(pool), 1);
+
+      expect(Array.from(new Float32Array(pool))).toEqual(expected);
+    });
+  }
+
+  test('reads from a SharedArrayBuffer', () => {
+    const packed = new Float32Array(new SharedArrayBuffer(2 * N * FLOAT_BYTES));
+    packed.set(packedRows(2));
+
+    expect(Array.from(mat3x2.fromPacked(mat3x2.create(), packed, 1))).toEqual(rowValues(1));
+  });
+
+  test('writes NaN for a row past the end', () => {
+    for (const n of mat3x2.fromPacked(mat3x2.create(), new Float32Array(N), 1)) expect(n).toBeNaN();
+  });
+});

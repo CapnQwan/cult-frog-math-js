@@ -357,3 +357,23 @@ describe('decompose', () => {
     mat4.decompose(vector, rotation, vector, raw);
   });
 });
+
+describe('fromPacked', () => {
+  test('it writes to a mutable out and returns it', () => {
+    expectTypeOf(mat4.fromPacked).parameters.toEqualTypeOf<[Mat4, Float32Array, number]>();
+    expectTypeOf(mat4.fromPacked).returns.toEqualTypeOf<Mat4>();
+  });
+
+  test('call sites', () => {
+    mat4.fromPacked(live, raw, 0);
+    mat4.fromPacked(shared, rawShared, 0);
+    // @ts-expect-error readonly can never be an out parameter
+    mat4.fromPacked(frozen, raw, 0);
+    // @ts-expect-error unbranded arrays are rejected as out
+    mat4.fromPacked(raw, raw, 0);
+    // @ts-expect-error plain arrays are rejected; pack the values into a Float32Array
+    mat4.fromPacked(live, [1, 2, 3, 4], 0);
+    // @ts-expect-error the row index is required
+    mat4.fromPacked(live, raw);
+  });
+});

@@ -85,7 +85,7 @@ export function quatFromRotation(
     y = (r12 + r21) * k;
   }
 
-  const invLen = 1 / Math.hypot(x, y, z, w);
+  const invLen = 1 / Math.sqrt(x * x + y * y + z * z + w * w);
 
   out[0] = x * invLen;
   out[1] = y * invLen;

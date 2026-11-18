@@ -2465,14 +2465,34 @@ describe('angle', () => {
     );
   });
 
-  test('a cosine rounded just above 1 is clamped rather than giving NaN', () => {
+  test('exactly parallel vectors whose cosine rounds above 1 stay within rounding of 0', () => {
+    // 0.1 times each of these components rounds by the same relative amount, so
+    // b is exactly parallel to a, yet the cosine works out above 1.
     const a = vec4.create(1, 2, 2, 8);
     const b = vec4.scale(vec4.create(), a, 0.1);
 
     expect(vec4.dot(a, b) / Math.sqrt(vec4.magnitudeSq(a) * vec4.magnitudeSq(b))).toBeGreaterThan(
       1
     );
-    expect(vec4.angle(a, b)).toBe(0);
+    expect(vec4.angle(a, b)).toBeLessThan(1e-15);
+  });
+
+  test('stays accurate for angles a cosine cannot resolve', () => {
+    const x = vec4.create(1, 0, 0, 0);
+
+    for (const theta of [1e-5, 1e-7, 1e-9]) {
+      const b = vec4.create(Math.cos(theta), Math.sin(theta), 0, 0);
+      const exact = Math.atan2(b[1], b[0]);
+
+      expect(Math.abs(vec4.angle(x, b) - exact) / exact).toBeLessThan(1e-12);
+    }
+  });
+
+  test('stays accurate next to pi', () => {
+    const x = vec4.create(1, 0, 0, 0);
+    const b = vec4.create(-Math.cos(1e-7), Math.sin(1e-7), 0, 0);
+
+    expect(vec4.angle(x, b)).toBeCloseTo(Math.atan2(b[1], b[0]), 15);
   });
 
   test('rounding can leave parallel vectors very slightly apart', () => {
@@ -2500,6 +2520,15 @@ describe('angle', () => {
 
     expect(vec4.angle(vec4.create(Number.NaN, 1, 0, 0), y)).toBeNaN();
     expect(vec4.angle(vec4.create(Number.POSITIVE_INFINITY, 1, 0, 0), y)).toBeNaN();
+
+    const ones = vec4.create(1, 1, 1, 1);
+    const inf = vec4.create(Number.POSITIVE_INFINITY, 1, 1, 1);
+
+    expect(vec4.angle(inf, ones)).toBeNaN();
+    expect(vec4.angle(ones, inf)).toBeNaN();
+    expect(vec4.angle(vec4.create(Number.NEGATIVE_INFINITY, 1, 1, 1), ones)).toBeNaN();
+    expect(vec4.angle(inf, inf)).toBeNaN();
+    expect(vec4.angle(inf, vec4.create())).toBeNaN();
   });
 
   test('w counts like any other component', () => {
@@ -2603,16 +2632,6 @@ describe('fromPacked', () => {
     vec4.fromPacked(viewAt(pool, 5), new Float32Array(pool), 1);
 
     expect(Array.from(new Float32Array(pool))).toEqual([1, 2, 3, 4, 5, 5, 6, 7, 8]);
-  });
-
-  test('reads from a plain array, rounding to float32', () => {
-    expectComponents(vec4.fromPacked(vec4.create(), [0.1, 0.2, 0.3, 0.4], 0), 0.1, 0.2, 0.3, 0.4);
-  });
-
-  test('reads from a readonly vector', () => {
-    const source: ReadonlyVec4 = vec4.create(1, 2, 3, 4);
-
-    expectComponents(vec4.fromPacked(vec4.create(), source, 0), 1, 2, 3, 4);
   });
 
   test('reads from a SharedArrayBuffer', () => {
