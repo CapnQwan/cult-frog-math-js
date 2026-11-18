@@ -398,7 +398,7 @@ export function invert(out: Mat3, a: ReadonlyMat3): Mat3 | null {
  * `Quat.multiply(tmp, a, b)` equals the `multiply` of `fromQuat(a)` and
  * `fromQuat(b)`, applying `b` first. `q` and `-q` give exactly the same
  * matrix. The inverse is the `transpose`, or `fromQuat` of the
- * `Quat.conjugate`.
+ * `Quat.conjugate`. `Quat.fromMat3` converts the matrix back to a quaternion.
  *
  * `q` **must be unit length**, as for `Vec3.transformQuat`. A non-unit `q`
  * gives neither a rotation nor a scaled one, so the matrix skews whatever it

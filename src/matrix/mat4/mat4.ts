@@ -29,6 +29,7 @@
  */
 
 import { EPSILON } from '../../constants.js';
+import { quatFromRotation } from '../../quaternion/quatFromRotation.js';
 import * as Scalars from '../../scalars.js';
 
 import type { Quat, ReadonlyQuat } from '../../quaternion/_types/quat.js';
@@ -878,50 +879,11 @@ export function decompose(outT: Vec3, outR: Quat, outS: Vec3, m: ReadonlyMat4): 
   const r10 = a10 * invX, r11 = a11 * invY, r12 = a12 * invZ;
   const r20 = a20 * invX, r21 = a21 * invY, r22 = a22 * invZ;
 
-  // Recover the largest of |w|, |x|, |y| and |z| from the diagonal first, and
-  // the rest from the off-diagonal sums and differences divided by it. Dividing
-  // by the largest keeps the result accurate near half turns, where w is
-  // near zero and recovering it first would divide by almost nothing.
-  let x: number, y: number, z: number, w: number;
-  const trace = r00 + r11 + r22;
-
-  if (trace > 0) {
-    const k = 0.5 / Math.sqrt(trace + 1);
-    w = 0.25 / k;
-    x = (r21 - r12) * k;
-    y = (r02 - r20) * k;
-    z = (r10 - r01) * k;
-  } else if (r00 > r11 && r00 > r22) {
-    const k = 0.5 / Math.sqrt(1 + r00 - r11 - r22);
-    x = 0.25 / k;
-    w = (r21 - r12) * k;
-    y = (r01 + r10) * k;
-    z = (r02 + r20) * k;
-  } else if (r11 > r22) {
-    const k = 0.5 / Math.sqrt(1 + r11 - r00 - r22);
-    y = 0.25 / k;
-    w = (r02 - r20) * k;
-    x = (r01 + r10) * k;
-    z = (r12 + r21) * k;
-  } else {
-    const k = 0.5 / Math.sqrt(1 + r22 - r00 - r11);
-    z = 0.25 / k;
-    w = (r10 - r01) * k;
-    x = (r02 + r20) * k;
-    y = (r12 + r21) * k;
-  }
-
-  // Exact for a rotation, and keeps a sheared input's rotation unit length.
-  const invLen = 1 / Math.hypot(x, y, z, w);
+  quatFromRotation(outR, r00, r01, r02, r10, r11, r12, r20, r21, r22);
 
   outT[0] = a03;
   outT[1] = a13;
   outT[2] = a23;
-
-  outR[0] = x * invLen;
-  outR[1] = y * invLen;
-  outR[2] = z * invLen;
-  outR[3] = w * invLen;
 
   outS[0] = sX;
   outS[1] = sY;

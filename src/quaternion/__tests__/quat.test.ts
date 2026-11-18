@@ -2,10 +2,12 @@
 import { describe, expect, test } from 'vitest';
 
 import { EPSILON } from '../../constants.js';
+import * as mat3 from '../../matrix/mat3/mat3.js';
 import * as vec3 from '../../vector/vec3/vec3.js';
 import * as vec4 from '../../vector/vec4/vec4.js';
 import * as quat from '../quat.js';
 
+import type { Mat3 } from '../../matrix/mat3/_types/mat3.js';
 import type { ReadonlyVec3, Vec3 } from '../../vector/vec3/_types/vec3.js';
 import type { Quat, ReadonlyQuat } from '../_types/quat.js';
 
@@ -2300,5 +2302,122 @@ describe('isEqualRotation', () => {
     quat.isEqualRotation(a, b);
     expectComponents(a, 1, 2, 3, 4);
     expectComponents(b, 5, 6, 7, 8);
+  });
+});
+
+/** Test-only cast site: a Mat3 view over element `index` of a shared buffer. */
+function mat3ViewAt(buffer: ArrayBuffer, index: number): Mat3 {
+  return new Float32Array(buffer, index * FLOAT_BYTES, 9) as Mat3;
+}
+
+describe('fromMat3', () => {
+  const rotations = [
+    quat.fromAxisAngle(quat.create(), vec3.normalize(vec3.create(), vec3.create(1, 2, 3)), 0.7),
+    quat.fromAxisAngle(quat.create(), vec3.normalize(vec3.create(), vec3.create(-2, 0.5, 1)), 2.4),
+    quat.fromAxisAngle(quat.create(), vec3.create(0, 1, 0), Math.PI),
+    quat.fromAxisAngle(quat.create(), vec3.normalize(vec3.create(), vec3.create(1, -1, -1)), 4),
+  ];
+
+  test('returns out', () => {
+    const out = quat.create(7, 7, 7, 7);
+    expect(quat.fromMat3(out, mat3.IDENTITY)).toBe(out);
+    expect(quat.isEqual(out, quat.IDENTITY)).toBe(true);
+  });
+
+  test('undoes Mat3.fromQuat, up to sign', () => {
+    for (const q of rotations) {
+      const m = mat3.fromQuat(mat3.create(), q);
+      const result = quat.fromMat3(quat.create(), m);
+
+      expect(quat.isEqualRotation(result, q, 1e-5)).toBe(true);
+      expect(mat3.isEqualEpsilon(mat3.fromQuat(mat3.create(), result), m, 1e-5)).toBe(true);
+    }
+  });
+
+  test('reads the matrix in column-major storage order', () => {
+    // A quarter turn about z sends x to y:
+    // Rows:  0 -1  0
+    //        1  0  0
+    //        0  0  1
+    const quarterZ = mat3.create(0, -1, 0, 1, 0, 0, 0, 0, 1);
+    const result = quat.fromMat3(quat.create(), quarterZ);
+
+    // Reading it transposed would give the opposite turn, with a negative z.
+    expectClose(result, 0, 0, Math.SQRT1_2, Math.SQRT1_2);
+  });
+
+  test('the same matrix always gives the same quaternion, which may be -q', () => {
+    const q = quat.create(0.1, 0.2, 0.3, -0.9);
+    quat.normalize(q, q);
+    const result = quat.fromMat3(quat.create(), mat3.fromQuat(mat3.create(), q));
+
+    expectClose(result, -(q[0] as number), -(q[1] as number), -(q[2] as number), -(q[3] as number));
+    expect(quat.isEqualRotation(result, q, 1e-5)).toBe(true);
+  });
+
+  test('turns a camera basis into its orientation', () => {
+    // A camera yawed a quarter turn left looks down -x: right is -z, up is y, back is x.
+    // biome-ignore format: visual alignment with the matrix
+    const basis = mat3.create(
+       0, 0, 1,
+       0, 1, 0,
+      -1, 0, 0,
+    );
+    const yawLeft = quat.fromAxisAngle(quat.create(), vec3.UP, Math.PI / 2);
+
+    expect(quat.isEqualRotation(quat.fromMat3(quat.create(), basis), yawLeft, 1e-6)).toBe(true);
+    const forward = vec3.transformQuat(
+      vec3.create(),
+      vec3.FORWARD,
+      quat.fromMat3(quat.create(), basis)
+    );
+    expectVec3Close(forward, -1, 0, 0);
+  });
+
+  test('a NaN element makes every component NaN', () => {
+    for (let i = 0; i < 9; i++) {
+      const m = mat3.fromQuat(mat3.create(), rotations[0] as ReadonlyQuat);
+      m[i] = Number.NaN;
+      expect(Array.from(quat.fromMat3(quat.create(), m)).every(Number.isNaN)).toBe(true);
+    }
+  });
+
+  test('never writes to the input', () => {
+    const m = mat3.fromQuat(mat3.create(), rotations[1] as ReadonlyQuat);
+    const copy = mat3.clone(m);
+    quat.fromMat3(quat.create(), m);
+
+    expect(mat3.isEqual(m, copy)).toBe(true);
+  });
+
+  test('out may overlap the input', () => {
+    const source = mat3.fromQuat(mat3.create(), rotations[1] as ReadonlyQuat);
+    const expected = quat.fromMat3(quat.create(), source);
+
+    for (let index = 0; index <= 9; index++) {
+      const buffer = new ArrayBuffer(16 * FLOAT_BYTES);
+      const m = mat3ViewAt(buffer, 3);
+      mat3.copy(m, source);
+
+      quat.fromMat3(viewAt(buffer, index), m);
+
+      expect(quat.isEqual(viewAt(buffer, index), expected)).toBe(true);
+    }
+  });
+
+  test('writes only its own slots when out is a pooled view', () => {
+    const pool = sequentialBuffer(12);
+    const expected = quat.fromMat3(
+      quat.create(),
+      mat3.fromQuat(mat3.create(), rotations[0] as ReadonlyQuat)
+    );
+
+    quat.fromMat3(viewAt(pool, 4), mat3.fromQuat(mat3.create(), rotations[0] as ReadonlyQuat));
+
+    const after = Array.from({ length: 12 }, (_, i) => i + 1);
+    Array.from(expected).forEach((value, i) => {
+      after[4 + i] = value;
+    });
+    expect(Array.from(new Float32Array(pool))).toEqual(after);
   });
 });

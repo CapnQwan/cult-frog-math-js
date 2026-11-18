@@ -26,7 +26,9 @@
 
 import { EPSILON } from '../constants.js';
 import { isEqualEpsilon as isEqualEpsilonScalar } from '../scalars.js';
+import { quatFromRotation } from './quatFromRotation.js';
 
+import type { ReadonlyMat3 } from '../matrix/mat3/_types/mat3.js';
 import type { ReadonlyVec3, Vec3 } from '../vector/vec3/_types/vec3.js';
 import type { Quat, ReadonlyQuat } from './_types/quat.js';
 
@@ -1018,4 +1020,47 @@ export function fromUnitVectors(out: Quat, from: ReadonlyVec3, to: ReadonlyVec3)
   out[3] = 1 + dot;
 
   return normalize(out, out);
+}
+
+/**
+ * Writes the rotation described by the rotation matrix `m` into `out`, the
+ * inverse of `Mat3.fromQuat`: `Mat3.fromQuat` of the result gives `m` back,
+ * up to rounding.
+ *
+ * Use it to turn an orientation known as a basis into a quaternion, such as
+ * the right, up and back axes of a camera, or a rotation imported as a matrix.
+ * For the rotation inside a `Mat4`, use `Mat4.decompose`, which divides out
+ * the scale first.
+ *
+ * The result is accurate for every rotation, half turns included: the largest
+ * of `|w|`, `|x|`, `|y|` and `|z|` is recovered from the diagonal first, and
+ * the rest from the off-diagonal elements divided by it, rather than always
+ * starting from `w`, which is near zero for a half turn. The same matrix
+ * always gives the same quaternion, but `q` and `-q` give the same matrix, so
+ * `fromMat3(out, Mat3.fromQuat(tmp, q))` may be `-q`. Compare it with
+ * `isEqualRotation` rather than component by component.
+ *
+ * `m` **must be a rotation**: orthonormal columns and a determinant of `1`.
+ * The result is normalised, so the slight drift left by accumulated rounding
+ * does no harm, but nothing else is corrected or checked. A scaled matrix
+ * gives the wrong rotation, not a scaled one, and a mirroring one a
+ * meaningless one. Even the zero matrix gives a half turn about z rather than
+ * anything visibly wrong. A `NaN` element makes every component `NaN`.
+ *
+ * Every element of `m` is read before anything is written, so `out` may be a
+ * view overlapping it.
+ *
+ * @param out - The quaternion to write to.
+ * @param m - The rotation matrix.
+ * @returns `out`.
+ */
+export function fromMat3(out: Quat, m: ReadonlyMat3): Quat {
+  // Mat3 storage is column major: element a<row><col> is at index 3 * col + row.
+  // biome-ignore format: visual alignment with the matrix
+  return quatFromRotation(
+    out,
+    m[0], m[3], m[6],
+    m[1], m[4], m[7],
+    m[2], m[5], m[8]
+  );
 }

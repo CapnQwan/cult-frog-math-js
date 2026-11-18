@@ -6,6 +6,8 @@ import * as quat from '../quat.js';
 
 import type { Brand, BrandOf } from '@cult-frog/types';
 import type { FixedFloat32Array } from '../../_types/fixedFloat32Array.js';
+import type { Mat3, ReadonlyMat3 } from '../../matrix/mat3/_types/mat3.js';
+import type { Mat4 } from '../../matrix/mat4/_types/mat4.js';
 import type { Vec2 } from '../../vector/vec2/_types/vec2.js';
 import type { ReadonlyVec3, Vec3 } from '../../vector/vec3/_types/vec3.js';
 import type { ReadonlyVec4, Vec4 } from '../../vector/vec4/_types/vec4.js';
@@ -18,6 +20,9 @@ declare const raw: Float32Array<ArrayBuffer>;
 declare const axis: Vec3;
 declare const frozenAxis: ReadonlyVec3;
 declare const flat: Vec2;
+declare const rotationMatrix: Mat3;
+declare const frozenRotationMatrix: ReadonlyMat3;
+declare const model: Mat4;
 
 /** A `Quat` backed by a `SharedArrayBuffer`, as a view into worker-shared storage would be. */
 type SharedQuat = Brand<FixedFloat32Array<4, SharedArrayBuffer>, BrandOf<Quat>>;
@@ -417,5 +422,25 @@ describe('toAxisAngle', () => {
     quat.toAxisAngle(axis, vector);
     // @ts-expect-error unbranded arrays are rejected
     quat.toAxisAngle(axis, raw);
+  });
+});
+
+describe('fromMat3', () => {
+  test('out is mutable, the matrix is readonly, and out is returned', () => {
+    expectTypeOf(quat.fromMat3).parameters.toEqualTypeOf<[Quat, ReadonlyMat3]>();
+    expectTypeOf(quat.fromMat3).returns.toEqualTypeOf<Quat>();
+  });
+
+  test('call sites', () => {
+    quat.fromMat3(live, rotationMatrix);
+    quat.fromMat3(shared, frozenRotationMatrix);
+    // @ts-expect-error readonly can never be an out parameter
+    quat.fromMat3(frozen, rotationMatrix);
+    // @ts-expect-error the shared constant must never be written through
+    quat.fromMat3(quat.IDENTITY, rotationMatrix);
+    // @ts-expect-error a Mat4 is not a Mat3: decompose it instead
+    quat.fromMat3(live, model);
+    // @ts-expect-error unbranded arrays are rejected
+    quat.fromMat3(live, raw);
   });
 });
